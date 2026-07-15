@@ -1,0 +1,47 @@
+server:
+  host: "0.0.0.0"
+  port: 8090
+  mode: "release"                          # release / debug
+  read_timeout: 30
+  write_timeout: 30
+
+database:
+  host: "127.0.0.1"
+  port: 5433
+  user: "mobileops"
+  password: "mobileops_dev_2026"
+  dbname: "mobileops"
+  sslmode: "disable"
+  max_open: 50
+  max_idle: 10
+
+security:
+  # AES-256 加密密钥，用于加密 kubeconfig / AK-SK / Token
+  # 生产环境从环境变量 MOBILEOPS_ENCRYPTION_KEY 读取
+  encryption_key: "CHANGE_ME_TO_32_BYTE_KEY_IN_PROD"
+  jwt_secret: "CHANGE_ME_JWT_SECRET"
+  jwt_ttl_hours: 12
+
+grafana_default:
+  # MVP 首次启动可以预填一个默认 Grafana 数据源
+  # 用户可在设置页覆盖
+  enabled: false
+  url: "http://172.22.211.72:3000"
+  token: ""                                # 首次启动后由用户在页面填入
+
+prometheus_default:
+  enabled: false
+  url: "http://172.22.67.24:11002/select/0/prometheus"
+  auth_type: "none"
+
+alertmanager:
+  webhook_path: "/api/v1/alerts/webhook"   # 让 alertmanager 回调
+
+policy:
+  # 扩容防抖：同一节点池 X 分钟内不重复扩容
+  scale_debounce_minutes: 5
+  # 扩容后节点 Ready 轮询超时
+  ready_poll_timeout_minutes: 15
+  ready_poll_interval_seconds: 10
+  # 数据新鲜度阈值：超过 N 秒视为陈旧，前端提示
+  metric_freshness_seconds: 30

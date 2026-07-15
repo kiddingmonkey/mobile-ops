@@ -1,0 +1,40 @@
+# 项目级忽略
+.DS_Store
+._*
+*.tar.gz
+*.log
+
+# 后端
+backend/bin/
+backend/vendor/
+backend/config.yaml
+backend/.env
+backend/*.gz
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Android
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.idea/
+frontend/android/local.properties
+frontend/android/captures/
+frontend/android/.externalNativeBuild/
+frontend/android/.cxx/
+
+# 证书 & 密钥（永远不要 push）
+certs/
+*.pem
+*.key
+*.keystore
+!frontend/android/app/src/main/res/raw/mobile_ops_ca.crt
+
+# IDE
+.vscode/
+.idea/
+*.swp

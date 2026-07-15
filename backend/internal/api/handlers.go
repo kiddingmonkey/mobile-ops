@@ -1,0 +1,544 @@
+package api
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	"mobile-ops/internal/models"
+	"mobile-ops/internal/services"
+)
+
+// jsonList 保证空列表序列化为 [] 而不是 null（Go nil slice 默认序列化成 null）
+func jsonList[T any](c *gin.Context, list []T) {
+	if list == nil {
+		list = []T{}
+	}
+	c.JSON(200, list)
+}
+
+// ============ Auth ============
+
+type loginReq struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	var r loginReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	var u models.User
+	err := h.db.GetContext(c.Request.Context(), &u,
+		`SELECT id, username, password_hash, display_name, email, role, last_login_at, created_at, updated_at
+		 FROM users WHERE username=$1`, r.Username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(401, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	if !services.VerifyPassword(u.PasswordHash, r.Password) {
+		c.JSON(401, gin.H{"error": "invalid credentials"})
+		return
+	}
+	tok, err := h.auth.GenerateToken(&u)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	h.db.ExecContext(c.Request.Context(), `UPDATE users SET last_login_at=NOW() WHERE id=$1`, u.ID)
+	c.JSON(200, gin.H{"token": tok, "user": u})
+}
+
+func (h *Handler) Me(c *gin.Context) {
+	uid := c.GetInt64("user_id")
+	var u models.User
+	err := h.db.GetContext(c.Request.Context(), &u,
+		`SELECT id, username, display_name, email, role, last_login_at, created_at, updated_at
+		 FROM users WHERE id=$1`, uid)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(200, u)
+}
+
+// ============ Grafana Sources ============
+
+func (h *Handler) ListGrafanaSources(c *gin.Context) {
+	list, err := h.config.ListGrafanaSources(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createGrafanaReq struct {
+	Name      string `json:"name" binding:"required"`
+	URL       string `json:"url" binding:"required"`
+	Token     string `json:"token" binding:"required"`
+	IsDefault bool   `json:"is_default"`
+}
+
+func (h *Handler) CreateGrafanaSource(c *gin.Context) {
+	var r createGrafanaReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	uid := c.GetInt64("user_id")
+	out, err := h.config.CreateGrafanaSource(c.Request.Context(), uid, r.Name, r.URL, r.Token, r.IsDefault)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) DeleteGrafanaSource(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.config.DeleteGrafanaSource(c.Request.Context(), id); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+// ============ Prom Sources ============
+
+func (h *Handler) ListPromSources(c *gin.Context) {
+	list, err := h.config.ListPromSources(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createPromReq struct {
+	Name      string `json:"name" binding:"required"`
+	URL       string `json:"url" binding:"required"`
+	AuthType  string `json:"auth_type"`
+	Auth      string `json:"auth"`
+	IsDefault bool   `json:"is_default"`
+}
+
+func (h *Handler) CreatePromSource(c *gin.Context) {
+	var r createPromReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if r.AuthType == "" {
+		r.AuthType = "none"
+	}
+	uid := c.GetInt64("user_id")
+	out, err := h.config.CreatePromSource(c.Request.Context(), uid, r.Name, r.URL, r.AuthType, r.Auth, r.IsDefault)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+// ============ Cloud Accounts ============
+
+func (h *Handler) ListCloudAccounts(c *gin.Context) {
+	list, err := h.config.ListCloudAccounts(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createCloudReq struct {
+	Name      string `json:"name" binding:"required"`
+	Provider  string `json:"provider" binding:"required"`
+	Region    string `json:"region" binding:"required"`
+	SecretID  string `json:"secret_id" binding:"required"`
+	SecretKey string `json:"secret_key" binding:"required"`
+}
+
+func (h *Handler) CreateCloudAccount(c *gin.Context) {
+	var r createCloudReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	uid := c.GetInt64("user_id")
+	out, err := h.config.CreateCloudAccount(c.Request.Context(), uid, r.Name, r.Provider, r.Region, r.SecretID, r.SecretKey)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+// ============ Clusters ============
+
+func (h *Handler) ListClusters(c *gin.Context) {
+	list, err := h.config.ListClusters(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createClusterReq struct {
+	Name               string  `json:"name" binding:"required"`
+	DisplayName        string  `json:"display_name"`
+	Provider           string  `json:"provider"`
+	ProviderClusterID  string  `json:"provider_cluster_id"`
+	Region             string  `json:"region"`
+	CloudAccountID     *int64  `json:"cloud_account_id"`
+	Kubeconfig         string  `json:"kubeconfig"`
+	GrafanaSourceID    *int64  `json:"grafana_source_id"`
+	GrafanaClusterVar  string  `json:"grafana_cluster_var"`
+	PromSourceID       *int64  `json:"prom_source_id"`
+	AutoPullKubeconfig bool    `json:"auto_pull_kubeconfig"`
+	IsExtranet         bool    `json:"is_extranet"`
+}
+
+func (h *Handler) CreateCluster(c *gin.Context) {
+	var r createClusterReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if r.Provider == "" {
+		r.Provider = "tencent"
+	}
+	uid := c.GetInt64("user_id")
+	out, err := h.config.CreateCluster(c.Request.Context(), services.CreateClusterInput{
+		Name:               r.Name,
+		DisplayName:        r.DisplayName,
+		Provider:           r.Provider,
+		ProviderClusterID:  r.ProviderClusterID,
+		Region:             r.Region,
+		CloudAccountID:     r.CloudAccountID,
+		Kubeconfig:         r.Kubeconfig,
+		GrafanaSourceID:    r.GrafanaSourceID,
+		GrafanaClusterVar:  r.GrafanaClusterVar,
+		PromSourceID:       r.PromSourceID,
+		AutoPullKubeconfig: r.AutoPullKubeconfig,
+		IsExtranet:         r.IsExtranet,
+		UserID:             uid,
+	})
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) SyncCluster(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.config.SyncNodePools(c.Request.Context(), id); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+func (h *Handler) GetCluster(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	cl, err := h.config.GetCluster(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(404, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, cl)
+}
+
+type updateClusterReq struct {
+	DisplayName       *string `json:"display_name"`
+	Region            *string `json:"region"`
+	ProviderClusterID *string `json:"provider_cluster_id"`
+	CloudAccountID    *int64  `json:"cloud_account_id"`
+	Kubeconfig        *string `json:"kubeconfig"`
+	GrafanaSourceID   *int64  `json:"grafana_source_id"`
+	GrafanaClusterVar *string `json:"grafana_cluster_var"`
+	PromSourceID      *int64  `json:"prom_source_id"`
+}
+
+func (h *Handler) UpdateCluster(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var r updateClusterReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := h.config.UpdateCluster(c.Request.Context(), id, services.UpdateClusterInput{
+		DisplayName:       r.DisplayName,
+		Region:            r.Region,
+		ProviderClusterID: r.ProviderClusterID,
+		CloudAccountID:    r.CloudAccountID,
+		Kubeconfig:        r.Kubeconfig,
+		GrafanaSourceID:   r.GrafanaSourceID,
+		GrafanaClusterVar: r.GrafanaClusterVar,
+		PromSourceID:      r.PromSourceID,
+	})
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) DeleteCluster(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.config.DeleteClusterHard(c.Request.Context(), id); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+func (h *Handler) ClusterOverview(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ov, err := h.config.ClusterOverview(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, ov)
+}
+
+// ============ Node Pools & Metrics ============
+
+func (h *Handler) ListNodePools(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var list []models.NodePool
+	err := h.db.SelectContext(c.Request.Context(), &list,
+		`SELECT * FROM node_pools WHERE cluster_id=$1`, id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+func (h *Handler) ClusterMetrics(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	m, err := h.config.ClusterMetrics(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, m)
+}
+
+// GrafanaPanel 后端代理拉 Grafana 面板 PNG
+// GET /clusters/:id/grafana/panel?dash=xxx&panel=1&from=now-1h&to=now&theme=dark&w=800&h=400
+func (h *Handler) GrafanaPanel(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	dash := c.Query("dash")
+	panelStr := c.DefaultQuery("panel", "1")
+	panel, _ := strconv.Atoi(panelStr)
+	from := c.DefaultQuery("from", "now-1h")
+	to := c.DefaultQuery("to", "now")
+	theme := c.DefaultQuery("theme", "dark")
+	w, _ := strconv.Atoi(c.DefaultQuery("w", "800"))
+	h_, _ := strconv.Atoi(c.DefaultQuery("h", "400"))
+	if dash == "" {
+		c.JSON(400, gin.H{"error": "dash 参数必填"})
+		return
+	}
+	png, ct, err := h.config.FetchGrafanaPanel(c.Request.Context(), id, dash, panel, w, h_, from, to, theme)
+	if err != nil {
+		c.JSON(502, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=30")
+	c.Data(200, ct, png)
+}
+
+// GrafanaDashboards 列出该集群关联 Grafana 的常用 dashboard
+// 前端可以用来给用户选择显示哪个面板
+func (h *Handler) GrafanaDashboards(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	list, err := h.config.ListGrafanaDashboardsForCluster(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+// ============ Scale ============
+
+type precheckReq struct {
+	ClusterID  int64 `json:"cluster_id" binding:"required"`
+	NodePoolID int64 `json:"node_pool_id" binding:"required"`
+	Delta      int   `json:"delta" binding:"required"`
+}
+
+func (h *Handler) ScalePrecheck(c *gin.Context) {
+	var r precheckReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	res, err := h.scale.Precheck(c.Request.Context(), r.ClusterID, r.NodePoolID, r.Delta)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, res)
+}
+
+type submitReq struct {
+	ClusterID     int64                       `json:"cluster_id" binding:"required"`
+	NodePoolID    int64                       `json:"node_pool_id" binding:"required"`
+	Delta         int                         `json:"delta" binding:"required"`
+	TriggerSource string                      `json:"trigger_source"`
+	AlertRef      string                      `json:"alert_ref"`
+	Precheck      *services.PrecheckResult    `json:"precheck" binding:"required"`
+}
+
+func (h *Handler) ScaleSubmit(c *gin.Context) {
+	var r submitReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	uid := c.GetInt64("user_id")
+	if r.TriggerSource == "" {
+		r.TriggerSource = "manual"
+	}
+	opID, err := h.scale.SubmitScale(context.Background(), uid, r.ClusterID, r.NodePoolID, r.Delta, r.TriggerSource, r.AlertRef, r.Precheck)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"operation_id": opID})
+}
+
+// ============ Operations ============
+
+func (h *Handler) ListOperations(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	var list []models.Operation
+	err := h.db.SelectContext(c.Request.Context(), &list,
+		`SELECT * FROM operations ORDER BY started_at DESC LIMIT $1`, limit)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+func (h *Handler) GetOperation(c *gin.Context) {
+	opid := c.Param("opid")
+	var op models.Operation
+	err := h.db.GetContext(c.Request.Context(), &op,
+		`SELECT * FROM operations WHERE operation_id=$1`, opid)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(200, op)
+}
+
+// ============ Alerts ============
+
+func (h *Handler) AlertWebhook(c *gin.Context) {
+	var p services.AlertManagerPayload
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.alert.Ingest(c.Request.Context(), &p); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true, "received": len(p.Alerts)})
+}
+
+func (h *Handler) ListAlerts(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	list, err := h.alert.List(c.Request.Context(), limit)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+// ============ Shortcuts ============
+
+func (h *Handler) ListShortcuts(c *gin.Context) {
+	uid := c.GetInt64("user_id")
+	var list []struct {
+		ID          int64  `db:"id" json:"id"`
+		Name        string `db:"name" json:"name"`
+		ClusterID   int64  `db:"cluster_id" json:"cluster_id"`
+		NodePoolID  int64  `db:"node_pool_id" json:"node_pool_id"`
+		Action      string `db:"action" json:"action"`
+		Delta       int    `db:"delta" json:"delta"`
+		Icon        string `db:"icon" json:"icon"`
+		SortOrder   int    `db:"sort_order" json:"sort_order"`
+	}
+	err := h.db.SelectContext(c.Request.Context(), &list,
+		`SELECT id, name, cluster_id, node_pool_id, action, delta, icon, sort_order
+		 FROM shortcuts WHERE user_id=$1 ORDER BY sort_order, id`, uid)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createShortcutReq struct {
+	Name       string `json:"name" binding:"required"`
+	ClusterID  int64  `json:"cluster_id" binding:"required"`
+	NodePoolID int64  `json:"node_pool_id" binding:"required"`
+	Action     string `json:"action" binding:"required"`
+	Delta      int    `json:"delta" binding:"required"`
+	Icon       string `json:"icon"`
+}
+
+func (h *Handler) CreateShortcut(c *gin.Context) {
+	var r createShortcutReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	uid := c.GetInt64("user_id")
+	if r.Icon == "" {
+		r.Icon = "thunderbolt"
+	}
+	var id int64
+	err := h.db.QueryRowContext(c.Request.Context(),
+		`INSERT INTO shortcuts(user_id, name, cluster_id, node_pool_id, action, delta, icon)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+		uid, r.Name, r.ClusterID, r.NodePoolID, r.Action, r.Delta, r.Icon).Scan(&id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"id": id})
+}
+
+func (h *Handler) DeleteShortcut(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	uid := c.GetInt64("user_id")
+	_, err := h.db.ExecContext(c.Request.Context(),
+		`DELETE FROM shortcuts WHERE id=$1 AND user_id=$2`, id, uid)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}

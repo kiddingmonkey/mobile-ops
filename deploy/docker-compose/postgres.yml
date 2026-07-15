@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: docker.m.daocloud.io/library/postgres:15-alpine
+    container_name: mobileops-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mobileops
+      POSTGRES_USER: mobileops
+      POSTGRES_PASSWORD: mobileops_dev_2026
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - mobileops-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mobileops -d mobileops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mobileops-pgdata:

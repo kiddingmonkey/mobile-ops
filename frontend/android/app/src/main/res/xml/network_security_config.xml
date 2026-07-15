@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 允许 App 内部信任我们的自签 CA 证书 -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/mobile_ops_ca" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 针对 nip.io 域名：明确信任自签 CA -->
+    <domain-config includeSubdomains="true">
+        <domain>101-43-172-231.nip.io</domain>
+        <trust-anchors>
+            <certificates src="@raw/mobile_ops_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    <domain-config includeSubdomains="true">
+        <domain>nip.io</domain>
+        <trust-anchors>
+            <certificates src="@raw/mobile_ops_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

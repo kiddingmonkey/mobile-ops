@@ -1,0 +1,18 @@
+[Unit]
+Description=Mobile-Ops Backend Server
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data2/haowu33/mobile/backend
+EnvironmentFile=-/data2/haowu33/mobile/backend/.env
+ExecStart=/data2/haowu33/mobile/backend/bin/mobile-ops --config=/data2/haowu33/mobile/backend/config.yaml --migrations=/data2/haowu33/mobile/backend/migrations
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/data2/haowu33/mobile/logs/backend.log
+StandardError=append:/data2/haowu33/mobile/logs/backend.err
+
+[Install]
+WantedBy=multi-user.target
