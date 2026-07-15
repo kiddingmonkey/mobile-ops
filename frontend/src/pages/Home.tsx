@@ -152,6 +152,8 @@ export default function HomePage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Button block size="small" fill="outline" onClick={() => { setActiveCluster(c.id); nav('/monitor') }}
                     style={{ '--border-color': 'var(--border-color)' } as any}>监控</Button>
+                  <Button block size="small" fill="outline" onClick={() => nav(`/clusters/${c.id}/resources`)}
+                    style={{ '--border-color': 'var(--border-color)' } as any}>资源</Button>
                   <Button block size="small" color="primary" onClick={() => { setActiveCluster(c.id); nav('/scale') }}>⚡ 扩缩容</Button>
                 </div>
               </div>
