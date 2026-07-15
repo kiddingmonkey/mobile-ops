@@ -1,88 +1,93 @@
-import { useMemo, useState } from 'react'
-import { Button } from 'antd-mobile'
-import { useTheme, resolveTheme } from '@/store'
+import { useState } from 'react'
+import { Popup } from 'antd-mobile'
+import { CloseOutline } from 'antd-mobile-icons'
 
 interface Props {
-  originalUrl: string   // 用户粘的原始 URL
+  url: string
   title?: string
-  from?: string
-  to?: string
   height?: number
-  onDelete?: () => void
+  enableFullscreen?: boolean
 }
 
-// GrafanaPanel 用 iframe 嵌入反代后的 Grafana
-// 反代域名: grafana.101-43-172-231.nip.io:18443（自动带 Token）
-const GRAFANA_PROXY_HOST = window.location.hostname.startsWith('grafana.')
-  ? window.location.host
-  : `grafana.${window.location.host}`
+export default function GrafanaPanel({ url, title, height = 240, enableFullscreen = true }: Props) {
+  const [fullscreen, setFullscreen] = useState(false)
 
-export default function GrafanaPanel({
-  originalUrl, title, from = 'now-1h', to = 'now', height = 400, onDelete
-}: Props) {
-  const themeMode = useTheme(s => s.mode)
-  const themeName = resolveTheme(themeMode)
-  const [tick, setTick] = useState(0)
-
-  // 把原始 URL host 换成反代 host，加上 kiosk 模式 + 主题 + 时间范围
-  const iframeUrl = useMemo(() => {
+  const enterFullscreen = async () => {
+    setFullscreen(true)
+    // 尝试横屏
     try {
-      const u = new URL(originalUrl)
-      u.protocol = 'https:'
-      u.host = GRAFANA_PROXY_HOST
-      // 参数覆盖 / 补充
-      u.searchParams.set('kiosk', 'tv')  // tv 模式：只隐藏侧边栏和顶栏，保留时间选择
-      u.searchParams.set('theme', themeName)
-      u.searchParams.set('from', from)
-      u.searchParams.set('to', to)
-      // 缓存打破，让每次刷新都重新加载
-      u.searchParams.set('_t', String(tick))
-      return u.toString()
-    } catch {
-      return ''
-    }
-  }, [originalUrl, themeName, from, to, tick])
+      const so = screen.orientation as any
+      if (so?.lock) await so.lock('landscape').catch(() => {})
+    } catch {}
+  }
 
-  if (!iframeUrl) {
-    return (
-      <div className="card">
-        <div style={{ color: 'var(--danger)', fontSize: 12 }}>URL 解析失败: {originalUrl}</div>
-      </div>
-    )
+  const exitFullscreen = async () => {
+    setFullscreen(false)
+    try {
+      const so = screen.orientation as any
+      if (so?.unlock) so.unlock()
+    } catch {}
   }
 
   return (
-    <div className="card" style={{ position: 'relative' }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8
-      }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{title || '📊 Dashboard'}</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <Button size="mini" fill="none" onClick={() => { window.open(iframeUrl, '_blank') }}>新窗口</Button>
-          <Button size="mini" fill="none" onClick={() => setTick(t => t + 1)}>刷新</Button>
-          {onDelete && <Button size="mini" fill="none" color="danger" onClick={onDelete}>删除</Button>}
-        </div>
+    <>
+      <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--bg-elevated)' }}>
+        {title && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '10px 12px', background: 'var(--bg-secondary)',
+            borderBottom: '1px solid var(--border-color)'
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+            {enableFullscreen && (
+              <span
+                style={{ color: 'var(--accent-blue)', cursor: 'pointer', fontSize: 18 }}
+                onClick={enterFullscreen}
+              >⛶</span>
+            )}
+          </div>
+        )}
+        <iframe
+          src={url}
+          style={{ width: '100%', height, border: 0, display: 'block' }}
+          sandbox="allow-same-origin allow-scripts allow-forms"
+        />
       </div>
-      <iframe
-        key={tick}
-        src={iframeUrl}
-        title={title}
-        style={{
-          width: '100%',
-          height: `${height}px`,
-          border: '1px solid var(--border-color)',
-          borderRadius: 8,
-          background: 'var(--bg-elevated)'
+
+      <Popup
+        visible={fullscreen}
+        onMaskClick={exitFullscreen}
+        bodyStyle={{
+          width: '100vw',
+          height: '100vh',
+          background: 'var(--bg-primary)',
+          padding: 0,
+          borderRadius: 0
         }}
-        loading="lazy"
-        allow="fullscreen"
-      />
-      <div style={{
-        fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6,
-        wordBreak: 'break-all'
-      }}>
-        iframe 加载失败？点"新窗口"在浏览器打开 · 代理: {GRAFANA_PROXY_HOST}
-      </div>
-    </div>
+      >
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <div style={{
+            position: 'absolute', top: 8, right: 8, zIndex: 100,
+            width: 36, height: 36, borderRadius: '50%',
+            background: 'rgba(0,0,0,0.6)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+          }} onClick={exitFullscreen}>
+            <CloseOutline fontSize={20} style={{ color: 'white' }} />
+          </div>
+          {title && (
+            <div style={{
+              position: 'absolute', top: 8, left: 8, zIndex: 100,
+              background: 'rgba(0,0,0,0.6)', padding: '6px 12px',
+              borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600
+            }}>{title}</div>
+          )}
+          <iframe
+            src={url}
+            style={{ width: '100%', height: '100%', border: 0 }}
+            sandbox="allow-same-origin allow-scripts allow-forms"
+          />
+        </div>
+      </Popup>
+    </>
   )
 }

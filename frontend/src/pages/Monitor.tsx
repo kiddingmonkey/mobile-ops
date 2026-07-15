@@ -211,20 +211,29 @@ export default function MonitorPage() {
 
             {panels.length > 0 && (
               <>
-                {panels.map(pn => (
-                  <GrafanaPanel
-                    key={pn.id}
-                    originalUrl={pn.originalUrl}
-                    title={pn.title}
-                    from={timeRange}
-                    to="now"
-                    height={pn.height || 400}
-                    onDelete={async () => {
-                      const ok = await Dialog.confirm({ content: `删除面板「${pn.title}」？` })
-                      if (ok) removePanel(pn.id)
-                    }}
-                  />
-                ))}
+                {panels.map(pn => {
+                  const url = pn.originalUrl + `&from=${timeRange}&to=now`
+                  return (
+                    <div key={pn.id} style={{ position: 'relative' }}>
+                      <GrafanaPanel
+                        url={url}
+                        title={pn.title}
+                        height={pn.height || 280}
+                        enableFullscreen
+                      />
+                      <Button
+                        size="small"
+                        color="danger"
+                        fill="none"
+                        style={{ position: 'absolute', top: 8, right: 50, zIndex: 10 }}
+                        onClick={async () => {
+                          const ok = await Dialog.confirm({ content: `删除面板「${pn.title}」？` })
+                          if (ok) removePanel(pn.id)
+                        }}
+                      >删除</Button>
+                    </div>
+                  )
+                })}
               </>
             )}
 

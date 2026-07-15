@@ -108,7 +108,16 @@ export default function SettingsPage() {
           <List.Item extra="v1.0.0">当前版本</List.Item>
           <List.Item extra="Capacitor 8">运行环境</List.Item>
           <List.Item
-            onClick={() => Toast.show({ content: '已是最新版本', icon: 'success' })}
+            onClick={async () => {
+              Toast.show({ content: '正在检查...', icon: 'loading', duration: 0 })
+              // 清空 Service Worker 缓存
+              if ('serviceWorker' in navigator && 'caches' in window) {
+                const keys = await caches.keys()
+                await Promise.all(keys.map(k => caches.delete(k)))
+              }
+              // 强制 reload
+              setTimeout(() => window.location.reload(), 500)
+            }}
           >检查更新</List.Item>
         </List>
 
