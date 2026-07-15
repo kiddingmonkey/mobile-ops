@@ -1,17 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { TabBar } from 'antd-mobile'
-import { AppOutline, HistogramOutline, AlipayCircleFill, SetOutline, BellOutline } from 'antd-mobile-icons'
+import { TabBar, Badge } from 'antd-mobile'
+import { AppOutline, HistogramOutline, SetOutline, BellOutline, ClockCircleOutline } from 'antd-mobile-icons'
+import { api } from '@/api/client'
 
 export default function AppLayout() {
   const nav = useNavigate()
   const loc = useLocation()
+  const [alertCount, setAlertCount] = useState(0)
+
+  useEffect(() => {
+    api.listAlerts(100).then(a => {
+      const firing = (a || []).filter((x: any) => x.status === 'firing')
+      setAlertCount(firing.length)
+    }).catch(() => {})
+  }, [loc.pathname])
 
   const tabs = [
     { key: '/', title: '首页', icon: <AppOutline /> },
     { key: '/monitor', title: '监控', icon: <HistogramOutline /> },
-    { key: '/alerts', title: '告警', icon: <BellOutline /> },
-    { key: '/operations', title: '记录', icon: <AlipayCircleFill /> },
+    { key: '/alerts', title: '告警', icon: (s: boolean) => (
+      <Badge content={alertCount > 0 ? alertCount : null} style={{ '--right': '-4px', '--top': '-2px' } as any}>
+        <BellOutline />
+      </Badge>
+    )},
+    { key: '/operations', title: '记录', icon: <ClockCircleOutline /> },
     { key: '/settings', title: '设置', icon: <SetOutline /> }
   ]
 
@@ -31,7 +44,11 @@ export default function AppLayout() {
       }}>
         <TabBar activeKey={active} onChange={k => nav(k)}>
           {tabs.map(t => (
-            <TabBar.Item key={t.key} icon={t.icon} title={t.title} />
+            <TabBar.Item
+              key={t.key}
+              icon={typeof t.icon === 'function' ? t.icon(active === t.key) : t.icon}
+              title={t.title}
+            />
           ))}
         </TabBar>
       </div>

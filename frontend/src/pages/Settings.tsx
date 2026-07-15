@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { List, Button, Dialog, Toast, Divider, Selector } from 'antd-mobile'
-import { AddOutline, RightOutline } from 'antd-mobile-icons'
+import { List, Button, Dialog, Toast, Selector } from 'antd-mobile'
+import { RightOutline, InformationCircleOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
-import PageShell from '@/components/PageShell'
 import { api } from '@/api/client'
 import { useAuth, useTheme } from '@/store'
 
@@ -31,79 +30,110 @@ export default function SettingsPage() {
   }
 
   return (
-    <PageShell title="设置">
-      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 22,
-          background: 'var(--accent-blue)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, color: 'white', fontWeight: 600
-        }}>{(user?.username || 'U')[0].toUpperCase()}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600 }}>{user?.display_name || user?.username}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{user?.role || 'operator'}</div>
+    <div className="page">
+      <div className="page-header"><span className="title">设置</span></div>
+      <div className="page-content">
+        {/* 用户卡片 */}
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: 'linear-gradient(135deg, var(--accent-blue) 0%, #6E9BFF 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, color: 'white', fontWeight: 700, flexShrink: 0
+          }}>{(user?.username || 'U')[0].toUpperCase()}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{user?.display_name || user?.username}</div>
+            <div className="text-xs" style={{ marginTop: 2 }}>
+              {user?.role || 'operator'} · 登录中
+            </div>
+          </div>
+        </div>
+
+        {/* 外观 */}
+        <List header="外观" mode="card">
+          <List.Item description="选择主题模式">
+            <div style={{ marginTop: 8 }}>
+              <Selector
+                columns={3}
+                value={[themeMode]}
+                onChange={v => v[0] && setThemeMode(v[0] as any)}
+                options={[
+                  { label: '深色', value: 'dark' },
+                  { label: '浅色', value: 'light' },
+                  { label: '跟随系统', value: 'auto' }
+                ]}
+              />
+            </div>
+          </List.Item>
+        </List>
+
+        {/* 数据源 */}
+        <List header="数据源" mode="card">
+          <List.Item
+            prefix={<StatusDot connected={grafana.length > 0} />}
+            extra={`${grafana.length} 个`}
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/grafana')}
+          >Grafana</List.Item>
+          <List.Item
+            prefix={<StatusDot connected={prom.length > 0} />}
+            extra={`${prom.length} 个`}
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/prom')}
+          >Prometheus</List.Item>
+        </List>
+
+        {/* 云账号 */}
+        <List header="云服务" mode="card">
+          <List.Item
+            prefix={<StatusDot connected={cloud.length > 0} />}
+            extra={`${cloud.length} 个账号`}
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/cloud')}
+          >腾讯云 AK/SK</List.Item>
+        </List>
+
+        {/* 集群 */}
+        <List header="集群管理" mode="card">
+          <List.Item
+            prefix={<StatusDot connected={clusters.length > 0} />}
+            extra={`${clusters.length} 个`}
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/clusters')}
+          >K8s 集群</List.Item>
+        </List>
+
+        {/* 关于 */}
+        <List header="关于" mode="card">
+          <List.Item extra="v1.0.0">当前版本</List.Item>
+          <List.Item extra="Capacitor 8">运行环境</List.Item>
+          <List.Item
+            onClick={() => Toast.show({ content: '已是最新版本', icon: 'success' })}
+          >检查更新</List.Item>
+        </List>
+
+        {/* 退出 */}
+        <List mode="card">
+          <List.Item
+            arrow={false}
+            onClick={doLogout}
+          ><span style={{ color: 'var(--danger)' }}>退出登录</span></List.Item>
+        </List>
+
+        <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11, padding: '16px 0 32px' }}>
+          Mobile-Ops · 手机运维，单手掌控 K8s 集群
         </div>
       </div>
+    </div>
+  )
+}
 
-      <List header="外观" mode="card">
-        <List.Item description="选择主题模式">
-          <div style={{ marginTop: 8 }}>
-            <Selector
-              columns={3}
-              value={[themeMode]}
-              onChange={v => v[0] && setThemeMode(v[0] as any)}
-              options={[
-                { label: '🌙 深色', value: 'dark' },
-                { label: '☀️ 浅色', value: 'light' },
-                { label: '🔄 跟随系统', value: 'auto' }
-              ]}
-            />
-          </div>
-        </List.Item>
-      </List>
-
-      <List header="数据源" mode="card">
-        <List.Item
-          extra={`${grafana.length} 个`}
-          arrow={<RightOutline />}
-          onClick={() => nav('/settings/grafana')}
-        >Grafana</List.Item>
-        <List.Item
-          extra={`${prom.length} 个`}
-          arrow={<RightOutline />}
-          onClick={() => nav('/settings/prom')}
-        >Prometheus</List.Item>
-      </List>
-
-      <List header="腾讯云" mode="card">
-        <List.Item
-          extra={`${cloud.length} 个账号`}
-          arrow={<RightOutline />}
-          onClick={() => nav('/settings/cloud')}
-        >云账号 (AK/SK)</List.Item>
-      </List>
-
-      <List header="集群" mode="card">
-        <List.Item
-          extra={`${clusters.length} 个`}
-          arrow={<RightOutline />}
-          onClick={() => nav('/settings/clusters')}
-        >K8s 集群</List.Item>
-      </List>
-
-      <List mode="card">
-        <List.Item
-          arrow={false}
-          onClick={doLogout}
-          style={{ '--prefix-width': '0' } as any}
-        >
-          <span style={{ color: 'var(--danger)' }}>退出登录</span>
-        </List.Item>
-      </List>
-
-      <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11, marginTop: 20 }}>
-        Mobile-Ops MVP v0.2 · {themeMode === 'auto' ? '跟随系统' : themeMode === 'dark' ? '深色' : '浅色'}
-      </div>
-    </PageShell>
+function StatusDot({ connected }: { connected: boolean }) {
+  return (
+    <div style={{
+      width: 8, height: 8, borderRadius: '50%',
+      background: connected ? 'var(--success)' : 'var(--text-disabled)',
+      boxShadow: connected ? '0 0 4px var(--success)' : 'none'
+    }}/>
   )
 }
