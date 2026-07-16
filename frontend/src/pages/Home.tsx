@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { PullToRefresh, Grid, Button, Toast, Skeleton } from 'antd-mobile'
+import { PullToRefresh, Grid, Button, Skeleton } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { RightOutline } from 'antd-mobile-icons'
-import { api } from '@/api/client'
+import { api, friendlyApiError } from '@/api/client'
 import { useUI, useAuth } from '@/store'
 import { fmtRelative, fmtPercent } from '@/utils/format'
 import ProgressRing from '@/components/ProgressRing'
 import StatCard from '@/components/StatCard'
+import RemoteStatusBanner from '@/components/RemoteStatusBanner'
 
 interface Cluster { id: number; name: string; display_name?: string; provider: string; status: string }
 interface Metrics { fetched_at: string; prometheus?: any; kubectl?: any }
@@ -20,11 +21,14 @@ export default function HomePage() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [ops, setOps] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
 
   const load = async () => {
+    setLoadErr(null)
     try {
+      // 每个接口独立 catch，一个挂了不影响其他，页面永远能渲染
       const [cs, al, op] = await Promise.all([
-        api.listClusters(),
+        api.listClusters().catch(e => { setLoadErr(friendlyApiError(e)); return [] }),
         api.listAlerts(5).catch(() => []),
         api.listOperations(5).catch(() => [])
       ])
@@ -39,8 +43,6 @@ export default function HomePage() {
           } catch {}
         })
       )
-    } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || '加载失败', icon: 'fail' })
     } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
@@ -63,6 +65,7 @@ export default function HomePage() {
 
   return (
     <div className="page">
+      <RemoteStatusBanner />
       {/* Header */}
       <div style={{ padding: 'calc(env(safe-area-inset-top) + 16px) 20px 12px' }}>
         <div className="text-sm" style={{ marginBottom: 2 }}>{greeting()}</div>
@@ -71,6 +74,16 @@ export default function HomePage() {
 
       <PullToRefresh onRefresh={load}>
         <div className="page-content">
+          {loadErr && (
+            <div className="card" style={{
+              borderLeft: '3px solid #F87171',
+              background: 'rgba(248, 113, 113, 0.08)'
+            }}>
+              <div style={{ fontSize: 13, color: '#FCA5A5', marginBottom: 6 }}>加载数据失败</div>
+              <div style={{ fontSize: 12, opacity: 0.8, wordBreak: 'break-all' }}>{loadErr}</div>
+              <Button size="mini" fill="outline" onClick={load} style={{ marginTop: 10 }}>重试</Button>
+            </div>
+          )}
           {/* 系统概览 */}
           <StatCard items={[
             { label: '集群', value: clusters.length, color: 'var(--accent-blue)' },

@@ -3,6 +3,7 @@ import { ConfigProvider } from 'antd-mobile'
 import zhCN from 'antd-mobile/es/locales/zh-CN'
 import { useAuth } from '@/store'
 
+import ErrorBoundary from '@/components/ErrorBoundary'
 import AppLayout from '@/components/AppLayout'
 import LoginPage from '@/pages/Login'
 import HomePage from '@/pages/Home'
@@ -30,6 +31,7 @@ function Protected({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>
         <Routes>
@@ -61,5 +63,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </ConfigProvider>
+    </ErrorBoundary>
   )
 }

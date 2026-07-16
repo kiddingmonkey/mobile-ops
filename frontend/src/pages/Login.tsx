@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Input, Button, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
+import { api, friendlyApiError } from '@/api/client'
 import { useAuth } from '@/store'
+import RemoteStatusBanner from '@/components/RemoteStatusBanner'
 
 export default function LoginPage() {
   const nav = useNavigate()
@@ -23,7 +24,7 @@ export default function LoginPage() {
       Toast.show({ content: '登录成功', icon: 'success' })
       nav('/', { replace: true })
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || '登录失败', icon: 'fail' })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
     } finally {
       setLoading(false)
     }
@@ -37,6 +38,7 @@ export default function LoginPage() {
       flexDirection: 'column',
       padding: 'env(safe-area-inset-top) 24px calc(24px + env(safe-area-inset-bottom))'
     }}>
+      <RemoteStatusBanner />
       {/* 顶部品牌区 */}
       <div style={{
         marginTop: 'calc(env(safe-area-inset-top) + 60px)',

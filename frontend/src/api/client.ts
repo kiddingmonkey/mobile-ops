@@ -1,6 +1,37 @@
 import axios, { AxiosInstance } from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
+const REMOTE_HEALTH = import.meta.env.VITE_REMOTE_HEALTH || '/api/v1/health'
+
+// 后端不可用时给统一的可展示错误对象
+export function friendlyApiError(err: any): string {
+  if (!err) return '未知错误'
+  const status = err.response?.status
+  const body = err.response?.data
+  if (status === 401) return '登录已过期，请重新登录'
+  if (status === 403) return '无权限'
+  if (status === 404) return '接口不存在'
+  if (status && status >= 500) {
+    // nginx 500 / 网关错误：多半是后端没起或安全组没放开
+    return `后端异常 (${status}) — 检查安全组或后端服务`
+  }
+  if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+    return '网络不通 — 请先在设置里更新安全组白名单'
+  }
+  if (err.code === 'ECONNABORTED') return '请求超时'
+  if (typeof body === 'string') return body
+  return body?.error || err.message || '请求失败'
+}
+
+// 探测远程后端是否可达（不需要 token，用于首页/登录页顶部提示）
+export async function pingRemote(): Promise<{ ok: boolean; status?: number; error?: string }> {
+  try {
+    const r = await axios.get(REMOTE_HEALTH, { timeout: 5000 })
+    return { ok: r.status >= 200 && r.status < 300, status: r.status }
+  } catch (e: any) {
+    return { ok: false, status: e?.response?.status, error: friendlyApiError(e) }
+  }
+}
 
 class ApiClient {
   private http: AxiosInstance
@@ -18,9 +49,13 @@ class ApiClient {
     this.http.interceptors.response.use(
       r => r,
       err => {
+        // 只有真正的登录过期 (401) 才踢回登录页
+        // 5xx / 网络错误保留 reject，让页面自己做错误提示
         if (err.response?.status === 401) {
+          const p = window.location.pathname
+          const onAuthPage = p === '/login' || p === '/'
           localStorage.removeItem('mobile_ops_token')
-          if (window.location.pathname !== '/login') {
+          if (!onAuthPage) {
             window.location.href = '/login'
           }
         }

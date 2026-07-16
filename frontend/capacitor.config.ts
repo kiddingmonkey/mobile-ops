@@ -4,10 +4,9 @@ const config: CapacitorConfig = {
   appId: 'com.mobileops.app',
   appName: 'Mobile-Ops',
   webDir: 'dist',
+  // 不配 server.url：APK 加载本地打包的 dist，即使后端 500 / 网络不通也能进登录页
+  // API 请求走绝对 URL (VITE_API_BASE)，请求失败在页面里以错误提示展示
   server: {
-    // App 直接加载远程 URL（这样服务器更新后 App 自动拿到最新，不用重新打包）
-    url: 'https://101-43-172-231.nip.io:18443',
-    cleartext: false,
     androidScheme: 'https'
   },
   android: {
