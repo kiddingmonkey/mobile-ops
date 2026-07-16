@@ -1,7 +1,34 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import fs from 'fs'
+import { execSync } from 'child_process'
+
+// build 时在 dist 根生成 version.json,APK 里读取以显示版本号
+function versionJsonPlugin(): Plugin {
+  return {
+    name: 'gen-version-json',
+    apply: 'build',
+    closeBundle() {
+      const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'))
+      let sha = process.env.GITHUB_SHA || ''
+      let runNumber = process.env.GITHUB_RUN_NUMBER || ''
+      if (!sha) {
+        try { sha = execSync('git rev-parse HEAD').toString().trim() } catch {}
+      }
+      const version = {
+        appVersion: pkg.version,               // 1.1.0
+        buildSha: sha.slice(0, 8) || 'local',  // 前 8 位
+        buildTime: new Date().toISOString(),
+        runNumber: runNumber || 'dev'
+      }
+      const out = path.resolve('dist/version.json')
+      fs.writeFileSync(out, JSON.stringify(version, null, 2))
+      console.log(`[version] ${version.appVersion}+${version.buildSha} (#${version.runNumber})`)
+    }
+  }
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -10,6 +37,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      versionJsonPlugin(),
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg'],

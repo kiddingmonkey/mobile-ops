@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { api, friendlyApiError } from '@/api/client'
 import { useAuth, useTheme } from '@/store'
-import { checkForUpdate, downloadAndApply, getCurrentVersion } from '@/utils/otaUpdater'
+import { checkForUpdate, downloadAndApply } from '@/utils/otaUpdater'
+import { getActiveVersion, versionShort, relTime } from '@/utils/version'
 
 export default function SettingsPage() {
   const nav = useNavigate()
@@ -166,7 +167,14 @@ export default function SettingsPage() {
 
         {/* 关于 */}
         <List header="关于" mode="card">
-          <List.Item extra={`v1.0.0 · ${getCurrentVersion().slice(0, 8)}`}>当前版本</List.Item>
+          <List.Item
+            extra={versionShort(getActiveVersion())}
+            description={
+              getActiveVersion().buildTime
+                ? `构建于 ${relTime(getActiveVersion().buildTime)} · #${getActiveVersion().runNumber}`
+                : undefined
+            }
+          >当前版本</List.Item>
           <List.Item extra="Capacitor 8">运行环境</List.Item>
           <List.Item onClick={handleCheckUpdate}>检查更新</List.Item>
         </List>

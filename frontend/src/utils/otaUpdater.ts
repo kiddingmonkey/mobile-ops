@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { unzipSync, strFromU8 } from 'fflate'
 import axios from 'axios'
+import { setActiveVersion, AppVersion } from './version'
 
 /**
  * 前端 OTA 更新逻辑
@@ -91,6 +92,15 @@ export async function downloadAndApply(
 
   // 2. 解压
   const files = unzipSync(zipData)
+
+  // 从解压结果里读 version.json,更新活跃版本号
+  const versionEntry = files['version.json'] || files['dist/version.json']
+  if (versionEntry) {
+    try {
+      const v = JSON.parse(strFromU8(versionEntry)) as AppVersion
+      setActiveVersion(v)
+    } catch {}
+  }
 
   // 3. 写入 Directory.Data/webroot/<version>/
   const versionDir = `${WEBROOT_DIR}/${info.version}`
