@@ -152,7 +152,7 @@ export default function MonitorPage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '12px 16px',
+        padding: 'max(12px, env(safe-area-inset-top)) 16px 12px',
         background: 'var(--bg-elevated)',
         borderBottom: '1px solid var(--border-color)'
       }}>
