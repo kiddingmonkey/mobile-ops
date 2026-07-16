@@ -172,11 +172,25 @@ func (t *TencentTKEClient) GetKubeconfig(ctx context.Context, clusterID string, 
 	return *resp.Response.Kubeconfig, nil
 }
 
-// NodePoolDetail 节点池详情(简化版)
+// NodePoolDetail 节点池详情 (供前端详情页展示)
 type NodePoolDetail struct {
-	NodePoolInfo                     // 嵌套基础
-	Labels       []KVPair     `json:"labels,omitempty"`
-	Taints       []Taint      `json:"taints,omitempty"`
+	NodePoolInfo                     // 嵌套基础信息
+	InstanceChargeType string       `json:"instance_charge_type,omitempty"` // PREPAID/POSTPAID_BY_HOUR
+	Zones              []string     `json:"zones,omitempty"`                 // 可用区列表
+	CPU                int64        `json:"cpu"`
+	Memory             int64        `json:"memory"`                          // GB
+	OsName             string       `json:"os_name,omitempty"`
+	SecurityGroupIds   []string     `json:"security_group_ids,omitempty"`
+	SystemDisk         *DiskConfig  `json:"system_disk,omitempty"`
+	DataDisks          []DiskConfig `json:"data_disks,omitempty"`
+	Labels             []KVPair     `json:"labels,omitempty"`
+	Taints             []Taint      `json:"taints,omitempty"`
+	Nodes              []PoolNode   `json:"nodes,omitempty"`                 // 节点列表
+}
+
+type DiskConfig struct {
+	DiskType string `json:"disk_type"` // CLOUD_SSD/CLOUD_PREMIUM...
+	DiskSize int64  `json:"disk_size"` // GB
 }
 
 type KVPair struct {
@@ -190,7 +204,19 @@ type Taint struct {
 	Effect string `json:"effect"`
 }
 
-// GetNodePoolDetail 拿节点池详情
+type PoolNode struct {
+	InstanceID   string    `json:"instance_id"`
+	InstanceRole string    `json:"instance_role"` // MASTER/WORKER
+	Zone         string    `json:"zone"`
+	State        string    `json:"state"`         // running/initializing/...
+	CreatedAt    time.Time `json:"created_at"`
+	CPU          int64     `json:"cpu"`
+	Memory       int64     `json:"memory"` // GB
+	PrivateIP    string    `json:"private_ip,omitempty"`
+	PublicIP     string    `json:"public_ip,omitempty"`
+}
+
+// GetNodePoolDetail 拿节点池详情 + 节点列表
 func (t *TencentTKEClient) GetNodePoolDetail(ctx context.Context, clusterID, nodePoolID string) (*NodePoolDetail, error) {
 	req := tke.NewDescribeClusterNodePoolDetailRequest()
 	req.ClusterId = common.StringPtr(clusterID)
@@ -209,14 +235,15 @@ func (t *TencentTKEClient) GetNodePoolDetail(ctx context.Context, clusterID, nod
 
 	detail := &NodePoolDetail{
 		NodePoolInfo: NodePoolInfo{
-			ClusterID:          clusterID,
-			NodePoolID:         safeStr(np.NodePoolId),
-			Name:               safeStr(np.Name),
-			LifeState:          safeStr(np.LifeState),
-			MinNodesNum:        safeInt64(np.MinNodesNum),
-			MaxNodesNum:        safeInt64(np.MaxNodesNum),
-			DesiredNodesNum:    safeInt64(np.DesiredNodesNum),
+			ClusterID:   clusterID,
+			NodePoolID:  safeStr(np.NodePoolId),
+			Name:        safeStr(np.Name),
+			LifeState:   safeStr(np.LifeState),
+			MinNodesNum: safeInt64(np.MinNodesNum),
+			MaxNodesNum: safeInt64(np.MaxNodesNum),
+			DesiredNodesNum: safeInt64(np.DesiredNodesNum),
 			AutoscalingGroupId: safeStr(np.AutoscalingGroupId),
+			InstanceType: safeStr(np.LaunchConfigurationId),
 		},
 	}
 	if np.NodeCountSummary != nil {
@@ -225,6 +252,42 @@ func (t *TencentTKEClient) GetNodePoolDetail(ctx context.Context, clusterID, nod
 		}
 		if np.NodeCountSummary.ManuallyAdded != nil && np.NodeCountSummary.ManuallyAdded.Total != nil {
 			detail.CurrentNodesNum += *np.NodeCountSummary.ManuallyAdded.Total
+		}
+	}
+		detail.InstanceChargeType = safeStr(ac.InstanceChargeType)
+		if ac.InstanceType != nil {
+			detail.InstanceType = *ac.InstanceType
+		}
+		if ac.Cpu != nil {
+			detail.CPU = *ac.Cpu
+		}
+		if ac.Memory != nil {
+			detail.Memory = *ac.Memory
+		}
+		for _, z := range ac.ZoneSet {
+			if z != nil {
+				detail.Zones = append(detail.Zones, *z)
+			}
+		}
+		if ac.SystemDisk != nil {
+			detail.SystemDisk = &DiskConfig{
+				DiskType: safeStr(ac.SystemDisk.DiskType),
+				DiskSize: safeInt64(ac.SystemDisk.DiskSize),
+			}
+		}
+		for _, d := range ac.DataDisks {
+			if d != nil {
+				detail.DataDisks = append(detail.DataDisks, DiskConfig{
+					DiskType: safeStr(d.DiskType),
+					DiskSize: safeInt64(d.DiskSize),
+				})
+			}
+		}
+		detail.OsName = safeStr(ac.OsName)
+		for _, sg := range ac.SecurityGroupIds {
+			if sg != nil {
+				detail.SecurityGroupIds = append(detail.SecurityGroupIds, *sg)
+			}
 		}
 	}
 	if np.Labels != nil {
@@ -244,6 +307,30 @@ func (t *TencentTKEClient) GetNodePoolDetail(ctx context.Context, clusterID, nod
 				})
 			}
 		}
+	}
+	// 节点列表
+	for _, n := range resp.Response.InstanceSet {
+		if n == nil {
+			continue
+		}
+		node := PoolNode{
+			InstanceID:   safeStr(n.InstanceId),
+			InstanceRole: safeStr(n.InstanceRole),
+			Zone:         safeStr(n.Zone),
+			State:        safeStr(n.InstanceState),
+		}
+		if n.CreatedTime != nil {
+			node.CreatedAt, _ = time.Parse(time.RFC3339, *n.CreatedTime)
+		}
+		if n.CPU != nil {
+			node.CPU = *n.CPU
+		}
+		if n.Mem != nil {
+			node.Memory = *n.Mem
+		}
+		node.PrivateIP = safeStr(n.LanIP)
+		node.PublicIP = safeStr(n.WanIP)
+		detail.Nodes = append(detail.Nodes, node)
 	}
 	return detail, nil
 }

@@ -60,6 +60,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/overview", h.ClusterOverview)
 
 		priv.GET("/clusters/:id/node-pools", h.ListNodePools)
+		priv.GET("/clusters/:id/node-pools/:pool_id", h.GetNodePoolDetail)
 		priv.GET("/clusters/:id/metrics", h.ClusterMetrics)
 		priv.GET("/clusters/:id/grafana/panel", h.GrafanaPanel)
 		priv.GET("/clusters/:id/grafana/dashboards", h.GrafanaDashboards)

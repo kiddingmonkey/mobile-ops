@@ -683,3 +683,42 @@ func (h *Handler) GetPodLogs(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"logs": logs})
 }
+
+// GetNodePoolDetail GET /clusters/:id/node-pools/:pool_id
+func (h *Handler) GetNodePoolDetail(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	poolID, _ := strconv.ParseInt(c.Param("pool_id"), 10, 64)
+	ctx := c.Request.Context()
+	// 1. 拿 cluster
+	var cluster models.Cluster
+	if err := h.db.GetContext(ctx, &cluster, `SELECT * FROM clusters WHERE id=$1`, clusterID); err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	// 2. 拿 node_pool
+	var pool models.NodePool
+	if err := h.db.GetContext(ctx, &pool, `SELECT * FROM node_pools WHERE id=$1 AND cluster_id=$2`, poolID, clusterID); err != nil {
+		c.JSON(404, gin.H{"error": "node pool not found"})
+		return
+	}
+	if pool.ProviderPoolID == nil || *pool.ProviderPoolID == "" {
+		c.JSON(400, gin.H{"error": "node pool has no provider_pool_id"})
+		return
+	}
+	if cluster.CloudAccountID == nil {
+		c.JSON(400, gin.H{"error": "cluster has no cloud_account_id"})
+		return
+	}
+	// 3. 调 TKE
+	tkeClient, err := h.config.GetTKEClient(ctx, *cluster.CloudAccountID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	detail, err := tkeClient.GetNodePoolDetail(ctx, *cluster.ProviderClusterID, *pool.ProviderPoolID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, detail)
+}
