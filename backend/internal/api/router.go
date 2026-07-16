@@ -64,6 +64,10 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/grafana/panel", h.GrafanaPanel)
 		priv.GET("/clusters/:id/grafana/dashboards", h.GrafanaDashboards)
 
+		// K8s 资源管理
+		priv.GET("/clusters/:id/resources/:type", h.ListK8sResources)
+		priv.GET("/clusters/:id/resources/:type/yaml", h.GetK8sResourceYAML)
+
 		// 扩容
 		priv.POST("/scale/precheck", h.ScalePrecheck)
 		priv.POST("/scale/submit", h.ScaleSubmit)

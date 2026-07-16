@@ -542,3 +542,82 @@ func (h *Handler) DeleteShortcut(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"ok": true})
 }
+
+// ============ K8s Resources ============
+
+func (h *Handler) ListK8sResources(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	resourceType := c.Param("type") // pods, deployments, services, configmaps, secrets, nodes
+	namespace := c.DefaultQuery("namespace", "")
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found or kubeconfig not loaded"})
+		return
+	}
+
+	var result interface{}
+	var queryErr error
+
+	switch resourceType {
+	case "pods":
+		result, queryErr = client.ListPods(ctx, namespace)
+	case "deployments":
+		result, queryErr = client.ListDeployments(ctx, namespace)
+	case "services":
+		result, queryErr = client.ListServices(ctx, namespace)
+	case "configmaps":
+		result, queryErr = client.ListConfigMaps(ctx, namespace)
+	case "secrets":
+		result, queryErr = client.ListSecrets(ctx, namespace)
+	case "nodes":
+		result, queryErr = client.ListNodes(ctx)
+	default:
+		c.JSON(400, gin.H{"error": "unsupported resource type"})
+		return
+	}
+
+	if queryErr != nil {
+		c.JSON(500, gin.H{"error": queryErr.Error()})
+		return
+	}
+	c.JSON(200, result)
+}
+
+func (h *Handler) GetK8sResourceYAML(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	resourceType := c.Param("type")
+	namespace := c.Query("namespace")
+	name := c.Query("name")
+
+	if namespace == "" || name == "" {
+		c.JSON(400, gin.H{"error": "namespace and name required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+
+	var result interface{}
+	var queryErr error
+
+	switch resourceType {
+	case "pods":
+		result, queryErr = client.GetPodYAML(ctx, namespace, name)
+	default:
+		c.JSON(400, gin.H{"error": "unsupported resource type"})
+		return
+	}
+
+	if queryErr != nil {
+		c.JSON(500, gin.H{"error": queryErr.Error()})
+		return
+	}
+	c.JSON(200, result)
+}
+

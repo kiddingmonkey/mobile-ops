@@ -29,6 +29,17 @@ class ApiClient {
     )
   }
 
+  // ============ 通用请求方法 ============
+  async get(path: string, config?: any) {
+    const r = await this.http.get(path, config)
+    return r.data
+  }
+
+  async post(path: string, data?: any, config?: any) {
+    const r = await this.http.post(path, data, config)
+    return r.data
+  }
+
   // ============ Auth ============
   async login(username: string, password: string) {
     const r = await this.http.post('/auth/login', { username, password })

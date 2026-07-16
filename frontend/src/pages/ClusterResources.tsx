@@ -26,35 +26,48 @@ export default function ClusterResourcesPage() {
   const loadResources = async (type: ResourceType) => {
     setLoading(true)
     try {
-      // 这里调用后端 API 拉 K8s 资源列表
-      // 暂时用 mock 数据演示
-      await new Promise(resolve => setTimeout(resolve, 500))
-      setResources([
-        { name: 'nginx-deployment', namespace: 'default', status: 'Running', ready: '3/3' },
-        { name: 'redis-service', namespace: 'default', status: 'Running', ready: '1/1' }
-      ])
+      const data = await api.get(`/clusters/${clusterId}/resources/${type}`)
+      setResources(data || [])
     } catch (e: any) {
       Toast.show({ content: e?.message || '加载失败', icon: 'fail' })
+      setResources([])
     } finally {
       setLoading(false)
     }
   }
 
-  const viewYAML = async (name: string) => {
-    const yaml = `apiVersion: v1
-kind: Pod
-metadata:
-  name: ${name}
-  namespace: default
-spec:
-  containers:
-  - name: nginx
-    image: nginx:latest`
+  const viewYAML = async (resource: any) => {
+    try {
+      Toast.show({ content: '加载中...', icon: 'loading', duration: 0 })
+      const yaml = await api.get(`/clusters/${clusterId}/resources/${tab}/yaml`, {
+        params: { namespace: resource.namespace, name: resource.name }
+      })
+      Toast.clear()
 
-    Dialog.alert({
-      title: name,
-      content: <pre style={{ fontSize: 11, overflow: 'auto', maxHeight: '60vh' }}>{yaml}</pre>
-    })
+      Dialog.alert({
+        title: resource.name,
+        content: (
+          <div>
+            <div style={{ marginBottom: 8 }}>
+              <Tag color="primary" style={{ marginRight: 4 }}>{resource.namespace}</Tag>
+              <Tag color={resource.status === 'Running' ? 'success' : 'warning'}>{resource.status}</Tag>
+            </div>
+            <pre style={{
+              fontSize: 11,
+              overflow: 'auto',
+              maxHeight: '60vh',
+              background: '#1E293B',
+              color: '#F8FAFC',
+              padding: 12,
+              borderRadius: 8
+            }}>{JSON.stringify(yaml, null, 2)}</pre>
+          </div>
+        ),
+        closeOnMaskClick: true
+      })
+    } catch (e: any) {
+      Toast.show({ content: e?.message || '加载失败', icon: 'fail' })
+    }
   }
 
   return (
@@ -81,21 +94,53 @@ spec:
             </div>
           ) : (
             <List mode="card">
-              {resources.map((r, i) => (
-                <List.Item
-                  key={i}
-                  prefix={<div style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
-                  }}/>}
-                  description={`Namespace: ${r.namespace} · Ready: ${r.ready}`}
-                  extra={<span className="text-xs">{r.status}</span>}
-                  arrow={<RightOutline />}
-                  onClick={() => viewYAML(r.name)}
-                >
-                  {r.name}
-                </List.Item>
-              ))}
+              {resources.map((r, i) => {
+                let description = ''
+                let statusColor = 'var(--success)'
+
+                switch (tab) {
+                  case 'pods':
+                    description = `Namespace: ${r.namespace} · Ready: ${r.ready} · Restarts: ${r.restarts || 0}`
+                    statusColor = r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
+                    break
+                  case 'deployments':
+                    description = `Namespace: ${r.namespace} · Ready: ${r.ready} · Available: ${r.available}`
+                    statusColor = r.available > 0 ? 'var(--success)' : 'var(--warning)'
+                    break
+                  case 'services':
+                    description = `Namespace: ${r.namespace} · Type: ${r.type} · ClusterIP: ${r.cluster_ip}`
+                    statusColor = 'var(--accent-blue)'
+                    break
+                  case 'configmaps':
+                    description = `Namespace: ${r.namespace} · Keys: ${r.data_count}`
+                    statusColor = 'var(--accent-blue)'
+                    break
+                  case 'secrets':
+                    description = `Namespace: ${r.namespace} · Type: ${r.type} · Keys: ${r.data_count}`
+                    statusColor = 'var(--warning)'
+                    break
+                  case 'nodes':
+                    description = `Status: ${r.status || 'Ready'} · Version: ${r.version || 'N/A'}`
+                    statusColor = 'var(--success)'
+                    break
+                }
+
+                return (
+                  <List.Item
+                    key={i}
+                    prefix={<div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: statusColor
+                    }}/>}
+                    description={description}
+                    extra={<span className="text-xs">{r.status || r.type || 'OK'}</span>}
+                    arrow={<RightOutline />}
+                    onClick={() => viewYAML(r)}
+                  >
+                    {r.name}
+                  </List.Item>
+                )
+              })}
             </List>
           )}
         </div>
