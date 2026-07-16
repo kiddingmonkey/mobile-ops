@@ -93,7 +93,9 @@ export default function SettingsPage() {
 
   return (
     <div className="page">
-      <div className="page-header"><span className="title">设置</span></div>
+      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+        <span className="title">设置</span>
+      </div>
       <div className="page-content">
         {/* 用户卡片 */}
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

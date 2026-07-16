@@ -29,7 +29,7 @@ export default function AlertsPage() {
 
   return (
     <div className="page">
-      <div className="page-header">
+      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
         <span className="title">告警中心</span>
         <span className="text-xs">{firing.length} 活跃</span>
       </div>
