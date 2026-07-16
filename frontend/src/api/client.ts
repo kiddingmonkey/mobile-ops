@@ -233,6 +233,14 @@ class ApiClient {
   }
 
   // ============ Pod 详情 / 事件 / 日志 ============
+  async listNamespaces(clusterId: number) {
+    const r = (await this.http.get(`/clusters/${clusterId}/namespaces`)).data
+    return (Array.isArray(r) ? r : []) as string[]
+  }
+  async listPods(clusterId: number, namespace: string) {
+    const r = (await this.http.get(`/clusters/${clusterId}/namespaces/${namespace}/pods`)).data
+    return (Array.isArray(r) ? r : []) as any[]
+  }
   async getPodDetail(clusterId: number, namespace: string, name: string) {
     return (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}`)).data
   }

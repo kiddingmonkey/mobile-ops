@@ -10,6 +10,7 @@ import HomePage from '@/pages/Home'
 import MonitorPage from '@/pages/Monitor'
 import AlertsPage from '@/pages/Alerts'
 import OperationsPage from '@/pages/Operations'
+import LogsPage from '@/pages/Logs'
 import ScalePage from '@/pages/Scale'
 import SettingsPage from '@/pages/Settings'
 import ClusterResourcesPage from '@/pages/ClusterResources'
@@ -63,9 +64,12 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/monitor" element={<MonitorPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/operations" element={<OperationsPage />} />
+            <Route path="/logs" element={<LogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
+
+          {/* 独立页面（无底部 TabBar） */}
+          <Route path="/operations" element={<Protected><OperationsPage /></Protected>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

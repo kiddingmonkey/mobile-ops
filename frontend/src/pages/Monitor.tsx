@@ -188,9 +188,10 @@ export default function MonitorPage() {
             background: 'var(--bg-elevated)',
             borderBottom: '1px solid var(--border-color)',
             overflowX: 'auto',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            WebkitOverflowScrolling: 'touch'
           }}>
-            <div style={{ display: 'inline-flex', gap: 8, padding: '0 16px' }}>
+            <div style={{ display: 'inline-flex', gap: 8, padding: '0 16px', minWidth: '100%' }}>
               {clusters.map(c => (
                 <div
                   key={c.id}
@@ -205,7 +206,8 @@ export default function MonitorPage() {
                     fontWeight: activeClusterId === c.id ? 600 : 400,
                     cursor: 'pointer',
                     transition: 'all 0.2s',
-                    border: activeClusterId === c.id ? 'none' : '1px solid var(--border-color)'
+                    border: activeClusterId === c.id ? 'none' : '1px solid var(--border-color)',
+                    flexShrink: 0
                   }}
                 >
                   {c.display_name || c.name}

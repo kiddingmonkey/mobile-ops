@@ -624,6 +624,41 @@ func (h *Handler) GetK8sResourceYAML(c *gin.Context) {
 
 // ============ Pod 详情 / 事件 / 日志 ============
 
+// ListNamespaces GET /clusters/:id/namespaces
+func (h *Handler) ListNamespaces(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	namespaces, err := client.ListNamespaces(ctx)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, namespaces)
+}
+
+// ListPods GET /clusters/:id/namespaces/:namespace/pods
+func (h *Handler) ListPods(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	pods, err := client.ListPods(ctx, ns)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, pods)
+}
+
 // GetPodDetail GET /clusters/:id/pods/:namespace/:name
 func (h *Handler) GetPodDetail(c *gin.Context) {
 	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)

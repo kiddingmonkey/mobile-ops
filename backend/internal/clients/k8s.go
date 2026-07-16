@@ -275,6 +275,19 @@ type PodCondition struct {
 	LastTransitionAt *time.Time `json:"last_transition_at,omitempty"`
 }
 
+// ListNamespaces 列出所有 namespace
+func (k *K8sClient) ListNamespaces(ctx context.Context) ([]string, error) {
+	nsList, err := k.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(nsList.Items))
+	for _, ns := range nsList.Items {
+		result = append(result, ns.Name)
+	}
+	return result, nil
+}
+
 // GetPodDetail 拿 Pod 详情
 func (k *K8sClient) GetPodDetail(ctx context.Context, namespace, name string) (*PodDetail, error) {
 	pod, err := k.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TabBar, Badge } from 'antd-mobile'
-import { AppOutline, HistogramOutline, SetOutline, BellOutline, ClockCircleOutline } from 'antd-mobile-icons'
+import { AppOutline, HistogramOutline, SetOutline, BellOutline, FileOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
 
 export default function AppLayout() {
@@ -24,7 +24,7 @@ export default function AppLayout() {
         <BellOutline />
       </Badge>
     )},
-    { key: '/operations', title: '记录', icon: <ClockCircleOutline /> },
+    { key: '/logs', title: '日志', icon: <FileOutline /> },
     { key: '/settings', title: '设置', icon: <SetOutline /> }
   ]
 

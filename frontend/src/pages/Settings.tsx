@@ -170,6 +170,14 @@ export default function SettingsPage() {
           >K8s 集群</List.Item>
         </List>
 
+        {/* 历史记录 */}
+        <List header="历史" mode="card">
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => nav('/operations')}
+          >操作记录</List.Item>
+        </List>
+
         {/* 关于 */}
         <List header="关于" mode="card">
           <List.Item

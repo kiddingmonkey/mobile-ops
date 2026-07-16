@@ -69,7 +69,9 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/resources/:type", h.ListK8sResources)
 		priv.GET("/clusters/:id/resources/:type/yaml", h.GetK8sResourceYAML)
 
-		// Pod 详情 / 事件 / 日志
+		// Pod 相关
+		priv.GET("/clusters/:id/namespaces", h.ListNamespaces)
+		priv.GET("/clusters/:id/namespaces/:namespace/pods", h.ListPods)
 		priv.GET("/clusters/:id/pods/:namespace/:name", h.GetPodDetail)
 		priv.GET("/clusters/:id/pods/:namespace/:name/events", h.ListPodEvents)
 		priv.GET("/clusters/:id/pods/:namespace/:name/logs", h.GetPodLogs)
