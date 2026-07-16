@@ -19,6 +19,8 @@ export const useAuth = create<AuthState>()(
       },
       logout: () => {
         localStorage.removeItem('mobile_ops_token')
+        // 主动登出时清除"记住密码"凭据,避免被踢回登录页后又被自动登录进来
+        localStorage.removeItem('mobile_ops_saved_credentials')
         set({ token: null, user: null })
       }
     }),

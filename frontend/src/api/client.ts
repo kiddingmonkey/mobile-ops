@@ -8,7 +8,11 @@ export function friendlyApiError(err: any): string {
   if (!err) return '未知错误'
   const status = err.response?.status
   const body = err.response?.data
-  if (status === 401) return '登录已过期，请重新登录'
+  if (status === 401) {
+    // 登录页 401 = 账号密码错; 其他页 401 = token 过期
+    const onLogin = typeof window !== 'undefined' && window.location.pathname === '/login'
+    return onLogin ? '账号或密码错误' : '登录已过期，请重新登录'
+  }
   if (status === 403) return '无权限'
   if (status === 404) return '接口不存在'
   if (status && status >= 500) {

@@ -1,33 +1,110 @@
-import { useState } from 'react'
-import { Input, Button, Toast } from 'antd-mobile'
+import { useEffect, useRef, useState } from 'react'
+import { Button, Toast, Selector } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api, friendlyApiError } from '@/api/client'
 import { useAuth } from '@/store'
 import RemoteStatusBanner from '@/components/RemoteStatusBanner'
 
+// APK WebView + 国产输入法下 antd-mobile Input 的 onChange 有时不同步,
+// 用原生 <input> + ref 直读 DOM 值,规避 state 与 DOM 不一致导致的 "请输入密码"
+
+const CRED_KEY = 'mobile_ops_saved_credentials'
+type RememberOption = 'off' | '7d' | '30d'
+const DAYS: Record<RememberOption, number> = { off: 0, '7d': 7, '30d': 30 }
+
+interface SavedCred { u: string; p: string; exp: number; days: number }
+
+// 简单 base64 混淆,避免 localStorage 里明文可读; 不是加密,只是防手抖泄露
+const obfuscate = (s: string) => btoa(encodeURIComponent(s))
+const deobfuscate = (s: string) => { try { return decodeURIComponent(atob(s)) } catch { return '' } }
+
+function loadCred(): SavedCred | null {
+  try {
+    const raw = localStorage.getItem(CRED_KEY)
+    if (!raw) return null
+    const obj = JSON.parse(raw)
+    if (!obj || typeof obj.exp !== 'number') return null
+    if (Date.now() > obj.exp) {
+      localStorage.removeItem(CRED_KEY)
+      return null
+    }
+    return { u: deobfuscate(obj.u), p: deobfuscate(obj.p), exp: obj.exp, days: obj.days || 0 }
+  } catch { return null }
+}
+function saveCred(u: string, p: string, days: number) {
+  if (days <= 0) { localStorage.removeItem(CRED_KEY); return }
+  const exp = Date.now() + days * 24 * 60 * 60 * 1000
+  localStorage.setItem(CRED_KEY, JSON.stringify({ u: obfuscate(u), p: obfuscate(p), exp, days }))
+}
+
 export default function LoginPage() {
   const nav = useNavigate()
   const setAuth = useAuth(s => s.setAuth)
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('')
+  const userRef = useRef<HTMLInputElement>(null)
+  const passRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
+  const [remember, setRemember] = useState<RememberOption>('7d')
+  const [autoTried, setAutoTried] = useState(false)
 
-  const submit = async () => {
-    if (!username || !password) {
-      Toast.show({ content: '请填账号密码', icon: 'fail' })
-      return
-    }
+  const doLogin = async (username: string, password: string, silent = false) => {
     setLoading(true)
     try {
       const r = await api.login(username, password)
       setAuth(r.token, r.user)
-      Toast.show({ content: '登录成功', icon: 'success' })
+      saveCred(username, password, DAYS[remember])
+      if (!silent) Toast.show({ content: '登录成功', icon: 'success' })
       nav('/', { replace: true })
+      return true
     } catch (e: any) {
-      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
+      // 自动登录静默失败:密码可能改了,清凭据回到手动
+      if (silent && e?.response?.status === 401) {
+        localStorage.removeItem(CRED_KEY)
+      } else {
+        Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
+      }
+      return false
     } finally {
       setLoading(false)
     }
+  }
+
+  const submit = () => {
+    const username = userRef.current?.value?.trim() || ''
+    const password = passRef.current?.value || ''
+    if (!username || !password) {
+      Toast.show({ content: '请填账号密码', icon: 'fail' })
+      return
+    }
+    doLogin(username, password, false)
+  }
+
+  // 挂载时尝试自动登录
+  useEffect(() => {
+    if (autoTried) return
+    setAutoTried(true)
+    const c = loadCred()
+    if (!c) return
+    // 回填输入框,选项恢复
+    if (userRef.current) userRef.current.value = c.u
+    if (passRef.current) passRef.current.value = c.p
+    const opt = (Object.keys(DAYS) as RememberOption[]).find(k => DAYS[k] === c.days) || '7d'
+    setRemember(opt)
+    doLogin(c.u, c.p, true)
+  }, [])
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '14px 16px',
+    fontSize: 16,
+    lineHeight: '22px',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 12,
+    outline: 'none',
+    WebkitAppearance: 'none',
+    caretColor: 'var(--accent-blue)'
   }
 
   return (
@@ -58,43 +135,59 @@ export default function LoginPage() {
         <div className="text-sm">登录 Mobile-Ops，随时随地掌控你的集群</div>
       </div>
 
-      {/* 表单 */}
-      <div style={{ flex: 1 }}>
+      {/* 表单 —— 用原生 input 非受控，直读 ref */}
+      <form onSubmit={(e) => { e.preventDefault(); submit() }} style={{ flex: 1 }}>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500 }}>
             账号
           </div>
-          <Input
-            value={username}
-            onChange={setUsername}
+          <input
+            ref={userRef}
+            type="text"
+            defaultValue="admin"
             placeholder="admin"
-            style={{
-              '--font-size': '16px',
-              padding: '14px 16px',
-              background: 'var(--bg-input)',
-              borderRadius: 12
-            } as any}
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            style={inputStyle}
           />
         </div>
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500 }}>
             密码
           </div>
-          <Input
+          <input
+            ref={passRef}
             type="password"
-            value={password}
-            onChange={setPassword}
             placeholder="••••••"
-            style={{
-              '--font-size': '16px',
-              padding: '14px 16px',
-              background: 'var(--bg-input)',
-              borderRadius: 12
-            } as any}
-            onEnterPress={submit}
+            autoComplete="current-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            style={inputStyle}
           />
         </div>
-      </div>
+
+        {/* 记住密码选项 */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500 }}>
+            记住密码
+          </div>
+          <Selector
+            options={[
+              { label: '不记住', value: 'off' },
+              { label: '7 天', value: '7d' },
+              { label: '30 天', value: '30d' }
+            ]}
+            value={[remember]}
+            onChange={(arr) => arr[0] && setRemember(arr[0] as RememberOption)}
+            style={{ '--border-radius': '10px', '--padding': '8px 12px' } as any}
+          />
+        </div>
+
+        <button type="submit" style={{ display: 'none' }} aria-hidden />
+      </form>
 
       {/* 底部按钮区 */}
       <div>
