@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
     "@capacitor/filesystem": "^8.1.2",
     "antd-mobile": "^5.38.1",
     "antd-mobile-icons": "^0.3.0",

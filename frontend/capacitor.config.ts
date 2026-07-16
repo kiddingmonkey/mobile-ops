@@ -12,7 +12,15 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     captureInput: true,
-    webContentsDebuggingEnabled: true
+    webContentsDebuggingEnabled: true,
+    // 禁用系统返回手势避免误触退出App
+    overrideUserAgent: undefined,
+    backgroundColor: '#ffffff'
+  },
+  ios: {
+    // 禁用iOS侧滑返回手势
+    scrollEnabled: true,
+    allowsBackForwardNavigationGestures: false
   }
 };
 

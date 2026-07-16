@@ -5,6 +5,7 @@ import { useAuth } from '@/store'
 import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
+import { App as CapApp } from '@capacitor/app'
 
 import ErrorBoundary from '@/components/ErrorBoundary'
 import AppLayout from '@/components/AppLayout'
@@ -63,6 +64,20 @@ async function restoreUpdatedVersion() {
   }
 }
 
+// 处理Android返回按钮
+function setupBackButtonHandler() {
+  if (!Capacitor.isNativePlatform()) return
+
+  CapApp.addListener('backButton', (event: { canGoBack: boolean }) => {
+    // 如果WebView可以返回（有历史记录），则返回上一页
+    if (event.canGoBack) {
+      window.history.back()
+    }
+    // 否则什么都不做，防止退出App
+    // 用户需要通过Home键或任务管理器退出
+  })
+}
+
 function Protected({ children }: { children: React.ReactNode }) {
   const token = useAuth(s => s.token)
   if (!token) return <Navigate to="/login" replace />
@@ -72,6 +87,7 @@ function Protected({ children }: { children: React.ReactNode }) {
 export default function App() {
   useEffect(() => {
     restoreUpdatedVersion()
+    setupBackButtonHandler()
   }, [])
 
   return (
