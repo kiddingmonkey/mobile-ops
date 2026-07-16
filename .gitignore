@@ -42,3 +42,4 @@ certs/
 # 本地含明文密码的部署文档（永远不要 push）
 DEPLOYMENT.local.md
 *.local.md
+backend/server

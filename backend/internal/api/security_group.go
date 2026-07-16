@@ -150,16 +150,19 @@ func (h *Handler) ApplySGWhitelist(c *gin.Context) {
 		desc = *w.Description
 	}
 
-	// 4. 删旧规则 (按 description 匹配)
-	deleted, err := vpcClient.DeleteRulesByDescription(ctx, w.SGID, desc)
+	// 4. Upsert: 按 description 找现有规则, 改 CidrBlock; 找不到就新增
+	matched, updated, err := vpcClient.UpsertRuleByDescription(ctx, w.SGID, ip, w.Port, w.Protocol, desc)
 	if err != nil {
-		c.JSON(500, buildSGErrorResp("删除旧规则失败", "delete", err, w, ip, desc))
-		return
-	}
-
-	// 5. 添加新规则
-	if err := vpcClient.AddIngressRule(ctx, w.SGID, ip, w.Port, w.Protocol, desc); err != nil {
-		c.JSON(500, buildSGErrorResp("添加新规则失败", "create", err, w, ip, desc))
+		stage := "create"
+		msg := "添加新规则失败"
+		if strings.Contains(err.Error(), "vpc replace") {
+			stage = "modify"
+			msg = "修改现有规则失败"
+		} else if strings.Contains(err.Error(), "Describe") || matched < 0 {
+			stage = "describe"
+			msg = "查询现有规则失败"
+		}
+		c.JSON(500, buildSGErrorResp(msg, stage, err, w, ip, desc))
 		return
 	}
 
@@ -169,10 +172,15 @@ func (h *Handler) ApplySGWhitelist(c *gin.Context) {
 		`UPDATE security_group_whitelists
 		 SET last_ip=$1, last_updated_at=$2, updated_at=NOW() WHERE id=$3`,
 		ip, now, id)
+
+	// 组装响应: mode/matched 让前端知道是新增还是替换
+	mode := "created"
+	if updated {
+		mode = "updated"
+	}
 	if err != nil {
-		// SG 已改成功,只是更新 DB 失败,返回 200 但带 warning
 		c.JSON(200, gin.H{
-			"ok": true, "ip": ip, "deleted": deleted,
+			"ok": true, "ip": ip, "mode": mode, "matched": matched,
 			"warning": "SG updated but DB update failed: " + err.Error(),
 		})
 		return
@@ -180,7 +188,8 @@ func (h *Handler) ApplySGWhitelist(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"ok":      true,
 		"ip":      ip,
-		"deleted": deleted,
+		"mode":    mode,
+		"matched": matched,
 		"sg_id":   w.SGID,
 		"port":    w.Port,
 	})
@@ -212,13 +221,18 @@ func buildSGErrorResp(stage, op string, err error, w models.SecurityGroupWhiteli
 	hint := ""
 	switch {
 	case strings.Contains(raw, "UnauthorizedOperation"), strings.Contains(raw, "no permission"):
-		perm := "vpc:CreateSecurityGroupPolicies / vpc:DeleteSecurityGroupPolicies"
-		if op == "create" {
-			perm = "vpc:CreateSecurityGroupPolicies (+ vpc:DescribeSecurityGroupPolicies)"
-		} else if op == "delete" {
-			perm = "vpc:DeleteSecurityGroupPolicies (+ vpc:DescribeSecurityGroupPolicies)"
+		perm := ""
+		switch op {
+		case "create":
+			perm = "vpc:CreateSecurityGroupPolicy"
+		case "modify":
+			perm = "vpc:ModifySecurityGroupPolicy"
+		case "describe":
+			perm = "vpc:DescribeSecurityGroupPolicies"
+		default:
+			perm = "vpc:DescribeSecurityGroupPolicies + CreateSecurityGroupPolicy + ModifySecurityGroupPolicy"
 		}
-		hint = "AK/SK 权限不足. 需要在腾讯云 CAM 里给这个子账号加以下权限:\n" + perm + "\n或直接给 QcloudVPCFullAccess (仅测试)"
+		hint = "AK/SK 权限不足. 需要在腾讯云 CAM 里给这个子账号加权限:\n" + perm + "\n或绑定策略 QcloudVPCFullAccess (仅测试)"
 	case strings.Contains(raw, "InvalidParameterValue.Range"):
 		hint = "参数格式错. 检查 端口(数字/范围/ALL)、协议(TCP/UDP/ALL)、sg_id(sg-开头) 是否正确."
 	case strings.Contains(raw, "InvalidParameter") && strings.Contains(raw, "SecurityGroupId"):

@@ -39,7 +39,7 @@ export default function SecurityGroupsPage() {
           <div>安全组: <b>{row.sg_id}</b></div>
           <div>端口: {row.port} · {row.protocol}</div>
           <div style={{ marginTop: 6, color: 'var(--text-tertiary)', fontSize: 11 }}>
-            将删除旧规则 (按备注匹配),并放行当前 IP: <b>{myIP}</b>
+            按备注匹配现有规则: 找到就改 IP, 没找到就新增. 放行当前 IP: <b>{myIP}</b>
           </div>
         </div>
       ),
@@ -51,8 +51,10 @@ export default function SecurityGroupsPage() {
     try {
       const r = await api.applySGWhitelist(row.id)
       Toast.clear()
+      const action = r.mode === 'updated' ? '已改写规则为' : '已新增规则放行'
+      const extra = r.matched > 1 ? ` (匹配 ${r.matched} 条,只改了第一条)` : ''
       Toast.show({
-        content: `已放行 ${r.ip} (删除 ${r.deleted} 条旧规则)`,
+        content: `${action} ${r.ip}${extra}`,
         icon: 'success',
         duration: 2500
       })

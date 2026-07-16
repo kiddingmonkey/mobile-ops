@@ -109,6 +109,73 @@ func (v *TencentVPCClient) DeleteRulesByDescription(ctx context.Context, sgID, d
 	return len(toDelete), nil
 }
 
+// UpsertRuleByDescription 按 description 匹配现有规则:
+//  - 若匹配到 1 条: 用 ReplaceSecurityGroupPolicies 修改 CidrBlock (需 ModifySecurityGroupPolicy 权限)
+//  - 若匹配到 0 条: 用 CreateSecurityGroupPolicies 新增 (需 CreateSecurityGroupPolicy 权限)
+//  - 若匹配到多条: 只更新第一条,返回 matched 数量给上层决定
+// 返回: (matched 匹配数, updated true=改了旧的/false=新建了, error)
+func (v *TencentVPCClient) UpsertRuleByDescription(ctx context.Context, sgID, ip, port, protocol, description string) (int, bool, error) {
+	if description == "" {
+		return 0, false, fmt.Errorf("description is empty")
+	}
+	cidr := ip
+	if !strings.Contains(cidr, "/") {
+		cidr = cidr + "/32"
+	}
+	if protocol == "" {
+		protocol = "TCP"
+	}
+	if port == "" {
+		port = "ALL"
+	}
+
+	rules, err := v.ListIngressRules(ctx, sgID)
+	if err != nil {
+		return 0, false, err
+	}
+	matched := 0
+	var firstIdx int64 = -1
+	for _, r := range rules {
+		if r.PolicyDescription == description {
+			matched++
+			if firstIdx < 0 {
+				firstIdx = r.PolicyIndex
+			}
+		}
+	}
+
+	if matched == 0 {
+		// 新增
+		if err := v.AddIngressRule(ctx, sgID, ip, port, protocol, description); err != nil {
+			return 0, false, err
+		}
+		return 0, false, nil
+	}
+
+	// Replace 第一条
+	req := vpc.NewReplaceSecurityGroupPoliciesRequest()
+	req.SecurityGroupId = common.StringPtr(sgID)
+	req.SecurityGroupPolicySet = &vpc.SecurityGroupPolicySet{
+		Ingress: []*vpc.SecurityGroupPolicy{
+			{
+				PolicyIndex:       common.Int64Ptr(firstIdx),
+				Protocol:          common.StringPtr(protocol),
+				Port:              common.StringPtr(port),
+				CidrBlock:         common.StringPtr(cidr),
+				Action:            common.StringPtr("ACCEPT"),
+				PolicyDescription: common.StringPtr(description),
+			},
+		},
+	}
+	if _, err := v.client.ReplaceSecurityGroupPoliciesWithContext(ctx, req); err != nil {
+		if e, ok := err.(*tcerr.TencentCloudSDKError); ok {
+			return matched, false, fmt.Errorf("vpc replace [%s] %s", e.Code, e.Message)
+		}
+		return matched, false, err
+	}
+	return matched, true, nil
+}
+
 // AddIngressRule 添加一条入站规则 (放行 IP+端口)
 // port 支持 "443" / "80,443" / "ALL", protocol 支持 TCP/UDP/ALL
 func (v *TencentVPCClient) AddIngressRule(ctx context.Context, sgID, ip, port, protocol, description string) error {
