@@ -153,13 +153,13 @@ func (h *Handler) ApplySGWhitelist(c *gin.Context) {
 	// 4. 删旧规则 (按 description 匹配)
 	deleted, err := vpcClient.DeleteRulesByDescription(ctx, w.SGID, desc)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "delete old rules: " + err.Error()})
+		c.JSON(500, buildSGErrorResp("删除旧规则失败", "delete", err, w, ip, desc))
 		return
 	}
 
 	// 5. 添加新规则
 	if err := vpcClient.AddIngressRule(ctx, w.SGID, ip, w.Port, w.Protocol, desc); err != nil {
-		c.JSON(500, gin.H{"error": "add new rule: " + err.Error()})
+		c.JSON(500, buildSGErrorResp("添加新规则失败", "create", err, w, ip, desc))
 		return
 	}
 
@@ -184,4 +184,67 @@ func (h *Handler) ApplySGWhitelist(c *gin.Context) {
 		"sg_id":   w.SGID,
 		"port":    w.Port,
 	})
+}
+
+// buildSGErrorResp 从错误里抽出 SDK code / requestId, 给出人话建议
+func buildSGErrorResp(stage, op string, err error, w models.SecurityGroupWhitelist, ip, desc string) gin.H {
+	raw := err.Error()
+
+	// SDK 错误常见格式: "vpc delete [Code] message"
+	code := ""
+	if idx := strings.Index(raw, "["); idx >= 0 {
+		rest := raw[idx+1:]
+		if end := strings.Index(rest, "]"); end > 0 {
+			code = rest[:end]
+		}
+	}
+
+	// 抽 requestId
+	reqID := ""
+	if i := strings.Index(raw, "request id:"); i >= 0 {
+		rest := strings.TrimSpace(raw[i+len("request id:"):])
+		if end := strings.IndexAny(rest, "] "); end > 0 {
+			reqID = strings.TrimSpace(rest[:end])
+		}
+	}
+
+	// 给人话建议
+	hint := ""
+	switch {
+	case strings.Contains(raw, "UnauthorizedOperation"), strings.Contains(raw, "no permission"):
+		perm := "vpc:CreateSecurityGroupPolicies / vpc:DeleteSecurityGroupPolicies"
+		if op == "create" {
+			perm = "vpc:CreateSecurityGroupPolicies (+ vpc:DescribeSecurityGroupPolicies)"
+		} else if op == "delete" {
+			perm = "vpc:DeleteSecurityGroupPolicies (+ vpc:DescribeSecurityGroupPolicies)"
+		}
+		hint = "AK/SK 权限不足. 需要在腾讯云 CAM 里给这个子账号加以下权限:\n" + perm + "\n或直接给 QcloudVPCFullAccess (仅测试)"
+	case strings.Contains(raw, "InvalidParameterValue.Range"):
+		hint = "参数格式错. 检查 端口(数字/范围/ALL)、协议(TCP/UDP/ALL)、sg_id(sg-开头) 是否正确."
+	case strings.Contains(raw, "InvalidParameter") && strings.Contains(raw, "SecurityGroupId"):
+		hint = "安全组 ID 不存在或不属于当前云账号/地域. 请核对 sg_id 和地域."
+	case strings.Contains(raw, "AuthFailure"):
+		hint = "AK/SK 无效或已过期. 到设置 → 腾讯云 AK/SK 里检查."
+	case strings.Contains(raw, "LimitExceeded"):
+		hint = "安全组规则数已达上限. 需要先清理无用规则."
+	default:
+		hint = "腾讯云 API 返回错误. 可把 request_id 提交给腾讯云工单排查."
+	}
+
+	return gin.H{
+		"error":      stage,
+		"stage":      op,
+		"code":       code,
+		"request_id": reqID,
+		"message":    raw,
+		"hint":       hint,
+		"context": gin.H{
+			"sg_id":       w.SGID,
+			"region":      w.Region,
+			"port":        w.Port,
+			"protocol":    w.Protocol,
+			"description": desc,
+			"ip":          ip,
+		},
+	}
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { List, Button, Toast, Dialog, Tag, PullToRefresh, SwipeAction } from 'antd-mobile'
+import { Button, Toast, Dialog, Tag, PullToRefresh, SwipeAction } from 'antd-mobile'
 import { AddOutline, LockOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
@@ -59,10 +59,97 @@ export default function SecurityGroupsPage() {
       await load()
     } catch (e: any) {
       Toast.clear()
-      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 4000 })
+      showApplyError(e)
     } finally {
       setApplying(null)
     }
+  }
+
+  // 用 Dialog 详细展示后端结构化错误,支持复制
+  const showApplyError = (e: any) => {
+    const body = e?.response?.data || {}
+    const status = e?.response?.status
+    const hasStructured = body && (body.code || body.hint || body.message)
+
+    if (!hasStructured) {
+      Dialog.alert({
+        title: '更新失败',
+        content: (
+          <div style={{ fontSize: 12, wordBreak: 'break-all' }}>
+            {friendlyApiError(e)}
+          </div>
+        )
+      })
+      return
+    }
+
+    const fullText = JSON.stringify(body, null, 2)
+    Dialog.alert({
+      title: body.error || '更新失败',
+      content: (
+        <div style={{ fontSize: 12, textAlign: 'left' }}>
+          {body.code && (
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ color: 'var(--text-tertiary)' }}>错误码: </span>
+              <span style={{ color: 'var(--danger)', fontFamily: 'ui-monospace, monospace' }}>{body.code}</span>
+              {body.stage && (
+                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  ({body.stage} 阶段)
+                </span>
+              )}
+            </div>
+          )}
+          {body.hint && (
+            <div style={{
+              background: 'rgba(255, 200, 0, 0.1)',
+              borderLeft: '3px solid var(--warning)',
+              padding: 8, marginBottom: 8,
+              fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.5
+            }}>
+              💡 {body.hint}
+            </div>
+          )}
+          {body.request_id && (
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6, fontFamily: 'ui-monospace, monospace' }}>
+              request_id: {body.request_id}
+            </div>
+          )}
+          {body.message && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 11, color: 'var(--accent-blue)', cursor: 'pointer' }}>
+                原始错误信息
+              </summary>
+              <pre style={{
+                fontSize: 10, marginTop: 6, padding: 8,
+                background: 'var(--bg-primary)', borderRadius: 4,
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                maxHeight: 160, overflow: 'auto',
+                color: 'var(--text-secondary)'
+              }}>
+                {body.message}
+              </pre>
+            </details>
+          )}
+          {status && (
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              HTTP {status}
+            </div>
+          )}
+          <Button
+            block size="mini" fill="outline" style={{ marginTop: 10 }}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(fullText)
+                Toast.show({ content: '已复制完整错误', icon: 'success', duration: 1000 })
+              } catch {
+                Toast.show({ content: '复制失败', icon: 'fail' })
+              }
+            }}
+          >复制完整错误 JSON</Button>
+        </div>
+      ),
+      confirmText: '关闭'
+    })
   }
 
   const del = async (row: any) => {
