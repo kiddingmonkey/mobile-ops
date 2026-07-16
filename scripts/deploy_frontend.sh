@@ -12,22 +12,25 @@ DIST_ZIP_PATH="/data2/haowu33/mobile/frontend/dist.zip"
 
 cd "$(dirname "$0")/../frontend"
 
-echo "📦 [1/5] 编译前端..."
+echo "🧹 [1/6] 清理旧的 dist 目录..."
+rm -rf dist dist.zip
+
+echo "📦 [2/6] 编译前端..."
 npm run build
 
-echo "📦 [2/5] 打包 dist.zip..."
+echo "📦 [3/6] 打包 dist.zip..."
 cd dist
 zip -r ../dist.zip . -x "*.DS_Store"
 cd ..
 
-echo "📤 [3/5] 上传 dist 目录到服务器..."
+echo "📤 [4/6] 上传 dist 目录到服务器..."
 export SSHPASS="$SERVER_PASS"
 sshpass -e scp -o StrictHostKeyChecking=no -r dist/* ${SERVER_USER}@${SERVER}:${FRONTEND_DIR}/dist/
 
-echo "📤 [4/5] 上传 dist.zip 到服务器 (用于 App 更新)..."
+echo "📤 [5/6] 上传 dist.zip 到服务器 (用于 App 更新)..."
 sshpass -e scp -o StrictHostKeyChecking=no dist.zip ${SERVER_USER}@${SERVER}:${DIST_ZIP_PATH}
 
-echo "✅ [5/5] 验证部署..."
+echo "✅ [6/6] 验证部署..."
 sshpass -e ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${SERVER} << 'EOF'
 echo "📊 前端文件:"
 ls -lh /data2/haowu33/mobile/frontend/dist/index.html
