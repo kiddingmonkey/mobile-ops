@@ -93,48 +93,63 @@ export default function ClusterResourcesPage() {
               <div className="empty-title">没有 {tab}</div>
             </div>
           ) : (
-            <List mode="card">
+            <List mode="card" style={{
+              '--font-size': '12px',
+              '--prefix-width': '0px'
+            } as any}>
               {resources.map((r, i) => {
                 let description = ''
                 let statusColor = 'var(--success)'
 
                 switch (tab) {
                   case 'pods':
-                    description = `Namespace: ${r.namespace} · Ready: ${r.ready} · Restarts: ${r.restarts || 0}`
+                    description = `${r.namespace} · ${r.ready} · Restarts: ${r.restarts || 0}`
                     statusColor = r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
                     break
                   case 'deployments':
-                    description = `Namespace: ${r.namespace} · Ready: ${r.ready} · Available: ${r.available}`
+                    description = `${r.namespace} · ${r.ready} · Available: ${r.available}`
                     statusColor = r.available > 0 ? 'var(--success)' : 'var(--warning)'
                     break
                   case 'services':
-                    description = `Namespace: ${r.namespace} · Type: ${r.type} · ClusterIP: ${r.cluster_ip}`
+                    description = `${r.namespace} · ${r.type} · ${r.cluster_ip}`
                     statusColor = 'var(--accent-blue)'
                     break
                   case 'configmaps':
-                    description = `Namespace: ${r.namespace} · Keys: ${r.data_count}`
+                    description = `${r.namespace} · Keys: ${r.data_count}`
                     statusColor = 'var(--accent-blue)'
                     break
                   case 'secrets':
-                    description = `Namespace: ${r.namespace} · Type: ${r.type} · Keys: ${r.data_count}`
+                    description = `${r.namespace} · ${r.type} · Keys: ${r.data_count}`
                     statusColor = 'var(--warning)'
                     break
                   case 'nodes':
-                    description = `Status: ${r.status || 'Ready'} · Version: ${r.version || 'N/A'}`
-                    statusColor = 'var(--success)'
+                    description = `${r.status || 'Ready'} · ${r.version || 'N/A'}`
+                    statusColor = r.status === 'Ready' ? 'var(--success)' : 'var(--error)'
                     break
                 }
 
                 return (
                   <List.Item
                     key={i}
-                    prefix={<div style={{
-                      width: 8, height: 8, borderRadius: '50%',
-                      background: statusColor
-                    }}/>}
-                    description={description}
-                    extra={<span className="text-xs">{r.status || r.type || 'OK'}</span>}
-                    arrow={<RightOutline />}
+                    prefix={
+                      <div style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: statusColor,
+                        marginRight: 6
+                      }} />
+                    }
+                    description={
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                        {description}
+                      </div>
+                    }
+                    arrow={<RightOutline fontSize={14} />}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: 13
+                    }}
                     onClick={() => {
                       if (tab === 'pods') {
                         nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)

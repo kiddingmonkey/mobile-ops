@@ -35,8 +35,11 @@ export default function LogsPage() {
   const [podLoading, setPodLoading] = useState(false)
   const [selectedNamespace, setSelectedNamespace] = useState('')
   const [selectedPod, setSelectedPod] = useState('')
+  const [selectedContainer, setSelectedContainer] = useState('')
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [pods, setPods] = useState<any[]>([])
+  const [containers, setContainers] = useState<string[]>([])
+  const [logType, setLogType] = useState<'stdout' | 'file'>('stdout')
 
   useEffect(() => {
     api.listClusters().then(cs => {
@@ -87,6 +90,24 @@ export default function LogsPage() {
     }
   }, [selectedNamespace, activeClusterId])
 
+  useEffect(() => {
+    if (selectedPod && pods.length > 0) {
+      // 获取选中 Pod 的容器列表
+      const pod = pods.find(p => p.name === selectedPod)
+      if (pod && pod.containers && pod.containers.length > 0) {
+        const containerNames = pod.containers.map((c: any) => c.name)
+        setContainers(containerNames)
+        // 默认选择第一个容器
+        if (!selectedContainer || !containerNames.includes(selectedContainer)) {
+          setSelectedContainer(containerNames[0])
+        }
+      } else {
+        setContainers([])
+        setSelectedContainer('')
+      }
+    }
+  }, [selectedPod, pods])
+
   const loadPods = async () => {
     if (!activeClusterId || !selectedNamespace) return
     try {
@@ -105,10 +126,19 @@ export default function LogsPage() {
       Toast.show({ content: '请先选择 namespace 和 pod', icon: 'fail' })
       return
     }
+    if (logType === 'stdout' && !selectedContainer) {
+      Toast.show({ content: '请先选择容器', icon: 'fail' })
+      return
+    }
     setPodLoading(true)
     try {
-      const logs = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod)
-      setPodLogs(logs || '(无日志)')
+      if (logType === 'stdout') {
+        const logs = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod, selectedContainer)
+        setPodLogs(logs || '(无日志)')
+      } else {
+        // TODO: 文件日志功能
+        Toast.show({ content: '容器文件日志功能开发中', icon: 'fail' })
+      }
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '获取日志失败', icon: 'fail' })
     } finally {
@@ -322,108 +352,135 @@ export default function LogsPage() {
 
               {/* 容器日志 Tab */}
               <Tabs.Tab title="📦 容器日志 (Pod)" key="pod">
-                <div className="card">
-                  <List mode="card" style={{
-                    '--border-inner': '0px',
-                    '--border-top': '0px',
-                    '--border-bottom': '0px',
-                    '--padding-left': '0px',
-                    '--padding-right': '0px'
-                  } as any}>
-                    <List.Item
-                      title={<span style={{ fontSize: 13, fontWeight: 600 }}>Namespace</span>}
-                      description={
-                        <div style={{ marginTop: 8 }}>
-                          {namespaces.length === 0 ? (
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                              正在加载...
-                            </div>
-                          ) : (
-                            <Selector
-                              columns={3}
-                              options={namespaces.map(ns => ({ label: ns, value: ns }))}
-                              value={selectedNamespace ? [selectedNamespace] : []}
-                              onChange={v => {
-                                setSelectedNamespace(v[0] as string || '')
-                                setSelectedPod('')
-                                setPodLogs('')
-                              }}
-                              style={{ '--border-radius': '6px' } as any}
-                            />
-                          )}
-                        </div>
-                      }
-                    />
+                <div className="card" style={{ padding: '12px' }}>
+                  {/* 紧凑的选择器 */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Namespace</div>
+                      <select
+                        value={selectedNamespace}
+                        onChange={(e) => {
+                          setSelectedNamespace(e.target.value)
+                          setSelectedPod('')
+                          setSelectedContainer('')
+                          setPodLogs('')
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-secondary)',
+                          fontSize: 12
+                        }}
+                      >
+                        <option value="">选择 namespace</option>
+                        {namespaces.map(ns => (
+                          <option key={ns} value={ns}>{ns}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <List.Item
-                      title={<span style={{ fontSize: 13, fontWeight: 600 }}>Pod</span>}
-                      description={
-                        <div style={{ marginTop: 8 }}>
-                          {!selectedNamespace ? (
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                              请先选择 namespace
-                            </div>
-                          ) : pods.length === 0 ? (
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                              该 namespace 下没有 Pod
-                            </div>
-                          ) : (
-                            <Selector
-                              columns={2}
-                              options={pods.map(p => ({ label: p.name, value: p.name }))}
-                              value={selectedPod ? [selectedPod] : []}
-                              onChange={v => {
-                                setSelectedPod(v[0] as string || '')
-                                setPodLogs('')
-                              }}
-                              style={{ '--border-radius': '6px' } as any}
-                            />
-                          )}
-                        </div>
-                      }
-                    />
-                  </List>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Pod</div>
+                      <select
+                        value={selectedPod}
+                        onChange={(e) => {
+                          setSelectedPod(e.target.value)
+                          setSelectedContainer('')
+                          setPodLogs('')
+                        }}
+                        disabled={!selectedNamespace || pods.length === 0}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-secondary)',
+                          fontSize: 12,
+                          opacity: !selectedNamespace ? 0.5 : 1
+                        }}
+                      >
+                        <option value="">选择 Pod</option>
+                        {pods.map(p => (
+                          <option key={p.name} value={p.name}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                  <Button
-                    block
-                    color="primary"
-                    onClick={loadPodLogs}
-                    loading={podLoading}
-                    disabled={!selectedPod}
-                    style={{ marginTop: 16 }}
-                  >
-                    <SearchOutline /> 查看日志
-                  </Button>
+                  {selectedPod && containers.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}>容器</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {containers.map(c => (
+                          <div
+                            key={c}
+                            onClick={() => {
+                              setSelectedContainer(c)
+                              setPodLogs('')
+                            }}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              cursor: 'pointer',
+                              background: selectedContainer === c ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                              color: selectedContainer === c ? 'white' : 'var(--text-primary)',
+                              border: selectedContainer === c ? 'none' : '1px solid var(--border-color)',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {c}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Button
+                      block
+                      color="primary"
+                      size="small"
+                      onClick={loadPodLogs}
+                      loading={podLoading}
+                      disabled={!selectedPod || !selectedContainer}
+                    >
+                      查看日志
+                    </Button>
+                  </div>
                 </div>
 
                 {podLogs && (
-                  <div className="card">
+                  <div className="card" style={{ marginTop: 0 }}>
                     <div style={{
-                      fontSize: 13,
+                      fontSize: 11,
                       fontWeight: 600,
-                      marginBottom: 12,
+                      marginBottom: 8,
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      color: 'var(--text-secondary)'
                     }}>
                       <span>日志内容</span>
-                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                        {selectedNamespace}/{selectedPod}
+                      <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                        {selectedNamespace}/{selectedPod}/{selectedContainer}
                       </span>
                     </div>
                     <div style={{
                       background: '#1e1e1e',
                       color: '#d4d4d4',
-                      padding: 12,
-                      borderRadius: 8,
-                      fontSize: 11,
+                      padding: 10,
+                      borderRadius: 6,
+                      fontSize: 10,
                       fontFamily: 'Monaco, Menlo, "SF Mono", "Courier New", monospace',
                       overflowX: 'auto',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-all',
-                      maxHeight: '60vh',
+                      maxHeight: '65vh',
                       overflowY: 'auto',
-                      lineHeight: 1.5
+                      lineHeight: 1.4
                     }}>
                       {podLogs}
                     </div>
