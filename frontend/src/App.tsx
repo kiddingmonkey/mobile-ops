@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd-mobile'
 import zhCN from 'antd-mobile/es/locales/zh-CN'
 import { useAuth } from '@/store'
+import { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 
 import ErrorBoundary from '@/components/ErrorBoundary'
 import AppLayout from '@/components/AppLayout'
@@ -28,6 +31,38 @@ import CloudNewPage from '@/pages/settings/CloudNew'
 import ClusterNewPage from '@/pages/settings/ClusterNew'
 import ClusterEditPage from '@/pages/settings/ClusterEdit'
 
+const CURRENT_VERSION_KEY = 'mobile_ops_dist_version'
+const WEBROOT_DIR = 'webroot'
+
+// 在 App 启动时恢复热更新版本
+async function restoreUpdatedVersion() {
+  if (!Capacitor.isNativePlatform()) return
+
+  const savedVersion = localStorage.getItem(CURRENT_VERSION_KEY)
+  if (!savedVersion || savedVersion === 'builtin') return
+
+  try {
+    // 获取更新后的资源目录
+    const versionDir = `${WEBROOT_DIR}/${savedVersion}`
+    const uri = await Filesystem.getUri({
+      path: versionDir,
+      directory: Directory.Data
+    })
+    const absPath = uri.uri.replace(/^file:\/\//, '')
+
+    // 重新设置 WebView 基础路径
+    const { WebView } = await import('@capacitor/core')
+    if (WebView && typeof (WebView as any).setServerBasePath === 'function') {
+      await (WebView as any).setServerBasePath({ path: absPath })
+      console.log(`[OTA] Restored version ${savedVersion} from ${absPath}`)
+    }
+  } catch (err) {
+    console.error('[OTA] Failed to restore updated version:', err)
+    // 如果恢复失败，清除版本记录，避免无限循环
+    localStorage.removeItem(CURRENT_VERSION_KEY)
+  }
+}
+
 function Protected({ children }: { children: React.ReactNode }) {
   const token = useAuth(s => s.token)
   if (!token) return <Navigate to="/login" replace />
@@ -35,6 +70,10 @@ function Protected({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    restoreUpdatedVersion()
+  }, [])
+
   return (
     <ErrorBoundary>
     <ConfigProvider locale={zhCN}>
