@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Selector, PullToRefresh, Grid, Button, Toast, Dialog, Form, Input, Stepper, SwipeAction, List } from 'antd-mobile'
 import { AddOutline, DeleteOutline } from 'antd-mobile-icons'
+import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useUI } from '@/store'
 import { fmtRelative, fmtPercent, fmtNumber } from '@/utils/format'
@@ -26,6 +27,7 @@ function savePanels(clusterId: number, panels: PanelConfig[]) {
 }
 
 export default function MonitorPage() {
+  const nav = useNavigate()
   const activeClusterId = useUI(s => s.activeClusterId)
   const setActive = useUI(s => s.setActiveCluster)
   const [clusters, setClusters] = useState<any[]>([])
@@ -242,19 +244,27 @@ export default function MonitorPage() {
               <div className="card">
                 <div className="card-title">节点池</div>
                 {overview.node_pools.map((np: any) => (
-                  <div key={np.id} style={{
-                    padding: '10px 0',
-                    borderBottom: '1px solid var(--border-color)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                  }}>
+                  <div
+                    key={np.id}
+                    onClick={() => activeClusterId && nav(`/clusters/${activeClusterId}/node-pools/${np.id}`)}
+                    style={{
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--border-color)',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
                     <div>
                       <div style={{ fontWeight: 500 }}>{np.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
                         min={np.min_size} · max={np.max_size}
                       </div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>
-                      {np.current_size || np.desired_size || '-'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 20, fontWeight: 700 }}>
+                        {np.current_size || np.desired_size || '-'}
+                      </div>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: 14 }}>›</span>
                     </div>
                   </div>
                 ))}
