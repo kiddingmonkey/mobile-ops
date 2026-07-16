@@ -41,6 +41,13 @@ export default function ClusterNewPage() {
   }
 
   const submit = async () => {
+    // 空字段兜底 (kubeconfig / cluster_id 等真实值不兜底)
+    const cur = form.getFieldsValue()
+    const patch: Record<string, any> = {}
+    if (!cur.name) patch.name = 'prod-tke-01'
+    if (!cur.display_name) patch.display_name = '生产集群 01'
+    if (!cur.region) patch.region = 'ap-beijing'
+    if (Object.keys(patch).length) form.setFieldsValue(patch)
     try {
       const v = await form.validateFields()
       const payload: any = {

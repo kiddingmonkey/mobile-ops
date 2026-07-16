@@ -44,6 +44,20 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Pack dist.zip (for OTA)
+        working-directory: frontend
+        run: |
+          cd dist
+          zip -qr ../dist.zip .
+          ls -la ../dist.zip
+
+      - name: Upload dist.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-ops-dist-${{ github.run_number }}
+          path: frontend/dist.zip
+          retention-days: 30
+
       - name: Sync Capacitor
         working-directory: frontend
         run: npx cap sync android
@@ -73,5 +87,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: frontend/android/app/build/outputs/apk/debug/*.apk
+          files: |
+            frontend/android/app/build/outputs/apk/debug/*.apk
+            frontend/dist.zip
           generate_release_notes: true

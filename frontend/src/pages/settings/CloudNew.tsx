@@ -16,6 +16,8 @@ export default function CloudNewPage() {
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
+    // name 空则兜底; AK/SK 敏感值不做兜底
+    if (!form.getFieldValue('name')) form.setFieldsValue({ name: '腾讯云-运维子账号' })
     try {
       const v = await form.validateFields()
       if (Array.isArray(v.region)) v.region = v.region[0]

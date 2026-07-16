@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { List, Button, Dialog, Toast, Selector } from 'antd-mobile'
 import { RightOutline, InformationCircleOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
+import { Capacitor } from '@capacitor/core'
+import { api, friendlyApiError } from '@/api/client'
 import { useAuth, useTheme } from '@/store'
+import { checkForUpdate, downloadAndApply, getCurrentVersion } from '@/utils/otaUpdater'
 
 export default function SettingsPage() {
   const nav = useNavigate()
@@ -27,6 +29,65 @@ export default function SettingsPage() {
   const doLogout = async () => {
     const ok = await Dialog.confirm({ content: '确认退出登录？' })
     if (ok) { logout(); nav('/login', { replace: true }) }
+  }
+
+  const handleCheckUpdate = async () => {
+    const th = Toast.show({ content: '检查更新中...', icon: 'loading', duration: 0 })
+    const r = await checkForUpdate()
+    th.close()
+
+    if (r.error) {
+      Toast.show({ content: r.error, icon: 'fail', duration: 3000 })
+      return
+    }
+    if (!r.info) {
+      Toast.show({ content: '服务器无更新包', icon: 'fail' })
+      return
+    }
+    if (!r.hasUpdate) {
+      Toast.show({ content: `已是最新 (${r.currentVersion.slice(0, 8)})`, icon: 'success' })
+      return
+    }
+
+    const sizeMB = (r.info.size / 1024 / 1024).toFixed(2)
+    const ok = await Dialog.confirm({
+      title: '发现新版本',
+      content: (
+        <div style={{ fontSize: 13 }}>
+          <div>当前: {r.currentVersion.slice(0, 8)}</div>
+          <div>最新: {r.info.version} ({sizeMB} MB)</div>
+          <div style={{ marginTop: 8, color: 'var(--text-tertiary)', fontSize: 11 }}>
+            发布于 {new Date(r.info.released_at).toLocaleString()}
+          </div>
+        </div>
+      ),
+      confirmText: '立即更新'
+    })
+    if (!ok) return
+
+    if (!Capacitor.isNativePlatform()) {
+      // Web / PWA: 清 SW 缓存 reload,拿新静态资源
+      Toast.show({ content: '刷新页面...', icon: 'loading', duration: 800 })
+      if ('serviceWorker' in navigator && 'caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      setTimeout(() => window.location.reload(), 800)
+      return
+    }
+
+    // APK: 下载 + 解压 + 切 WebView
+    const progressToast = Toast.show({ content: '下载 0%', icon: 'loading', duration: 0 })
+    try {
+      await downloadAndApply(r.info, (loaded, total) => {
+        const pct = total > 0 ? Math.round((loaded / total) * 100) : 0
+        progressToast.close()
+        Toast.show({ content: `下载 ${pct}%`, icon: 'loading', duration: 0 })
+      })
+      // 成功不会走到这里,reload 触发页面重载
+    } catch (e: any) {
+      Toast.show({ content: friendlyApiError(e) || e?.message || '更新失败', icon: 'fail', duration: 4000 })
+    }
   }
 
   return (
@@ -105,20 +166,9 @@ export default function SettingsPage() {
 
         {/* 关于 */}
         <List header="关于" mode="card">
-          <List.Item extra="v1.0.0">当前版本</List.Item>
+          <List.Item extra={`v1.0.0 · ${getCurrentVersion().slice(0, 8)}`}>当前版本</List.Item>
           <List.Item extra="Capacitor 8">运行环境</List.Item>
-          <List.Item
-            onClick={async () => {
-              Toast.show({ content: '正在检查...', icon: 'loading', duration: 0 })
-              // 清空 Service Worker 缓存
-              if ('serviceWorker' in navigator && 'caches' in window) {
-                const keys = await caches.keys()
-                await Promise.all(keys.map(k => caches.delete(k)))
-              }
-              // 强制 reload
-              setTimeout(() => window.location.reload(), 500)
-            }}
-          >检查更新</List.Item>
+          <List.Item onClick={handleCheckUpdate}>检查更新</List.Item>
         </List>
 
         {/* 退出 */}

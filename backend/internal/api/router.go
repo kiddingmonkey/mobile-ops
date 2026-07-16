@@ -83,6 +83,10 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/shortcuts", h.ListShortcuts)
 		priv.POST("/shortcuts", h.CreateShortcut)
 		priv.DELETE("/shortcuts/:id", h.DeleteShortcut)
+
+		// OTA 更新 (前端资源包)
+		priv.GET("/updates/latest", h.UpdatesLatest)
+		priv.GET("/updates/dist.zip", h.UpdatesDownload)
 	}
 }
 

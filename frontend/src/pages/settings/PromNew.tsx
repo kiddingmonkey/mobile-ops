@@ -5,12 +5,29 @@ import PageShell from '@/components/PageShell'
 import NativeInput from '@/components/NativeInput'
 import { api, friendlyApiError } from '@/api/client'
 
+const DEFAULTS = {
+  name: '内网 vmselect',
+  url: 'http://172.22.67.24:11002/select/0/prometheus'
+}
+
 export default function PromNewPage() {
   const nav = useNavigate()
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
 
+  const fillDefaults = () => {
+    form.setFieldsValue(DEFAULTS)
+    Toast.show({ content: '已填充示例值', icon: 'success', duration: 1000 })
+  }
+
   const submit = async () => {
+    const cur = form.getFieldsValue()
+    const patch: Record<string, any> = {}
+    for (const k of Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]) {
+      if (!cur[k]) patch[k] = DEFAULTS[k]
+    }
+    if (Object.keys(patch).length) form.setFieldsValue(patch)
+
     try {
       const v = await form.validateFields()
       if (Array.isArray(v.auth_type)) v.auth_type = v.auth_type[0]
@@ -27,6 +44,11 @@ export default function PromNewPage() {
 
   return (
     <PageShell title="添加 Prometheus" onBack={() => nav(-1)}>
+      <div style={{ margin: '0 12px 12px' }}>
+        <Button block fill="outline" color="primary" size="small" onClick={fillDefaults}>
+          一键填充示例值
+        </Button>
+      </div>
       <Form
         form={form}
         layout="vertical"
@@ -39,10 +61,10 @@ export default function PromNewPage() {
         }
       >
         <Form.Item name="name" label="名称" rules={[{ required: true, message: '必填' }]}>
-          <NativeInput placeholder="内网 vmselect" />
+          <NativeInput placeholder={DEFAULTS.name} />
         </Form.Item>
         <Form.Item name="url" label="URL" rules={[{ required: true, message: '必填' }]}>
-          <NativeInput placeholder="http://172.22.67.24:11002/select/0/prometheus" />
+          <NativeInput placeholder={DEFAULTS.url} />
         </Form.Item>
         <Form.Item name="auth_type" label="认证方式">
           <Selector
