@@ -247,79 +247,82 @@ export default function LogsPage() {
             >
               {/* 云日志 Tab */}
               <Tabs.Tab title="☁️ 云日志 (CLS)" key="cloud">
-                <div className="card">
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-                      选择地域
+                <div className="card" style={{ padding: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>地域</div>
+                      <select
+                        value={selectedRegion}
+                        onChange={(e) => {
+                          setSelectedRegion(e.target.value)
+                          setSelectedLogset('')
+                          setClsLogs([])
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-secondary)',
+                          fontSize: 12
+                        }}
+                      >
+                        <option value="">选择地域</option>
+                        {regions.map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
                     </div>
-                    <Selector
-                      columns={3}
-                      options={regions}
-                      value={selectedRegion ? [selectedRegion] : []}
-                      onChange={v => {
-                        setSelectedRegion(v[0] as string || '')
-                        setSelectedLogset('')
-                        setClsLogs([])
-                      }}
-                    />
+
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>日志集</div>
+                      <select
+                        value={selectedLogset}
+                        onChange={(e) => {
+                          setSelectedLogset(e.target.value)
+                          setClsLogs([])
+                        }}
+                        disabled={!selectedRegion || logsets.length === 0}
+                        style={{
+                          width: '100%',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-secondary)',
+                          fontSize: 12,
+                          opacity: !selectedRegion ? 0.5 : 1
+                        }}
+                      >
+                        <option value="">选择日志集</option>
+                        {logsets.map((ls: any) => (
+                          <option key={ls.id} value={ls.id}>{ls.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  {selectedRegion && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-                        选择日志集
-                      </div>
-                      {logsets.length === 0 ? (
-                        <div style={{
-                          padding: '12px 16px',
-                          background: 'var(--bg-secondary)',
-                          borderRadius: 8,
-                          fontSize: 13,
-                          color: 'var(--text-tertiary)',
-                          textAlign: 'center'
-                        }}>
-                          该地域暂无日志集或功能开发中
-                        </div>
-                      ) : (
-                        <Selector
-                          columns={2}
-                          options={logsets.map((ls: any) => ({ label: ls.name, value: ls.id }))}
-                          value={selectedLogset ? [selectedLogset] : []}
-                          onChange={v => {
-                            setSelectedLogset(v[0] as string || '')
-                            setClsLogs([])
-                          }}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-                      搜索关键词
-                    </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>搜索关键词</div>
                     <Input
                       placeholder="输入关键词搜索日志"
                       value={clsKeyword}
                       onChange={setClsKeyword}
                       onEnterPress={searchClsLogs}
                       clearable
+                      style={{ '--font-size': '12px' } as any}
                     />
                   </div>
 
                   <Button
                     block
                     color="primary"
+                    size="small"
                     onClick={searchClsLogs}
                     loading={clsLoading}
                     disabled={!selectedRegion || !selectedLogset}
                   >
-                    <SearchOutline /> 搜索日志
+                    搜索日志
                   </Button>
-
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.5 }}>
-                    腾讯云 CLS 日志查询（通过 AK/SK 或 DataSight）
-                  </div>
                 </div>
 
                 {clsLogs.length === 0 ? (
@@ -330,8 +333,35 @@ export default function LogsPage() {
                   />
                 ) : (
                   <div className="card">
-                    <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
-                      搜索结果（共 {clsLogs.length} 条）
+                    <div style={{
+                      marginBottom: 12,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>搜索结果（共 {clsLogs.length} 条）</span>
+                      <Button
+                        size="mini"
+                        color="primary"
+                        fill="outline"
+                        onClick={() => {
+                          const content = clsLogs.map((log: any) =>
+                            `[${fmtTime(log.timestamp)}] ${log.content}`
+                          ).join('\n')
+                          const blob = new Blob([content], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `cls-${selectedRegion}-${Date.now()}.log`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                          Toast.show({ content: '日志已下载', icon: 'success' })
+                        }}
+                      >
+                        下载
+                      </Button>
                     </div>
                     <List mode="card" style={{ '--border-inner': '0px' } as any}>
                       {clsLogs.map((log: any, idx: number) => (
@@ -354,9 +384,9 @@ export default function LogsPage() {
               <Tabs.Tab title="📦 容器日志 (Pod)" key="pod">
                 <div className="card" style={{ padding: '12px' }}>
                   {/* 紧凑的选择器 */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Namespace</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>Namespace</div>
                       <select
                         value={selectedNamespace}
                         onChange={(e) => {
@@ -367,7 +397,7 @@ export default function LogsPage() {
                         }}
                         style={{
                           width: '100%',
-                          padding: '6px 8px',
+                          padding: '5px 8px',
                           borderRadius: 6,
                           border: '1px solid var(--border-color)',
                           background: 'var(--bg-secondary)',
@@ -381,8 +411,8 @@ export default function LogsPage() {
                       </select>
                     </div>
 
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Pod</div>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>Pod</div>
                       <select
                         value={selectedPod}
                         onChange={(e) => {
@@ -393,7 +423,7 @@ export default function LogsPage() {
                         disabled={!selectedNamespace || pods.length === 0}
                         style={{
                           width: '100%',
-                          padding: '6px 8px',
+                          padding: '5px 8px',
                           borderRadius: 6,
                           border: '1px solid var(--border-color)',
                           background: 'var(--bg-secondary)',
@@ -411,45 +441,53 @@ export default function LogsPage() {
 
                   {selectedPod && containers.length > 0 && (
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}>容器</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {containers.map(c => (
-                          <div
-                            key={c}
-                            onClick={() => {
-                              setSelectedContainer(c)
-                              setPodLogs('')
-                            }}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 6,
-                              fontSize: 11,
-                              cursor: 'pointer',
-                              background: selectedContainer === c ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                              color: selectedContainer === c ? 'white' : 'var(--text-primary)',
-                              border: selectedContainer === c ? 'none' : '1px solid var(--border-color)',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            {c}
-                          </div>
-                        ))}
-                      </div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>容器</div>
+                      {containers.length === 1 ? (
+                        <div style={{
+                          padding: '5px 10px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          background: 'var(--accent-blue)',
+                          color: 'white',
+                          display: 'inline-block'
+                        }}>
+                          {containers[0]}
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedContainer}
+                          onChange={(e) => {
+                            setSelectedContainer(e.target.value)
+                            setPodLogs('')
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '5px 8px',
+                            borderRadius: 6,
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-secondary)',
+                            fontSize: 12
+                          }}
+                        >
+                          <option value="">选择容器</option>
+                          {containers.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <Button
-                      block
-                      color="primary"
-                      size="small"
-                      onClick={loadPodLogs}
-                      loading={podLoading}
-                      disabled={!selectedPod || !selectedContainer}
-                    >
-                      查看日志
-                    </Button>
-                  </div>
+                  <Button
+                    block
+                    color="primary"
+                    size="small"
+                    onClick={loadPodLogs}
+                    loading={podLoading}
+                    disabled={!selectedPod || !selectedContainer}
+                  >
+                    查看日志
+                  </Button>
                 </div>
 
                 {podLogs && (
@@ -464,9 +502,28 @@ export default function LogsPage() {
                       color: 'var(--text-secondary)'
                     }}>
                       <span>日志内容</span>
-                      <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                        {selectedNamespace}/{selectedPod}/{selectedContainer}
-                      </span>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <Button
+                          size="mini"
+                          color="primary"
+                          fill="outline"
+                          onClick={() => {
+                            const blob = new Blob([podLogs], { type: 'text/plain' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `${selectedNamespace}-${selectedPod}-${selectedContainer}-${Date.now()}.log`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                            Toast.show({ content: '日志已下载', icon: 'success' })
+                          }}
+                        >
+                          下载
+                        </Button>
+                        <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                          {selectedNamespace}/{selectedPod}/{selectedContainer}
+                        </span>
+                      </div>
                     </div>
                     <div style={{
                       background: '#1e1e1e',
