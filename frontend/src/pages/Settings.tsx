@@ -78,15 +78,23 @@ export default function SettingsPage() {
     }
 
     // APK: 下载 + 解压 + 切 WebView
-    const progressToast = Toast.show({ content: '下载 0%', icon: 'loading', duration: 0 })
+    let progressToast = Toast.show({ content: '准备下载...', icon: 'loading', duration: 0 })
     try {
-      await downloadAndApply(r.info, (loaded, total) => {
-        const pct = total > 0 ? Math.round((loaded / total) * 100) : 0
-        progressToast.close()
-        Toast.show({ content: `下载 ${pct}%`, icon: 'loading', duration: 0 })
-      })
+      await downloadAndApply(
+        r.info,
+        (loaded, total) => {
+          const pct = total > 0 ? Math.round((loaded / total) * 100) : 0
+          progressToast.close()
+          progressToast = Toast.show({ content: `下载 ${pct}%`, icon: 'loading', duration: 0 })
+        },
+        (status) => {
+          progressToast.close()
+          progressToast = Toast.show({ content: status, icon: 'loading', duration: 0 })
+        }
+      )
       // 成功不会走到这里,reload 触发页面重载
     } catch (e: any) {
+      progressToast.close()
       Toast.show({ content: friendlyApiError(e) || e?.message || '更新失败', icon: 'fail', duration: 4000 })
     }
   }

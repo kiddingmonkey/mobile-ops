@@ -72,7 +72,8 @@ export async function checkForUpdate(): Promise<{
 // 下载 dist.zip 并解压到本地目录
 export async function downloadAndApply(
   info: UpdateInfo,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  onStatus?: (status: string) => void
 ): Promise<void> {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('OTA 更新仅在 APK 内可用; 浏览器请刷新页面')
@@ -80,6 +81,7 @@ export async function downloadAndApply(
   const token = localStorage.getItem('mobile_ops_token') || ''
 
   // 1. 下载 zip 二进制
+  onStatus?.('正在下载更新包...')
   const zipResp = await axios.get(`${API_BASE}/updates/dist.zip`, {
     responseType: 'arraybuffer',
     timeout: 120000,
@@ -91,6 +93,7 @@ export async function downloadAndApply(
   const zipData = new Uint8Array(zipResp.data)
 
   // 2. 解压
+  onStatus?.('正在解压文件...')
   const files = unzipSync(zipData)
 
   // 从解压结果里读 version.json,更新活跃版本号
@@ -106,6 +109,7 @@ export async function downloadAndApply(
   const versionDir = `${WEBROOT_DIR}/${info.version}`
 
   // 清理老的临时目录 (同名的 version 目录)
+  onStatus?.('正在准备存储目录...')
   try {
     await Filesystem.rmdir({
       path: versionDir,
@@ -123,6 +127,7 @@ export async function downloadAndApply(
   })
 
   // 逐个写文件. fflate 的 files 键可能带 dist/ 前缀,统一去掉
+  onStatus?.('正在写入文件...')
   const entries = Object.entries(files)
   for (let i = 0; i < entries.length; i++) {
     const [rawName, content] = entries[i]
@@ -130,6 +135,11 @@ export async function downloadAndApply(
     // 去掉 zip 里的顶层 dist/ 前缀,如果存在
     let name = rawName.replace(/^dist\//, '')
     if (!name) continue
+
+    // 显示写入进度
+    if (i % 5 === 0) {
+      onStatus?.(`正在写入文件 ${i + 1}/${entries.length}`)
+    }
 
     // 创建中间目录
     const dir = name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : ''
@@ -166,6 +176,7 @@ export async function downloadAndApply(
   }
 
   // 4. 拿绝对路径
+  onStatus?.('正在应用更新...')
   const uri = await Filesystem.getUri({
     path: versionDir,
     directory: Directory.Data
@@ -183,7 +194,10 @@ export async function downloadAndApply(
   localStorage.setItem(CURRENT_VERSION_KEY, info.version)
 
   // 7. reload 生效
-  window.location.reload()
+  onStatus?.('更新完成，正在重启...')
+  setTimeout(() => {
+    window.location.reload()
+  }, 500)
 }
 
 export function getCurrentVersion(): string {
