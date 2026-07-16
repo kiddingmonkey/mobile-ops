@@ -132,6 +132,22 @@ type Shortcut struct {
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
+type SecurityGroupWhitelist struct {
+	ID              int64      `db:"id" json:"id"`
+	Name            string     `db:"name" json:"name"`
+	CloudAccountID  int64      `db:"cloud_account_id" json:"cloud_account_id"`
+	Region          string     `db:"region" json:"region"`
+	SGID            string     `db:"sg_id" json:"sg_id"`
+	Port            string     `db:"port" json:"port"`
+	Protocol        string     `db:"protocol" json:"protocol"`
+	Description     *string    `db:"description" json:"description,omitempty"`
+	LastIP          *string    `db:"last_ip" json:"last_ip,omitempty"`
+	LastUpdatedAt   *time.Time `db:"last_updated_at" json:"last_updated_at,omitempty"`
+	CreatedBy       *int64     `db:"created_by" json:"created_by,omitempty"`
+	CreatedAt       time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time  `db:"updated_at" json:"updated_at"`
+}
+
 type MetricsSnapshot struct {
 	ID          int64           `db:"id" json:"id"`
 	ClusterID   int64           `db:"cluster_id" json:"cluster_id"`

@@ -93,6 +93,13 @@ func (h *Handler) Register(r *gin.Engine) {
 		// OTA 更新 (前端资源包)
 		priv.GET("/updates/latest", h.UpdatesLatest)
 		priv.GET("/updates/dist.zip", h.UpdatesDownload)
+
+		// 安全组白名单
+		priv.GET("/whoami/ip", h.WhoamiIP)
+		priv.GET("/security-groups/whitelists", h.ListSGWhitelists)
+		priv.POST("/security-groups/whitelists", h.CreateSGWhitelist)
+		priv.DELETE("/security-groups/whitelists/:id", h.DeleteSGWhitelist)
+		priv.POST("/security-groups/whitelists/:id/apply", h.ApplySGWhitelist)
 	}
 }
 

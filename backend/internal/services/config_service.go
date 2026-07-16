@@ -205,6 +205,30 @@ func (s *ConfigService) GetTKEClientForRegion(ctx context.Context, cloudAccountI
 	return clients.NewTencentTKEClient(sid, sk, useRegion)
 }
 
+// GetVPCClientForRegion 拿腾讯云 VPC 客户端 (安全组用)
+func (s *ConfigService) GetVPCClientForRegion(ctx context.Context, cloudAccountID int64, region string) (*clients.TencentVPCClient, error) {
+	var acc models.CloudAccount
+	err := s.db.GetContext(ctx, &acc,
+		`SELECT id, name, provider, region, secret_id_encrypted, secret_key_encrypted, created_by, created_at
+		 FROM cloud_accounts WHERE id=$1`, cloudAccountID)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := s.cipher.Decrypt(acc.SecretIDEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	sk, err := s.cipher.Decrypt(acc.SecretKeyEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	useRegion := region
+	if useRegion == "" {
+		useRegion = acc.Region
+	}
+	return clients.NewTencentVPCClient(sid, sk, useRegion)
+}
+
 // ============ Clusters ============
 
 func (s *ConfigService) ListClusters(ctx context.Context) ([]models.Cluster, error) {

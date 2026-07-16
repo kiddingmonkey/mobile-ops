@@ -16,6 +16,8 @@ import ClusterResourcesPage from '@/pages/ClusterResources'
 import PodDetailPage from '@/pages/PodDetail'
 import NodePoolDetailPage from '@/pages/NodePoolDetail'
 import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
+import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
+import SecurityGroupNewPage from '@/pages/settings/SecurityGroupNew'
 import PromSettingsPage from '@/pages/settings/PromSettings'
 import CloudSettingsPage from '@/pages/settings/CloudSettings'
 import ClustersSettingsPage from '@/pages/settings/ClustersSettings'
@@ -53,6 +55,8 @@ export default function App() {
           <Route path="/settings/clusters" element={<Protected><ClustersSettingsPage /></Protected>} />
           <Route path="/settings/clusters/new" element={<Protected><ClusterNewPage /></Protected>} />
           <Route path="/settings/clusters/:id/edit" element={<Protected><ClusterEditPage /></Protected>} />
+          <Route path="/settings/security-groups" element={<Protected><SecurityGroupsPage /></Protected>} />
+          <Route path="/settings/security-groups/new" element={<Protected><SecurityGroupNewPage /></Protected>} />
 
           {/* 主界面（含底部 TabBar） */}
           <Route element={<Protected><AppLayout /></Protected>}>

@@ -250,6 +250,32 @@ class ApiClient {
   async getNodePoolDetail(clusterId: number, poolId: number) {
     return (await this.http.get(`/clusters/${clusterId}/node-pools/${poolId}`)).data
   }
+
+  // ============ 安全组白名单 ============
+  async whoamiIP() {
+    return (await this.http.get('/whoami/ip')).data as { ip: string }
+  }
+  async listSGWhitelists() {
+    const r = (await this.http.get('/security-groups/whitelists')).data
+    return (Array.isArray(r) ? r : []) as any[]
+  }
+  async createSGWhitelist(payload: {
+    name: string
+    cloud_account_id: number
+    region: string
+    sg_id: string
+    port?: string
+    protocol?: string
+    description?: string
+  }) {
+    return (await this.http.post('/security-groups/whitelists', payload)).data
+  }
+  async deleteSGWhitelist(id: number) {
+    return (await this.http.delete(`/security-groups/whitelists/${id}`)).data
+  }
+  async applySGWhitelist(id: number, ip?: string) {
+    return (await this.http.post(`/security-groups/whitelists/${id}/apply`, ip ? { ip } : {})).data
+  }
 }
 
 export const api = new ApiClient()

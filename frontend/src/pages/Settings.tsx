@@ -153,6 +153,11 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => nav('/settings/cloud')}
           >腾讯云 AK/SK</List.Item>
+          <List.Item
+            prefix={<span style={{ fontSize: 14 }}>🔐</span>}
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/security-groups')}
+          >安全组白名单</List.Item>
         </List>
 
         {/* 集群 */}
