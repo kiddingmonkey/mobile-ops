@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Form, Input, Switch, Selector, Button, Toast } from 'antd-mobile'
+import { Form, Switch, Selector, Button, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import NativeInput from '@/components/NativeInput'
+import { api, friendlyApiError } from '@/api/client'
 
 export default function PromNewPage() {
   const nav = useNavigate()
@@ -18,7 +19,7 @@ export default function PromNewPage() {
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || e?.message || '失败', icon: 'fail' })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
     } finally {
       setLoading(false)
     }
@@ -38,10 +39,10 @@ export default function PromNewPage() {
         }
       >
         <Form.Item name="name" label="名称" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="内网 vmselect" />
+          <NativeInput placeholder="内网 vmselect" />
         </Form.Item>
         <Form.Item name="url" label="URL" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="http://172.22.67.24:11002/select/0/prometheus" />
+          <NativeInput placeholder="http://172.22.67.24:11002/select/0/prometheus" />
         </Form.Item>
         <Form.Item name="auth_type" label="认证方式">
           <Selector
@@ -54,7 +55,7 @@ export default function PromNewPage() {
           />
         </Form.Item>
         <Form.Item name="auth" label="凭证（Bearer Token 或 user:pass，无认证留空）">
-          <Input placeholder="" />
+          <NativeInput placeholder="" usePlaceholderAsDefault={false} />
         </Form.Item>
         <Form.Item name="is_default" label="设为默认" childElementPosition="right">
           <Switch />

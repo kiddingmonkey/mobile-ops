@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Form, Input, Selector, Button, Toast } from 'antd-mobile'
+import { Form, Selector, Button, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import NativeInput from '@/components/NativeInput'
+import { api, friendlyApiError } from '@/api/client'
 
 const TENCENT_REGIONS = [
   'ap-beijing', 'ap-shanghai', 'ap-guangzhou', 'ap-chengdu',
@@ -24,7 +25,7 @@ export default function CloudNewPage() {
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || e?.message || '失败', icon: 'fail' })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
     } finally {
       setLoading(false)
     }
@@ -50,7 +51,7 @@ export default function CloudNewPage() {
         }
       >
         <Form.Item name="name" label="名称" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="腾讯云-运维子账号" />
+          <NativeInput placeholder="腾讯云-运维子账号" />
         </Form.Item>
         <Form.Item name="region" label="地域" rules={[{ required: true, message: '必选' }]}>
           <Selector
@@ -59,10 +60,10 @@ export default function CloudNewPage() {
           />
         </Form.Item>
         <Form.Item name="secret_id" label="SecretId" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="AKIDxxxx" />
+          <NativeInput placeholder="AKIDxxxx" usePlaceholderAsDefault={false} />
         </Form.Item>
         <Form.Item name="secret_key" label="SecretKey" rules={[{ required: true, message: '必填' }]}>
-          <Input type="password" placeholder="••••••" />
+          <NativeInput type="password" placeholder="••••••" usePlaceholderAsDefault={false} />
         </Form.Item>
       </Form>
     </PageShell>

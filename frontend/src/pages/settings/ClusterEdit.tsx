@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Form, Input, Selector, TextArea, Button, Toast, Dialog, Skeleton } from 'antd-mobile'
+import { Form, Selector, TextArea, Button, Toast, Dialog, Skeleton } from 'antd-mobile'
 import { useNavigate, useParams } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import NativeInput from '@/components/NativeInput'
+import { api, friendlyApiError } from '@/api/client'
 
 export default function ClusterEditPage() {
   const nav = useNavigate()
@@ -42,7 +43,7 @@ export default function ClusterEditPage() {
           prom_source_id: c.prom_source_id ? [c.prom_source_id] : []
         })
       } catch (e: any) {
-        Toast.show({ content: e?.response?.data?.error || '加载失败', icon: 'fail' })
+        Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
         nav(-1)
       } finally {
         setLoading(false)
@@ -88,7 +89,7 @@ export default function ClusterEditPage() {
       Toast.show({ content: '保存成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || e?.message || '失败', icon: 'fail', duration: 4000 })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 4000 })
     } finally {
       setSaving(false)
     }
@@ -112,7 +113,7 @@ export default function ClusterEditPage() {
       Toast.show({ content: '已删除', icon: 'success' })
       nav('/settings/clusters', { replace: true })
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || '删除失败', icon: 'fail' })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
     } finally {
       setDeleting(false)
     }
@@ -155,13 +156,13 @@ export default function ClusterEditPage() {
       >
         <Form.Header>基础信息</Form.Header>
         <Form.Item name="display_name" label="显示名">
-          <Input placeholder="生产集群 01" />
+          <NativeInput placeholder="生产集群 01" />
         </Form.Item>
         <Form.Item name="region" label="地域">
-          <Input placeholder="ap-beijing" />
+          <NativeInput placeholder="ap-beijing" />
         </Form.Item>
         <Form.Item name="provider_cluster_id" label="TKE ClusterId">
-          <Input placeholder="cls-xxxxxx" />
+          <NativeInput placeholder="cls-xxxxxx" usePlaceholderAsDefault={false} />
         </Form.Item>
         <Form.Item name="cloud_account_id" label="云账号">
           <Selector
@@ -212,7 +213,7 @@ export default function ClusterEditPage() {
           label="cluster 变量值 (关键)"
           help="Prometheus 里 kube_node_info 的 cluster 标签值，缺失会导致节点数错乱"
         >
-          <Input placeholder="cls-xxxxxx" />
+          <NativeInput placeholder="cls-xxxxxx" usePlaceholderAsDefault={false} />
         </Form.Item>
         <Form.Item name="prom_source_id" label="Prometheus">
           <Selector

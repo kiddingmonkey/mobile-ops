@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Form, Input, Selector, Switch, TextArea, Button, Toast } from 'antd-mobile'
+import { Form, Selector, Switch, TextArea, Button, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import NativeInput from '@/components/NativeInput'
+import { api, friendlyApiError } from '@/api/client'
 
 export default function ClusterNewPage() {
   const nav = useNavigate()
@@ -61,8 +62,7 @@ export default function ClusterNewPage() {
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || '失败'
-      Toast.show({ content: msg, icon: 'fail', duration: 4000 })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 4000 })
     } finally {
       setLoading(false)
     }
@@ -83,13 +83,13 @@ export default function ClusterNewPage() {
       >
         <Form.Header>基础信息</Form.Header>
         <Form.Item name="name" label="集群名 (唯一)" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="prod-tke-01" />
+          <NativeInput placeholder="prod-tke-01" />
         </Form.Item>
         <Form.Item name="display_name" label="显示名">
-          <Input placeholder="生产集群 01" />
+          <NativeInput placeholder="生产集群 01" />
         </Form.Item>
         <Form.Item name="region" label="地域">
-          <Input placeholder="ap-beijing" />
+          <NativeInput placeholder="ap-beijing" />
         </Form.Item>
 
         <Form.Header>Kubeconfig 来源</Form.Header>
@@ -106,7 +106,7 @@ export default function ClusterNewPage() {
               />
             </Form.Item>
             <Form.Item name="provider_cluster_id" label="TKE ClusterId" rules={[{ required: true, message: '必填' }]}>
-              <Input placeholder="cls-xxxxxx" />
+              <NativeInput placeholder="cls-xxxxxx" usePlaceholderAsDefault={false} />
             </Form.Item>
             <Form.Item name="is_extranet" label="使用外网 kubeconfig" childElementPosition="right">
               <Switch />
@@ -140,7 +140,7 @@ export default function ClusterNewPage() {
               />
             </Form.Item>
             <Form.Item name="provider_cluster_id" label="TKE ClusterId (可选，用于云 API 操作)">
-              <Input placeholder="cls-xxxxxx" />
+              <NativeInput placeholder="cls-xxxxxx" usePlaceholderAsDefault={false} />
             </Form.Item>
             <Form.Item name="cloud_account_id" label="云账号 (可选，扩缩容时用)">
               <Selector
@@ -163,7 +163,7 @@ export default function ClusterNewPage() {
           label="Grafana / Prom cluster 标签值"
           help="Prometheus 里 kube_node_info{cluster=?} 的值，用于交叉验证节点数"
         >
-          <Input placeholder="prod / cls-9p2b79wz / 自定义" />
+          <NativeInput placeholder="prod / cls-9p2b79wz / 自定义" usePlaceholderAsDefault={false} />
         </Form.Item>
         <Form.Item name="prom_source_id" label="Prometheus">
           <Selector

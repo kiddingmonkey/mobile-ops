@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Form, Input, Switch, Button, Toast } from 'antd-mobile'
+import { Form, Switch, Button, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import NativeInput from '@/components/NativeInput'
+import { api, friendlyApiError } from '@/api/client'
 
 export default function GrafanaNewPage() {
   const nav = useNavigate()
@@ -17,7 +18,7 @@ export default function GrafanaNewPage() {
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || e?.message || '失败', icon: 'fail' })
+      Toast.show({ content: friendlyApiError(e), icon: 'fail', duration: 3000 })
     } finally {
       setLoading(false)
     }
@@ -36,13 +37,13 @@ export default function GrafanaNewPage() {
         }
       >
         <Form.Item name="name" label="名称" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="内网 Grafana" />
+          <NativeInput placeholder="内网 Grafana" />
         </Form.Item>
         <Form.Item name="url" label="URL" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="http://172.22.211.72:3000" />
+          <NativeInput placeholder="http://172.22.211.72:3000" />
         </Form.Item>
         <Form.Item name="token" label="API Token" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="eyJrIjoi..." />
+          <NativeInput placeholder="eyJrIjoi..." />
         </Form.Item>
         <Form.Item name="is_default" label="设为默认" childElementPosition="right">
           <Switch />
