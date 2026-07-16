@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TabBar, Badge } from 'antd-mobile'
 import { AppOutline, HistogramOutline, SetOutline, BellOutline, FileOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
+import { startAlertPolling, stopAlertPolling } from '@/utils/alertPoller'
 
 export default function AppLayout() {
   const nav = useNavigate()
@@ -15,6 +16,15 @@ export default function AppLayout() {
       setAlertCount(firing.length)
     }).catch(() => {})
   }, [loc.pathname])
+
+  // 启动告警轮询（30秒检查一次）
+  useEffect(() => {
+    startAlertPolling(30000)
+
+    return () => {
+      stopAlertPolling()
+    }
+  }, [])
 
   const tabs = [
     { key: '/', title: '首页', icon: <AppOutline /> },

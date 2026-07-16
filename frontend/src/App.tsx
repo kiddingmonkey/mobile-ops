@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { App as CapApp } from '@capacitor/app'
+import { initNotifications, setupNotificationChannels } from '@/utils/alertNotifier'
 
 import ErrorBoundary from '@/components/ErrorBoundary'
 import AppLayout from '@/components/AppLayout'
@@ -88,6 +89,15 @@ export default function App() {
   useEffect(() => {
     restoreUpdatedVersion()
     setupBackButtonHandler()
+
+    // 初始化通知系统
+    if (Capacitor.isNativePlatform()) {
+      setupNotificationChannels().then(() => {
+        initNotifications().catch(err => {
+          console.error('[App] Failed to init notifications:', err)
+        })
+      })
+    }
   }, [])
 
   return (

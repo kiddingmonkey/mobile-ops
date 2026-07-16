@@ -12,6 +12,8 @@
   "dependencies": {
     "@capacitor/app": "^8.1.1",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.2.1",
     "antd-mobile": "^5.38.1",
     "antd-mobile-icons": "^0.3.0",
     "axios": "^1.7.9",
