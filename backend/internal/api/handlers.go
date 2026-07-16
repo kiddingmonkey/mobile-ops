@@ -621,3 +621,65 @@ func (h *Handler) GetK8sResourceYAML(c *gin.Context) {
 	c.JSON(200, result)
 }
 
+
+// ============ Pod 详情 / 事件 / 日志 ============
+
+// GetPodDetail GET /clusters/:id/pods/:namespace/:name
+func (h *Handler) GetPodDetail(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	detail, err := client.GetPodDetail(ctx, ns, name)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, detail)
+}
+
+// ListPodEvents GET /clusters/:id/pods/:namespace/:name/events
+func (h *Handler) ListPodEvents(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	events, err := client.ListPodEvents(ctx, ns, name)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, events)
+}
+
+// GetPodLogs GET /clusters/:id/pods/:namespace/:name/logs?container=xxx&tail=500&previous=false
+func (h *Handler) GetPodLogs(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+	container := c.Query("container")
+	tailLines, _ := strconv.ParseInt(c.DefaultQuery("tail", "500"), 10, 64)
+	previous := c.Query("previous") == "true"
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	logs, err := client.GetPodLogs(ctx, ns, name, container, tailLines, previous)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"logs": logs})
+}

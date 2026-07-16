@@ -230,6 +230,248 @@ func podToMap(pod *corev1.Pod) map[string]any {
 	}
 }
 
+// ContainerStatus 单个容器的状态快照
+type ContainerStatus struct {
+	Name         string     `json:"name"`
+	Image        string     `json:"image"`
+	Ready        bool       `json:"ready"`
+	RestartCount int32      `json:"restart_count"`
+	State        string     `json:"state"`        // running/waiting/terminated
+	Reason       string     `json:"reason,omitempty"`
+	Message      string     `json:"message,omitempty"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	ExitCode     int32      `json:"exit_code,omitempty"`
+	Requests     map[string]string `json:"requests,omitempty"`  // cpu/mem
+	Limits       map[string]string `json:"limits,omitempty"`
+}
+
+// PodDetail Pod 详情 (供 APP 详情页用)
+type PodDetail struct {
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	Node         string            `json:"node,omitempty"`
+	Phase        string            `json:"phase"`
+	PodIP        string            `json:"pod_ip,omitempty"`
+	HostIP       string            `json:"host_ip,omitempty"`
+	QosClass     string            `json:"qos_class,omitempty"`
+	ServiceAccount string          `json:"service_account,omitempty"`
+	RestartPolicy string           `json:"restart_policy,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	StartedAt    *time.Time        `json:"started_at,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
+	Annotations  map[string]string `json:"annotations,omitempty"`
+	Conditions   []PodCondition    `json:"conditions,omitempty"`
+	Containers   []ContainerStatus `json:"containers"`
+	InitContainers []ContainerStatus `json:"init_containers,omitempty"`
+	TotalRestarts int32            `json:"total_restarts"`
+	LastRestartAt *time.Time       `json:"last_restart_at,omitempty"`
+}
+
+type PodCondition struct {
+	Type   string `json:"type"`
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	LastTransitionAt *time.Time `json:"last_transition_at,omitempty"`
+}
+
+// GetPodDetail 拿 Pod 详情
+func (k *K8sClient) GetPodDetail(ctx context.Context, namespace, name string) (*PodDetail, error) {
+	pod, err := k.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	d := &PodDetail{
+		Name:           pod.Name,
+		Namespace:      pod.Namespace,
+		Node:           pod.Spec.NodeName,
+		Phase:          string(pod.Status.Phase),
+		PodIP:          pod.Status.PodIP,
+		HostIP:         pod.Status.HostIP,
+		QosClass:       string(pod.Status.QOSClass),
+		ServiceAccount: pod.Spec.ServiceAccountName,
+		RestartPolicy:  string(pod.Spec.RestartPolicy),
+		CreatedAt:      pod.CreationTimestamp.Time,
+		Labels:         pod.Labels,
+		Annotations:    pod.Annotations,
+	}
+	if pod.Status.StartTime != nil {
+		t := pod.Status.StartTime.Time
+		d.StartedAt = &t
+	}
+	for _, c := range pod.Status.Conditions {
+		pc := PodCondition{
+			Type:   string(c.Type),
+			Status: string(c.Status),
+			Reason: c.Reason,
+		}
+		if !c.LastTransitionTime.IsZero() {
+			t := c.LastTransitionTime.Time
+			pc.LastTransitionAt = &t
+		}
+		d.Conditions = append(d.Conditions, pc)
+	}
+	d.Containers = buildContainerStatuses(pod.Spec.Containers, pod.Status.ContainerStatuses)
+	d.InitContainers = buildContainerStatuses(pod.Spec.InitContainers, pod.Status.InitContainerStatuses)
+	var lastRestart time.Time
+	for _, cs := range pod.Status.ContainerStatuses {
+		d.TotalRestarts += cs.RestartCount
+		if cs.LastTerminationState.Terminated != nil {
+			t := cs.LastTerminationState.Terminated.FinishedAt.Time
+			if t.After(lastRestart) {
+				lastRestart = t
+			}
+		}
+	}
+	if !lastRestart.IsZero() {
+		d.LastRestartAt = &lastRestart
+	}
+	return d, nil
+}
+
+func buildContainerStatuses(specs []corev1.Container, statuses []corev1.ContainerStatus) []ContainerStatus {
+	specMap := make(map[string]corev1.Container, len(specs))
+	for _, s := range specs {
+		specMap[s.Name] = s
+	}
+	out := make([]ContainerStatus, 0, len(statuses))
+	for _, cs := range statuses {
+		item := ContainerStatus{
+			Name:         cs.Name,
+			Image:        cs.Image,
+			Ready:        cs.Ready,
+			RestartCount: cs.RestartCount,
+		}
+		switch {
+		case cs.State.Running != nil:
+			item.State = "running"
+			t := cs.State.Running.StartedAt.Time
+			item.StartedAt = &t
+		case cs.State.Waiting != nil:
+			item.State = "waiting"
+			item.Reason = cs.State.Waiting.Reason
+			item.Message = cs.State.Waiting.Message
+		case cs.State.Terminated != nil:
+			item.State = "terminated"
+			item.Reason = cs.State.Terminated.Reason
+			item.Message = cs.State.Terminated.Message
+			item.ExitCode = cs.State.Terminated.ExitCode
+			ts := cs.State.Terminated.StartedAt.Time
+			tf := cs.State.Terminated.FinishedAt.Time
+			item.StartedAt = &ts
+			item.FinishedAt = &tf
+		}
+		if spec, ok := specMap[cs.Name]; ok {
+			if len(spec.Resources.Requests) > 0 {
+				item.Requests = map[string]string{}
+				if v, ok := spec.Resources.Requests[corev1.ResourceCPU]; ok {
+					item.Requests["cpu"] = v.String()
+				}
+				if v, ok := spec.Resources.Requests[corev1.ResourceMemory]; ok {
+					item.Requests["memory"] = v.String()
+				}
+			}
+			if len(spec.Resources.Limits) > 0 {
+				item.Limits = map[string]string{}
+				if v, ok := spec.Resources.Limits[corev1.ResourceCPU]; ok {
+					item.Limits["cpu"] = v.String()
+				}
+				if v, ok := spec.Resources.Limits[corev1.ResourceMemory]; ok {
+					item.Limits["memory"] = v.String()
+				}
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// PodEvent Pod 事件
+type PodEvent struct {
+	Type      string    `json:"type"`      // Normal / Warning
+	Reason    string    `json:"reason"`
+	Message   string    `json:"message"`
+	Count     int32     `json:"count"`
+	FirstAt   time.Time `json:"first_at"`
+	LastAt    time.Time `json:"last_at"`
+	Source    string    `json:"source,omitempty"`
+}
+
+// ListPodEvents 拿 Pod 关联的事件
+func (k *K8sClient) ListPodEvents(ctx context.Context, namespace, name string) ([]PodEvent, error) {
+	sel := fmt.Sprintf("involvedObject.name=%s,involvedObject.namespace=%s", name, namespace)
+	evs, err := k.Clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: sel, Limit: 200})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PodEvent, 0, len(evs.Items))
+	for _, e := range evs.Items {
+		firstAt := e.FirstTimestamp.Time
+		lastAt := e.LastTimestamp.Time
+		if lastAt.IsZero() && !e.EventTime.IsZero() {
+			lastAt = e.EventTime.Time
+			firstAt = lastAt
+		}
+		out = append(out, PodEvent{
+			Type:    e.Type,
+			Reason:  e.Reason,
+			Message: e.Message,
+			Count:   e.Count,
+			FirstAt: firstAt,
+			LastAt:  lastAt,
+			Source:  e.Source.Component,
+		})
+	}
+	// 按 LastAt 倒序
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j].LastAt.After(out[i].LastAt) {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out, nil
+}
+
+// GetPodLogs 拿容器最近日志(非流式,一次性返回 tail 行)
+// container 为空时取 pod 里第一个容器
+func (k *K8sClient) GetPodLogs(ctx context.Context, namespace, name, container string, tailLines int64, previous bool) (string, error) {
+	if tailLines <= 0 {
+		tailLines = 500
+	}
+	opt := &corev1.PodLogOptions{
+		TailLines: &tailLines,
+		Previous:  previous,
+		Timestamps: true,
+	}
+	if container != "" {
+		opt.Container = container
+	}
+	req := k.Clientset.CoreV1().Pods(namespace).GetLogs(name, opt)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+	buf := make([]byte, 0, 64*1024)
+	tmp := make([]byte, 8192)
+	for {
+		n, err := stream.Read(tmp)
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+			// 限制最大 1MB
+			if len(buf) > 1024*1024 {
+				buf = append(buf, []byte("\n...[truncated]...")...)
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return string(buf), nil
+}
+
 // ListDeployments 列出 Deployments
 func (k *K8sClient) ListDeployments(ctx context.Context, namespace string) ([]DeploymentInfo, error) {
 	if namespace == "" {
