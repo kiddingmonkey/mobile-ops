@@ -13,6 +13,7 @@ import OperationsPage from '@/pages/Operations'
 import ScalePage from '@/pages/Scale'
 import SettingsPage from '@/pages/Settings'
 import ClusterResourcesPage from '@/pages/ClusterResources'
+import PodDetailPage from '@/pages/PodDetail'
 import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
 import PromSettingsPage from '@/pages/settings/PromSettings'
 import CloudSettingsPage from '@/pages/settings/CloudSettings'
@@ -40,6 +41,7 @@ export default function App() {
           {/* 独立表单页 & 向导（无底部 TabBar） */}
           <Route path="/scale" element={<Protected><ScalePage /></Protected>} />
           <Route path="/clusters/:id/resources" element={<Protected><ClusterResourcesPage /></Protected>} />
+          <Route path="/clusters/:clusterId/pods/:namespace/:name" element={<Protected><PodDetailPage /></Protected>} />
           <Route path="/settings/grafana" element={<Protected><GrafanaSettingsPage /></Protected>} />
           <Route path="/settings/grafana/new" element={<Protected><GrafanaNewPage /></Protected>} />
           <Route path="/settings/prom" element={<Protected><PromSettingsPage /></Protected>} />

@@ -231,6 +231,25 @@ class ApiClient {
   async deleteShortcut(id: number) {
     return (await this.http.delete(`/shortcuts/${id}`)).data
   }
+
+  // ============ Pod 详情 / 事件 / 日志 ============
+  async getPodDetail(clusterId: number, namespace: string, name: string) {
+    return (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}`)).data
+  }
+  async getPodEvents(clusterId: number, namespace: string, name: string) {
+    const r = (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}/events`)).data
+    return (Array.isArray(r) ? r : []) as any[]
+  }
+  async getPodLogs(clusterId: number, namespace: string, name: string, container?: string, tail = 500, previous = false) {
+    const params: any = { tail, previous }
+    if (container) params.container = container
+    return (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}/logs`, { params })).data
+  }
+
+  // ============ 节点池详情 ============
+  async getNodePoolDetail(clusterId: number, poolId: number) {
+    return (await this.http.get(`/clusters/${clusterId}/node-pools/${poolId}`)).data
+  }
 }
 
 export const api = new ApiClient()

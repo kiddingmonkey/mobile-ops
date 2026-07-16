@@ -135,7 +135,13 @@ export default function ClusterResourcesPage() {
                     description={description}
                     extra={<span className="text-xs">{r.status || r.type || 'OK'}</span>}
                     arrow={<RightOutline />}
-                    onClick={() => viewYAML(r)}
+                    onClick={() => {
+                      if (tab === 'pods') {
+                        nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)
+                      } else {
+                        viewYAML(r)
+                      }
+                    }}
                   >
                     {r.name}
                   </List.Item>
