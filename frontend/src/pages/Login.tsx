@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Toast, Selector } from 'antd-mobile'
+import { Button, Toast, Selector, Dialog } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api, friendlyApiError } from '@/api/client'
 import { useAuth } from '@/store'
@@ -45,6 +45,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [remember, setRemember] = useState<RememberOption>('7d')
   const [autoTried, setAutoTried] = useState(false)
+  const [myIP, setMyIP] = useState<string>('获取中...')
+
+  // 获取当前IP（不需要登录）
+  useEffect(() => {
+    fetch('https://api.ipify.org?format=json', {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    })
+      .then(resp => resp.json())
+      .then(data => setMyIP(data.ip || '未知'))
+      .catch(() => setMyIP('获取失败'))
+  }, [])
 
   const doLogin = async (username: string, password: string, silent = false) => {
     setLoading(true)
@@ -191,6 +203,59 @@ export default function LoginPage() {
 
       {/* 底部按钮区 */}
       <div>
+        {/* 当前IP显示 */}
+        {myIP !== '获取中...' && myIP !== '获取失败' && (
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: 12,
+            color: 'white'
+          }}>
+            <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 4 }}>当前公网 IP</div>
+            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>
+              {myIP}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 8, opacity: 0.85, lineHeight: 1.5 }}>
+              ⚠️ 如果无法登录，可能是IP不在安全组白名单中
+              <br />
+              <span
+                style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                onClick={() => {
+                  Dialog.alert({
+                    title: '安全组白名单',
+                    content: (
+                      <div style={{ fontSize: 13, textAlign: 'left', lineHeight: 1.6 }}>
+                        <p>当前IP <b>{myIP}</b> 可能不在服务器安全组白名单中。</p>
+                        <p style={{ marginTop: 8 }}>请按以下步骤操作：</p>
+                        <ol style={{ paddingLeft: 20, margin: '8px 0' }}>
+                          <li>登录腾讯云控制台</li>
+                          <li>进入「轻量应用服务器」或「云服务器」</li>
+                          <li>找到你的服务器，进入「防火墙」或「安全组」</li>
+                          <li>添加入站规则：
+                            <ul style={{ listStyle: 'none', paddingLeft: 0, marginTop: 4 }}>
+                              <li>• 来源：<b>{myIP}/32</b></li>
+                              <li>• 端口：<b>18443</b></li>
+                              <li>• 协议：<b>TCP</b></li>
+                            </ul>
+                          </li>
+                          <li>保存后等待10秒生效，重新登录</li>
+                        </ol>
+                        <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                          💡 登录成功后，可在「设置 → 安全组白名单」中一键更新
+                        </p>
+                      </div>
+                    ),
+                    confirmText: '我知道了'
+                  })
+                }}
+              >
+                点击查看解决方案
+              </span>
+            </div>
+          </div>
+        )}
+
         <Button
           block
           color="primary"
