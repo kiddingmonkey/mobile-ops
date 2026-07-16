@@ -1,19 +1,125 @@
 import { useEffect, useState } from 'react'
-import { PullToRefresh, Tabs, Collapse } from 'antd-mobile'
+import { PullToRefresh, Tabs, Collapse, Button, Dialog, Toast, Switch } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
 import StatCard from '@/components/StatCard'
+import { sendUrgentAlert, getTTSEnabled, setTTSEnabled, getFloatingAlertEnabled, setFloatingAlertEnabled, requestFloatingPermission, testTTS } from '@/utils/alertNotifier'
+import { Capacitor } from '@capacitor/core'
 
 export default function AlertsPage() {
   const nav = useNavigate()
   const [alerts, setAlerts] = useState<any[]>([])
   const [tab, setTab] = useState('all')
+  const [ttsOn, setTtsOn] = useState(getTTSEnabled())
+  const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
+
   const load = async () => {
     const a = await api.listAlerts(200).catch(() => [])
     setAlerts(a || [])
   }
   useEffect(() => { load() }, [])
+
+  // 测试告警通知
+  const testAlert = async (severity: 'critical' | 'warning') => {
+    const testData = {
+      id: Date.now(),
+      title: severity === 'critical' ? '测试紧急告警' : '测试警告告警',
+      message: severity === 'critical'
+        ? '这是一条测试紧急告警，包含震动、声音、语音播报和悬浮窗'
+        : '这是一条测试警告告警，包含震动和通知',
+      severity,
+      source: '测试来源'
+    }
+
+    try {
+      await sendUrgentAlert(testData)
+      Toast.show({ content: '测试告警已发送', icon: 'success' })
+    } catch (e: any) {
+      Toast.show({ content: e.message || '发送失败', icon: 'fail' })
+    }
+  }
+
+  // 显示测试菜单
+  const showTestMenu = () => {
+    Dialog.show({
+      title: '测试告警通知',
+      content: (
+        <div style={{ padding: '12px 0' }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>通知功能开关</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13 }}>语音播报（仅紧急告警）</span>
+              <Switch
+                checked={ttsOn}
+                onChange={(checked) => {
+                  setTtsOn(checked)
+                  setTTSEnabled(checked)
+                  Toast.show({ content: checked ? '已开启语音播报' : '已关闭语音播报' })
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13 }}>悬浮窗通知（仅紧急告警）</span>
+              <Switch
+                checked={floatingOn}
+                onChange={async (checked) => {
+                  if (checked && Capacitor.isNativePlatform()) {
+                    const granted = await requestFloatingPermission()
+                    if (!granted) {
+                      Toast.show({ content: '请在系统设置中授予悬浮窗权限', duration: 3000 })
+                      return
+                    }
+                  }
+                  setFloatingOn(checked)
+                  setFloatingAlertEnabled(checked)
+                  Toast.show({ content: checked ? '已开启悬浮窗' : '已关闭悬浮窗' })
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>选择测试类型</div>
+            <Button
+              block
+              color="danger"
+              onClick={() => {
+                Dialog.clear()
+                testAlert('critical')
+              }}
+              style={{ marginBottom: 8 }}
+            >
+              测试紧急告警（震动+声音+播报+悬浮窗）
+            </Button>
+            <Button
+              block
+              color="warning"
+              onClick={() => {
+                Dialog.clear()
+                testAlert('warning')
+              }}
+              style={{ marginBottom: 8 }}
+            >
+              测试警告告警（震动+通知）
+            </Button>
+            <Button
+              block
+              fill="outline"
+              onClick={async () => {
+                const success = await testTTS('这是语音播报测试')
+                Toast.show({ content: success ? '播放成功' : '播放失败', icon: success ? 'success' : 'fail' })
+              }}
+            >
+              测试语音播报
+            </Button>
+          </div>
+        </div>
+      ),
+      closeOnMaskClick: true,
+      actions: [{ key: 'close', text: '关闭' }]
+    })
+  }
 
   const firing = alerts.filter(a => a.status === 'firing')
   const critical = firing.filter(a => a.severity === 'critical')
@@ -31,7 +137,17 @@ export default function AlertsPage() {
     <div className="page">
       <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
         <span className="title">告警中心</span>
-        <span className="text-xs">{firing.length} 活跃</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button
+            size="mini"
+            color="primary"
+            fill="outline"
+            onClick={showTestMenu}
+          >
+            测试
+          </Button>
+          <span className="text-xs">{firing.length} 活跃</span>
+        </div>
       </div>
       <PullToRefresh onRefresh={load}>
         <div className="page-content">

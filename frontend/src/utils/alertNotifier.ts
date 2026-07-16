@@ -1,13 +1,17 @@
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
+import FloatingAlert from './floatingAlert'
 
 /**
  * 告警通知服务
- * 支持本地通知、震动、声音提醒
+ * 支持本地通知、震动、声音提醒、语音播报、悬浮窗
  */
 
 let notificationPermission = false
+let ttsEnabled = true // TTS功能开关
+let floatingAlertEnabled = true // 悬浮窗开关
 
 // 初始化通知权限
 export async function initNotifications() {
@@ -99,6 +103,39 @@ export async function sendUrgentAlert(alert: {
   } catch (e) {
     console.error('[AlertNotifier] Failed to send notification:', e)
   }
+
+  // 语音播报（仅critical级别）
+  if (alert.severity === 'critical' && ttsEnabled) {
+    try {
+      const spokenText = `紧急告警：${alert.title}。${alert.message}`
+      await TextToSpeech.speak({
+        text: spokenText,
+        lang: 'zh-CN',
+        rate: 1.0,
+        pitch: 1.2,
+        volume: 1.0,
+        category: 'ambient'
+      })
+    } catch (e) {
+      console.error('[AlertNotifier] TTS failed:', e)
+    }
+  }
+
+  // 悬浮窗（critical级别，覆盖其他应用）
+  if (alert.severity === 'critical' && floatingAlertEnabled && Capacitor.isNativePlatform()) {
+    try {
+      const permission = await FloatingAlert.checkPermission()
+      if (permission.granted) {
+        await FloatingAlert.showAlert({
+          title: alert.title,
+          message: alert.message,
+          severity: alert.severity
+        })
+      }
+    } catch (e) {
+      console.error('[AlertNotifier] Floating alert failed:', e)
+    }
+  }
 }
 
 // 取消告警通知
@@ -152,5 +189,70 @@ export async function setupNotificationChannels() {
     })
   } catch (e) {
     console.error('[AlertNotifier] Failed to create channels:', e)
+  }
+}
+
+// 设置TTS开关
+export function setTTSEnabled(enabled: boolean) {
+  ttsEnabled = enabled
+  localStorage.setItem('alert_tts_enabled', enabled ? '1' : '0')
+}
+
+// 获取TTS开关状态
+export function getTTSEnabled(): boolean {
+  const saved = localStorage.getItem('alert_tts_enabled')
+  if (saved !== null) {
+    ttsEnabled = saved === '1'
+  }
+  return ttsEnabled
+}
+
+// 测试语音播报
+export async function testTTS(text = '这是一条测试告警') {
+  try {
+    await TextToSpeech.speak({
+      text,
+      lang: 'zh-CN',
+      rate: 1.0,
+      pitch: 1.2,
+      volume: 1.0,
+      category: 'ambient'
+    })
+    return true
+  } catch (e) {
+    console.error('[AlertNotifier] TTS test failed:', e)
+    return false
+  }
+}
+
+// 设置悬浮窗开关
+export function setFloatingAlertEnabled(enabled: boolean) {
+  floatingAlertEnabled = enabled
+  localStorage.setItem('alert_floating_enabled', enabled ? '1' : '0')
+}
+
+// 获取悬浮窗开关状态
+export function getFloatingAlertEnabled(): boolean {
+  const saved = localStorage.getItem('alert_floating_enabled')
+  if (saved !== null) {
+    floatingAlertEnabled = saved === '1'
+  }
+  return floatingAlertEnabled
+}
+
+// 请求悬浮窗权限
+export async function requestFloatingPermission() {
+  if (!Capacitor.isNativePlatform()) return false
+
+  try {
+    const result = await FloatingAlert.checkPermission()
+    if (result.granted) return true
+
+    await FloatingAlert.requestPermission()
+    // 用户需要在设置页手动授权，这里返回到设置页
+    return false
+  } catch (e) {
+    console.error('[AlertNotifier] Failed to request floating permission:', e)
+    return false
   }
 }
