@@ -16,12 +16,31 @@ export default function SecurityGroupsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const [rows, whoami] = await Promise.all([
-        api.listSGWhitelists(),
-        api.whoamiIP().catch(() => ({ ip: '未知' }))
-      ])
+      // 并行加载列表和获取IP
+      const rowsPromise = api.listSGWhitelists()
+
+      // 优先使用公网服务获取IP（不受18443端口限制）
+      let ipResult = '获取中...'
+      try {
+        const resp = await fetch('https://api.ipify.org?format=json', {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000)
+        })
+        const data = await resp.json()
+        ipResult = data.ip || '未知'
+      } catch {
+        // 降级：尝试后端接口
+        try {
+          const whoami = await api.whoamiIP()
+          ipResult = whoami.ip || '未知'
+        } catch {
+          ipResult = '获取失败'
+        }
+      }
+
+      const rows = await rowsPromise
       setList(rows)
-      setMyIP(whoami.ip)
+      setMyIP(ipResult)
     } catch (e: any) {
       Toast.show({ content: friendlyApiError(e), icon: 'fail' })
     } finally {
@@ -183,8 +202,20 @@ export default function SecurityGroupsPage() {
             <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, fontFamily: 'ui-monospace, monospace' }}>
               {myIP}
             </div>
-            <div style={{ fontSize: 11, marginTop: 4, opacity: 0.85 }}>
-              点击任意白名单的"一键更新"按钮,将此 IP 加入对应安全组
+            <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85, lineHeight: 1.5 }}>
+              {myIP !== '获取失败' && myIP !== '未知' ? (
+                <>
+                  点击任意白名单的"一键更新"按钮，将此 IP 加入对应安全组
+                  <br />
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>
+                    💡 如果一键更新失败，请手动到腾讯云控制台添加此IP
+                  </span>
+                </>
+              ) : (
+                <span style={{ color: '#FFB020' }}>
+                  ⚠️ IP获取失败，但不影响手动到控制台添加白名单
+                </span>
+              )}
             </div>
           </div>
 
