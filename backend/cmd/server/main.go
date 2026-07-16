@@ -90,7 +90,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(RequestLogger(logger))
 
-	h := api.NewHandler(database, cfg, authSvc, configSvc, scaleSvc, alertSvc)
+	h := api.NewHandler(database, cfg, authSvc, configSvc, scaleSvc, alertSvc, cipher)
 	h.Register(r)
 
 	srv := &http.Server{

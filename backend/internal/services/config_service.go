@@ -229,6 +229,11 @@ func (s *ConfigService) GetVPCClientForRegion(ctx context.Context, cloudAccountI
 	return clients.NewTencentVPCClient(sid, sk, useRegion)
 }
 
+// NewCLSClient 创建 CLS 客户端（需要解密后的 AK/SK 和指定的 region）
+func (s *ConfigService) NewCLSClient(secretID, secretKey, region string) *clients.TencentCLSClient {
+	return clients.NewTencentCLSClient(secretID, secretKey, region)
+}
+
 // ============ Clusters ============
 
 func (s *ConfigService) ListClusters(ctx context.Context) ([]models.Cluster, error) {

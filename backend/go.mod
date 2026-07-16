@@ -10,7 +10,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.18.2
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.134
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.135
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke v1.0.900
 	golang.org/x/crypto v0.18.0
 	k8s.io/api v0.29.0
@@ -61,6 +61,7 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cls v1.3.135 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc v1.3.134 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect

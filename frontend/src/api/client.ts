@@ -284,6 +284,27 @@ class ApiClient {
   async applySGWhitelist(id: number, ip?: string) {
     return (await this.http.post(`/security-groups/whitelists/${id}/apply`, ip ? { ip } : {})).data
   }
+
+  // ============ CLS 日志服务 ============
+  async listCLSLogsets(region: string) {
+    const r = (await this.http.get(`/cls/regions/${region}/logsets`)).data
+    return (Array.isArray(r) ? r : []) as any[]
+  }
+  async listCLSTopics(region: string, logsetId: string) {
+    const r = (await this.http.get(`/cls/regions/${region}/logsets/${logsetId}/topics`)).data
+    return (Array.isArray(r) ? r : []) as any[]
+  }
+  async searchCLSLogs(params: {
+    region: string
+    logset_id?: string
+    topic_id?: string
+    query: string
+    start_time?: string
+    end_time?: string
+    limit?: number
+  }) {
+    return (await this.http.post('/cls/search', params)).data
+  }
 }
 
 export const api = new ApiClient()

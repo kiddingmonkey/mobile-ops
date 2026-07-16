@@ -60,11 +60,11 @@ export default function LogsPage() {
   const loadLogsets = async () => {
     if (!selectedRegion) return
     try {
-      // TODO: 调用后端接口获取该区域的日志集列表
-      Toast.show({ content: 'CLS 日志集查询功能开发中', icon: 'fail' })
-      setLogsets([])
+      const logsets = await api.listCLSLogsets(selectedRegion)
+      setLogsets(logsets || [])
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '获取日志集失败', icon: 'fail' })
+      setLogsets([])
     }
   }
 
@@ -131,11 +131,21 @@ export default function LogsPage() {
     }
     setClsLoading(true)
     try {
-      // TODO: 调用后端 CLS 日志查询接口
-      Toast.show({ content: 'CLS 日志查询功能开发中', icon: 'fail' })
-      setClsLogs([])
+      const result = await api.searchCLSLogs({
+        region: selectedRegion,
+        logset_id: selectedLogset,
+        query: clsKeyword,
+        limit: 100
+      })
+      setClsLogs(result.logs || [])
+      if (result.logs && result.logs.length > 0) {
+        Toast.show({ content: `找到 ${result.logs.length} 条日志`, icon: 'success' })
+      } else {
+        Toast.show({ content: '未找到匹配的日志', icon: 'fail' })
+      }
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '查询失败', icon: 'fail' })
+      setClsLogs([])
     } finally {
       setClsLoading(false)
     }
@@ -290,12 +300,18 @@ export default function LogsPage() {
                   />
                 ) : (
                   <div className="card">
-                    <List>
+                    <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+                      搜索结果（共 {clsLogs.length} 条）
+                    </div>
+                    <List mode="card" style={{ '--border-inner': '0px' } as any}>
                       {clsLogs.map((log: any, idx: number) => (
                         <List.Item key={idx}>
-                          <div style={{ fontSize: 13 }}>{log.content}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                            {fmtTime(log.timestamp)}
+                          <div style={{ fontSize: 12, fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                            {log.content}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{fmtTime(log.timestamp)}</span>
+                            {log.source && <span>来源: {log.source}</span>}
                           </div>
                         </List.Item>
                       ))}

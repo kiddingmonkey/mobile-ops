@@ -9,6 +9,7 @@ import (
 	"mobile-ops/internal/config"
 	"mobile-ops/internal/middleware"
 	"mobile-ops/internal/services"
+	"mobile-ops/internal/utils"
 )
 
 type Handler struct {
@@ -18,11 +19,12 @@ type Handler struct {
 	config  *services.ConfigService
 	scale   *services.ScaleService
 	alert   *services.AlertService
+	cipher  *utils.Cipher
 }
 
 func NewHandler(db *sqlx.DB, cfg *config.Config, auth *services.AuthService,
-	configSvc *services.ConfigService, scale *services.ScaleService, alert *services.AlertService) *Handler {
-	return &Handler{db: db, cfg: cfg, auth: auth, config: configSvc, scale: scale, alert: alert}
+	configSvc *services.ConfigService, scale *services.ScaleService, alert *services.AlertService, cipher *utils.Cipher) *Handler {
+	return &Handler{db: db, cfg: cfg, auth: auth, config: configSvc, scale: scale, alert: alert, cipher: cipher}
 }
 
 func (h *Handler) Register(r *gin.Engine) {
@@ -102,6 +104,11 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.POST("/security-groups/whitelists", h.CreateSGWhitelist)
 		priv.DELETE("/security-groups/whitelists/:id", h.DeleteSGWhitelist)
 		priv.POST("/security-groups/whitelists/:id/apply", h.ApplySGWhitelist)
+
+		// CLS 日志服务
+		priv.GET("/cls/regions/:region/logsets", h.ListCLSLogsets)
+		priv.GET("/cls/regions/:region/logsets/:logset_id/topics", h.ListCLSTopics)
+		priv.POST("/cls/search", h.SearchCLSLogs)
 	}
 }
 
