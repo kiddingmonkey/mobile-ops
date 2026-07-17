@@ -1,5 +1,5 @@
 /**
- * 获取公网IP - 多个国内可访问的服务
+ * 获取公网IP - 多个可用的IP查询服务
  * 按优先级尝试，第一个成功就返回
  */
 
@@ -7,45 +7,47 @@ interface IPService {
   name: string
   url: string
   parse: (data: any) => string | null
+  responseType?: 'json' | 'text'
 }
 
 const IP_SERVICES: IPService[] = [
   {
-    // 淘宝IP查询（国内快）
-    name: 'taobao',
-    url: 'https://www.taobao.com/help/getip.php',
-    parse: (data: any) => {
-      // 返回格式：ipCallback({ip:"xxx.xxx.xxx.xxx"})
-      const match = String(data).match(/ip:"([\d.]+)"/)
-      return match ? match[1] : null
-    }
+    name: 'ipinfo.io',
+    url: 'https://ipinfo.io/json',
+    responseType: 'json',
+    parse: (data: any) => data.ip
   },
   {
-    // ip.sb（国内可访问）
     name: 'ip.sb',
     url: 'https://api.ip.sb/jsonip',
+    responseType: 'json',
     parse: (data: any) => data.ip
   },
   {
-    // 腾讯天气IP查询
-    name: 'qq-weather',
-    url: 'https://pv.sohu.com/cityjson?ie=utf-8',
+    name: 'ipify',
+    url: 'https://api.ipify.org?format=json',
+    responseType: 'json',
+    parse: (data: any) => data.ip
+  },
+  {
+    name: 'icanhazip',
+    url: 'https://icanhazip.com',
+    responseType: 'text',
     parse: (data: any) => {
-      // 返回格式：var returnCitySN = {"cip": "xxx.xxx.xxx.xxx", ...}
-      const match = String(data).match(/"cip":\s*"([\d.]+)"/)
-      return match ? match[1] : null
+      const ip = String(data).trim()
+      return /^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip : null
     }
   },
   {
-    // ipify（国外，作为降级）
-    name: 'ipify',
-    url: 'https://api.ipify.org?format=json',
+    name: 'myip.la',
+    url: 'https://api.myip.la/en?json',
+    responseType: 'json',
     parse: (data: any) => data.ip
   },
   {
-    // ipapi.co（国外，作为降级）
     name: 'ipapi',
     url: 'https://ipapi.co/json/',
+    responseType: 'json',
     parse: (data: any) => data.ip
   }
 ]
@@ -54,7 +56,7 @@ const IP_SERVICES: IPService[] = [
  * 获取公网IP
  * 依次尝试多个服务，第一个成功的返回
  */
-export async function fetchPublicIP(timeout = 5000): Promise<string> {
+export async function fetchPublicIP(timeout = 3000): Promise<string> {
   for (const service of IP_SERVICES) {
     try {
       const controller = new AbortController()
@@ -62,20 +64,24 @@ export async function fetchPublicIP(timeout = 5000): Promise<string> {
 
       const resp = await fetch(service.url, {
         method: 'GET',
-        signal: controller.signal
+        signal: controller.signal,
+        // 避免CORS问题
+        mode: 'cors',
+        credentials: 'omit'
       })
 
       clearTimeout(timer)
 
-      if (!resp.ok) continue
+      if (!resp.ok) {
+        console.warn(`[fetchPublicIP] ${service.name} returned ${resp.status}`)
+        continue
+      }
 
-      // 根据内容类型解析
-      const contentType = resp.headers.get('content-type') || ''
       let data: any
-      if (contentType.includes('application/json')) {
-        data = await resp.json()
-      } else {
+      if (service.responseType === 'text') {
         data = await resp.text()
+      } else {
+        data = await resp.json()
       }
 
       const ip = service.parse(data)
