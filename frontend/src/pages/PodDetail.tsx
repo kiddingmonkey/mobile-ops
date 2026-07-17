@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Tabs, Card, Tag, List, Toast, PullToRefresh, TextArea } from 'antd-mobile'
+import { Tabs, Card, Tag, List, Toast, PullToRefresh, Button } from 'antd-mobile'
 import { ClockCircleOutline, CheckCircleOutline, CloseCircleOutline } from 'antd-mobile-icons'
 import PageShell from '@/components/PageShell'
 import { api } from '@/api/client'
+import { shareLog, downloadLog, makeLogFilename } from '@/utils/logShare'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -54,14 +55,20 @@ export default function PodDetailPage() {
     }
   }
 
-  const loadLogs = async (container?: string) => {
+  const loadLogs = async (container?: string, tail: number = 500, previous: boolean = false) => {
     try {
       Toast.show({ content: '加载日志...', icon: 'loading', duration: 0 })
-      const r = await api.getPodLogs(Number(clusterId), namespace!, name!, container)
-      setLogs(r.logs || '')
+      const r = await api.getPodLogs(Number(clusterId), namespace!, name!, container, tail, previous)
+      // 兼容多种返回格式
+      const logText = typeof r === 'string' ? r : (r?.logs || r?.data || '')
+      setLogs(logText)
       Toast.clear()
+      if (!logText) {
+        Toast.show({ content: previous ? '没有上次崩溃的日志' : '暂无日志', icon: 'fail' })
+      }
     } catch (e: any) {
-      Toast.show({ content: '加载日志失败', icon: 'fail' })
+      Toast.clear()
+      Toast.show({ content: '加载日志失败: ' + (e?.response?.data?.error || e?.message || ''), icon: 'fail' })
     }
   }
 
@@ -104,7 +111,12 @@ export default function PodDetailPage() {
               <EventsTab events={events} />
             </Tabs.Tab>
             <Tabs.Tab title="日志" key="logs">
-              <LogsTab logs={logs} containers={detail.containers} onSelectContainer={loadLogs} />
+              <LogsTab
+                logs={logs}
+                containers={detail.containers}
+                podName={name || ''}
+                onLoad={loadLogs}
+              />
             </Tabs.Tab>
             <Tabs.Tab title="YAML" key="yaml">
               <YamlTab yaml={yaml} />
@@ -286,40 +298,207 @@ function EventsTab({ events }: { events: any[] }) {
 }
 
 // 日志 Tab
-function LogsTab({ logs, containers, onSelectContainer }: {
+function LogsTab({ logs, containers, podName, onLoad }: {
   logs: string
   containers: any[]
-  onSelectContainer: (c: string) => void
+  podName: string
+  onLoad: (container?: string, tail?: number, previous?: boolean) => Promise<void>
 }) {
+  const [selectedContainer, setSelectedContainer] = useState<string>(containers?.[0]?.name || '')
+  const [tail, setTail] = useState<number>(500)
+  const [previous, setPrevious] = useState<boolean>(false)
+  const [fontSize, setFontSize] = useState<number>(9)
+
+  const doLoad = async () => {
+    await onLoad(selectedContainer, tail, previous)
+  }
+
+  const doShare = async () => {
+    if (!logs) {
+      Toast.show({ content: '没有日志可分享', icon: 'fail' })
+      return
+    }
+    try {
+      const filename = makeLogFilename(`${podName}_${selectedContainer || 'default'}${previous ? '_previous' : ''}`)
+      await shareLog({
+        content: logs,
+        filename,
+        title: `Pod日志 - ${podName}`
+      })
+    } catch (e: any) {
+      Toast.show({ content: '分享失败: ' + (e?.message || ''), icon: 'fail' })
+    }
+  }
+
+  const doDownload = async () => {
+    if (!logs) {
+      Toast.show({ content: '没有日志可下载', icon: 'fail' })
+      return
+    }
+    const filename = makeLogFilename(`${podName}_${selectedContainer || 'default'}${previous ? '_previous' : ''}`)
+    const result = await downloadLog(logs, filename)
+    if (result) {
+      Toast.show({ content: '已保存到: ' + filename, icon: 'success', duration: 2000 })
+    } else {
+      Toast.show({ content: '下载失败', icon: 'fail' })
+    }
+  }
+
+  const TAIL_OPTIONS = [100, 200, 500, 1000, 2000]
+
   return (
-    <div style={{ padding: '12px 12px 60px' }}>
-      {containers && containers.length > 1 && (
-        <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {containers.map((c: any) => (
-            <Tag
-              key={c.name}
-              color="primary"
-              onClick={() => onSelectContainer(c.name)}
-              style={{ cursor: 'pointer' }}
-            >
-              {c.name}
-            </Tag>
-          ))}
+    <div style={{ padding: '10px 10px 60px' }}>
+      {/* 控制栏 */}
+      <div style={{
+        background: 'var(--bg-elevated)',
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 8
+      }}>
+        {/* 容器选择 */}
+        {containers && containers.length > 1 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>容器</div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {containers.map((c: any) => (
+                <span
+                  key={c.name}
+                  onClick={() => setSelectedContainer(c.name)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    background: selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                    color: selectedContainer === c.name ? '#fff' : 'var(--text-primary)',
+                    border: '1px solid ' + (selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--border-color)')
+                  }}
+                >
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 行数选择 */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>显示行数</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {TAIL_OPTIONS.map(n => (
+              <span
+                key={n}
+                onClick={() => setTail(n)}
+                style={{
+                  padding: '3px 10px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  background: tail === n ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                  color: tail === n ? '#fff' : 'var(--text-primary)',
+                  border: '1px solid ' + (tail === n ? 'var(--accent-blue)' : 'var(--border-color)')
+                }}
+              >
+                {n}
+              </span>
+            ))}
+          </div>
         </div>
-      )}
-      <TextArea
-        value={logs || '暂无日志'}
-        readOnly
-        rows={20}
-        style={{
-          fontSize: 11,
-          fontFamily: 'ui-monospace, monospace',
-          background: '#1E293B',
-          color: '#F8FAFC',
-          border: 'none',
-          padding: 12
-        }}
-      />
+
+        {/* 日志类型 + 字体大小 */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          <span
+            onClick={() => setPrevious(false)}
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              cursor: 'pointer',
+              background: !previous ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+              color: !previous ? '#fff' : 'var(--text-primary)',
+              border: '1px solid ' + (!previous ? 'var(--accent-blue)' : 'var(--border-color)')
+            }}
+          >
+            当前日志
+          </span>
+          <span
+            onClick={() => setPrevious(true)}
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              cursor: 'pointer',
+              background: previous ? 'var(--warning)' : 'var(--bg-secondary)',
+              color: previous ? '#fff' : 'var(--text-primary)',
+              border: '1px solid ' + (previous ? 'var(--warning)' : 'var(--border-color)')
+            }}
+          >
+            上次崩溃(-p)
+          </span>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>字体</span>
+          <span
+            onClick={() => setFontSize(Math.max(7, fontSize - 1))}
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 12,
+              cursor: 'pointer',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              minWidth: 24,
+              textAlign: 'center'
+            }}
+          >A-</span>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 22, textAlign: 'center' }}>{fontSize}</span>
+          <span
+            onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 12,
+              cursor: 'pointer',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              minWidth: 24,
+              textAlign: 'center'
+            }}
+          >A+</span>
+        </div>
+
+        {/* 操作按钮 */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Button block color="primary" size="small" onClick={doLoad}>
+            加载日志
+          </Button>
+          <Button size="small" onClick={doDownload} disabled={!logs}>
+            📥 下载
+          </Button>
+          <Button size="small" color="primary" fill="outline" onClick={doShare} disabled={!logs}>
+            📤 分享
+          </Button>
+        </div>
+      </div>
+
+      {/* 日志内容 */}
+      <div style={{
+        background: '#1E293B',
+        color: '#E2E8F0',
+        borderRadius: 8,
+        padding: 8,
+        fontSize,
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+        overflowX: 'auto',
+        maxHeight: '65vh',
+        overflowY: 'auto',
+        lineHeight: 1.4
+      }}>
+        {logs || '点击"加载日志"按钮查看容器日志'}
+      </div>
     </div>
   )
 }

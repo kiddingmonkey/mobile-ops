@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useUI } from '@/store'
 import { fmtTime } from '@/utils/format'
+import { shareLog, downloadLog, makeLogFilename } from '@/utils/logShare'
 
 export default function LogsPage() {
   const nav = useNavigate()
@@ -44,6 +45,9 @@ export default function LogsPage() {
   // 容器日志状态
   const [podLogs, setPodLogs] = useState<string>('')
   const [podLoading, setPodLoading] = useState(false)
+  const [podTail, setPodTail] = useState<number>(500)
+  const [podPrevious, setPodPrevious] = useState<boolean>(false)
+  const [podFontSize, setPodFontSize] = useState<number>(10)
   const [selectedNamespace, setSelectedNamespace] = useState('')
   const [selectedPod, setSelectedPod] = useState('')
   const [selectedContainer, setSelectedContainer] = useState('')
@@ -144,9 +148,9 @@ export default function LogsPage() {
     setPodLoading(true)
     try {
       if (logType === 'stdout') {
-        const result = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod, selectedContainer)
+        const result = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod, selectedContainer, podTail, podPrevious)
         const logText = typeof result === 'string' ? result : (result?.logs || result?.data || JSON.stringify(result))
-        setPodLogs(logText || '(无日志)')
+        setPodLogs(logText || (podPrevious ? '没有上次崩溃的日志' : '(无日志)'))
       } else {
         // TODO: 文件日志功能
         Toast.show({ content: '容器文件日志功能开发中', icon: 'fail' })
@@ -407,26 +411,40 @@ export default function LogsPage() {
                       <span>
                         日志量: <span style={{ color: 'var(--accent-blue)' }}>{clsLogs.length}</span> 条
                       </span>
-                      <Button
-                        size="mini"
-                        color="primary"
-                        fill="outline"
-                        onClick={() => {
-                          const content = clsLogs.map((log: any) =>
-                            `[${fmtTime(log.timestamp)}] ${log.content}`
-                          ).join('\n')
-                          const blob = new Blob([content], { type: 'text/plain' })
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `cls-${selectedRegion}-${Date.now()}.log`
-                          a.click()
-                          URL.revokeObjectURL(url)
-                          Toast.show({ content: '日志已下载', icon: 'success' })
-                        }}
-                      >
-                        下载
-                      </Button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <Button
+                          size="mini"
+                          fill="outline"
+                          onClick={async () => {
+                            const content = clsLogs.map((log: any) =>
+                              `[${fmtTime(log.timestamp)}] ${log.content}`
+                            ).join('\n')
+                            const filename = makeLogFilename(`cls_${selectedRegion}`)
+                            const r = await downloadLog(content, filename)
+                            Toast.show({ content: r ? '已下载' : '下载失败', icon: r ? 'success' : 'fail' })
+                          }}
+                        >
+                          📥 下载
+                        </Button>
+                        <Button
+                          size="mini"
+                          color="primary"
+                          fill="outline"
+                          onClick={async () => {
+                            const content = clsLogs.map((log: any) =>
+                              `[${fmtTime(log.timestamp)}] ${log.content}`
+                            ).join('\n')
+                            const filename = makeLogFilename(`cls_${selectedRegion}`)
+                            try {
+                              await shareLog({ content, filename, title: `CLS日志 - ${selectedRegion}` })
+                            } catch (e: any) {
+                              Toast.show({ content: '分享失败', icon: 'fail' })
+                            }
+                          }}
+                        >
+                          📤 分享
+                        </Button>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {clsLogs.map((log: any, idx: number) => (
@@ -543,6 +561,46 @@ export default function LogsPage() {
                     </div>
                   )}
 
+                  {/* 行数 + 日志类型 */}
+                  {selectedPod && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>选项</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {[100, 200, 500, 1000, 2000].map(n => (
+                          <span
+                            key={n}
+                            onClick={() => setPodTail(n)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 11,
+                              cursor: 'pointer',
+                              background: podTail === n ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                              color: podTail === n ? '#fff' : 'var(--text-primary)',
+                              border: '1px solid ' + (podTail === n ? 'var(--accent-blue)' : 'var(--border-color)')
+                            }}
+                          >
+                            {n}行
+                          </span>
+                        ))}
+                        <span
+                          onClick={() => setPodPrevious(!podPrevious)}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            background: podPrevious ? 'var(--warning)' : 'var(--bg-secondary)',
+                            color: podPrevious ? '#fff' : 'var(--text-primary)',
+                            border: '1px solid ' + (podPrevious ? 'var(--warning)' : 'var(--border-color)')
+                          }}
+                        >
+                          {podPrevious ? '✓ 上次崩溃' : '上次崩溃(-p)'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <Button
                     block
                     color="primary"
@@ -567,27 +625,62 @@ export default function LogsPage() {
                       color: 'var(--text-secondary)'
                     }}>
                       <span>日志内容</span>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <Button
+                          size="mini"
+                          fill="outline"
+                          onClick={async () => {
+                            const filename = makeLogFilename(`${selectedPod}_${selectedContainer}`)
+                            const r = await downloadLog(podLogs, filename)
+                            Toast.show({ content: r ? '已下载' : '下载失败', icon: r ? 'success' : 'fail' })
+                          }}
+                        >
+                          📥 下载
+                        </Button>
                         <Button
                           size="mini"
                           color="primary"
                           fill="outline"
-                          onClick={() => {
-                            const blob = new Blob([podLogs], { type: 'text/plain' })
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `${selectedNamespace}-${selectedPod}-${selectedContainer}-${Date.now()}.log`
-                            a.click()
-                            URL.revokeObjectURL(url)
-                            Toast.show({ content: '日志已下载', icon: 'success' })
+                          onClick={async () => {
+                            const filename = makeLogFilename(`${selectedPod}_${selectedContainer}`)
+                            try {
+                              await shareLog({ content: podLogs, filename, title: `Pod日志 - ${selectedPod}` })
+                            } catch {
+                              Toast.show({ content: '分享失败', icon: 'fail' })
+                            }
                           }}
                         >
-                          下载
+                          📤 分享
                         </Button>
-                        <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                          {selectedNamespace}/{selectedPod}/{selectedContainer}
-                        </span>
+                      </div>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 6
+                    }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                        {selectedNamespace}/{selectedPod}/{selectedContainer}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span
+                          onClick={() => setPodFontSize(Math.max(7, podFontSize - 1))}
+                          style={{
+                            padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+                            background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                            borderRadius: 3, border: '1px solid var(--border-color)'
+                          }}
+                        >A-</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 18, textAlign: 'center' }}>{podFontSize}</span>
+                        <span
+                          onClick={() => setPodFontSize(Math.min(20, podFontSize + 1))}
+                          style={{
+                            padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+                            background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                            borderRadius: 3, border: '1px solid var(--border-color)'
+                          }}
+                        >A+</span>
                       </div>
                     </div>
                     <div style={{
@@ -595,7 +688,7 @@ export default function LogsPage() {
                       color: '#d4d4d4',
                       padding: 10,
                       borderRadius: 6,
-                      fontSize: 10,
+                      fontSize: podFontSize,
                       fontFamily: 'Monaco, Menlo, "SF Mono", "Courier New", monospace',
                       overflowX: 'auto',
                       whiteSpace: 'pre-wrap',
