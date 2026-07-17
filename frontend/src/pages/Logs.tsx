@@ -19,6 +19,17 @@ export default function LogsPage() {
   const [clsKeyword, setClsKeyword] = useState('')
   const [selectedRegion, setSelectedRegion] = useState('')
   const [selectedLogset, setSelectedLogset] = useState('')
+  const [timeRange, setTimeRange] = useState('15m')
+  const TIME_RANGES = [
+    { label: '最近5分钟', value: '5m' },
+    { label: '最近15分钟', value: '15m' },
+    { label: '最近30分钟', value: '30m' },
+    { label: '最近1小时', value: '1h' },
+    { label: '最近3小时', value: '3h' },
+    { label: '最近6小时', value: '6h' },
+    { label: '最近12小时', value: '12h' },
+    { label: '最近24小时', value: '24h' }
+  ]
   const [regions] = useState([
     { label: '广州', value: 'ap-guangzhou' },
     { label: '上海', value: 'ap-shanghai' },
@@ -133,8 +144,9 @@ export default function LogsPage() {
     setPodLoading(true)
     try {
       if (logType === 'stdout') {
-        const logs = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod, selectedContainer)
-        setPodLogs(logs || '(无日志)')
+        const result = await api.getPodLogs(activeClusterId, selectedNamespace, selectedPod, selectedContainer)
+        const logText = typeof result === 'string' ? result : (result?.logs || result?.data || JSON.stringify(result))
+        setPodLogs(logText || '(无日志)')
       } else {
         // TODO: 文件日志功能
         Toast.show({ content: '容器文件日志功能开发中', icon: 'fail' })
@@ -159,11 +171,30 @@ export default function LogsPage() {
     try {
       // 无关键词时使用 * 查询全部（腾讯云CLS语法）
       const query = clsKeyword.trim() || '*'
+
+      // 计算时间范围
+      const now = Date.now()
+      const rangeMap: Record<string, number> = {
+        '5m': 5 * 60 * 1000,
+        '15m': 15 * 60 * 1000,
+        '30m': 30 * 60 * 1000,
+        '1h': 60 * 60 * 1000,
+        '3h': 3 * 60 * 60 * 1000,
+        '6h': 6 * 60 * 60 * 1000,
+        '12h': 12 * 60 * 60 * 1000,
+        '24h': 24 * 60 * 60 * 1000
+      }
+      const duration = rangeMap[timeRange] || 15 * 60 * 1000
+      const startTime = new Date(now - duration).toISOString()
+      const endTime = new Date(now).toISOString()
+
       const result = await api.searchCLSLogs({
         region: selectedRegion,
         logset_id: selectedLogset,
         query,
-        limit: 100
+        limit: 100,
+        start_time: startTime,
+        end_time: endTime
       })
       setClsLogs(result.logs || [])
       if (!silent) {
@@ -305,6 +336,30 @@ export default function LogsPage() {
                           <option key={ls.id} value={ls.id}>{ls.name}</option>
                         ))}
                       </select>
+                    </div>
+                  </div>
+
+                  {/* 时间范围选择 */}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>时间范围</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {TIME_RANGES.map(t => (
+                        <span
+                          key={t.value}
+                          onClick={() => setTimeRange(t.value)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            background: timeRange === t.value ? 'var(--accent-blue)' : 'var(--bg-elevated)',
+                            color: timeRange === t.value ? '#fff' : 'var(--text-secondary)',
+                            border: `1px solid ${timeRange === t.value ? 'var(--accent-blue)' : 'var(--border-color)'}`
+                          }}
+                        >
+                          {t.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
 

@@ -485,3 +485,52 @@ body.mo-light .adm-list-body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.8); }
 }
+
+/* ============ 深色主题下antd-mobile组件修复 ============ */
+
+/* 所有输入框/选择器文字颜色 */
+.adm-input-element,
+.adm-text-area-element,
+.adm-selector .adm-selector-item-label,
+.adm-picker-view-column-item,
+.adm-picker-header-button,
+.adm-selector-item-label,
+.adm-list-item-content-main,
+.adm-dropdown-item-title,
+.adm-cascader-item,
+.adm-check-list-item {
+  color: var(--text-primary) !important;
+}
+
+/* 选择器选中项文字 */
+.adm-selector .adm-selector-item-active .adm-selector-item-label {
+  color: white !important;
+}
+
+/* Picker弹窗背景 */
+.adm-picker-popup .adm-popup-body,
+.adm-cascader-popup .adm-popup-body {
+  background: var(--bg-secondary) !important;
+}
+
+/* Input/TextArea placeholder */
+.adm-input-element::placeholder,
+.adm-text-area-element::placeholder {
+  color: var(--text-tertiary) !important;
+}
+
+/* 下拉菜单 */
+.adm-dropdown-popup .adm-popup-body {
+  background: var(--bg-secondary) !important;
+}
+
+/* List组件 */
+.adm-list-body,
+.adm-list-item {
+  background: var(--bg-secondary) !important;
+}
+
+.adm-list-item-content-extra {
+  color: var(--text-secondary) !important;
+}
+
