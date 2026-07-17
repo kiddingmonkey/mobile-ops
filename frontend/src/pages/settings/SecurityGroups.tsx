@@ -14,6 +14,7 @@ export default function SecurityGroupsPage() {
   const [list, setList] = useState<SGTemplate[]>([])
   const [myIP, setMyIP] = useState<string>('准备中...')
   const [ipStatus, setIpStatus] = useState<string>('')
+  const [failedDetails, setFailedDetails] = useState<Array<{ service: string; reason: string }>>([])
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState<string | null>(null)
 
@@ -29,6 +30,7 @@ export default function SecurityGroupsPage() {
           setIpStatus(`来自 ${progress.service}`)
         } else {
           setIpStatus('所有服务都失败了')
+          setFailedDetails(progress.failedServices || [])
         }
       })
 
@@ -269,7 +271,7 @@ export default function SecurityGroupsPage() {
             marginTop: 8
           }}>
             <div style={{ fontSize: 11, opacity: 0.9 }}>
-              当前公网 IP {ipStatus && myIP !== '获取中...' && myIP !== '准备中...' && `· ${ipStatus}`}
+              当前公网 IP {ipStatus && myIP !== '获取中...' && myIP !== '准备中...' && myIP !== '获取失败' && `· ${ipStatus}`}
             </div>
             {(myIP === '获取中...' || myIP === '准备中...') ? (
               <div style={{ fontSize: 14, marginTop: 6, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -282,6 +284,24 @@ export default function SecurityGroupsPage() {
                   animation: 'pulse 1s ease-in-out infinite'
                 }}/>
                 {ipStatus || '正在获取IP...'}
+              </div>
+            ) : myIP === '获取失败' ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+                  ❌ 无法获取公网IP
+                </div>
+                {failedDetails.length > 0 && (
+                  <div style={{ fontSize: 10, opacity: 0.85, lineHeight: 1.6 }}>
+                    已尝试以下 {failedDetails.length} 个服务：
+                    <div style={{ marginTop: 4 }}>
+                      {failedDetails.map((f, i) => (
+                        <div key={i} style={{ fontFamily: 'ui-monospace, monospace' }}>
+                          · {f.service} ({f.reason})
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, fontFamily: 'ui-monospace, monospace' }}>

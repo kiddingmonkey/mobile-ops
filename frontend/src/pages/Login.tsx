@@ -48,6 +48,7 @@ export default function LoginPage() {
   const [autoTried, setAutoTried] = useState(false)
   const [myIP, setMyIP] = useState<string>('准备中...')
   const [ipStatus, setIpStatus] = useState<string>('')
+  const [failedDetails, setFailedDetails] = useState<Array<{ service: string; reason: string }>>([])
 
   // 获取当前IP（使用国内可访问的服务）
   useEffect(() => {
@@ -56,9 +57,10 @@ export default function LoginPage() {
         setMyIP('获取中...')
         setIpStatus(`正在通过 ${progress.service} 获取 (${progress.index}/${progress.total})`)
       } else if (progress.status === 'success') {
-        setIpStatus(`已通过 ${progress.service} 获取`)
+        setIpStatus(`来自 ${progress.service}`)
       } else {
         setIpStatus('所有服务都失败了')
+        setFailedDetails(progress.failedServices || [])
       }
     }).then(ip => setMyIP(ip))
   }, [])
@@ -269,6 +271,33 @@ export default function LoginPage() {
                 animation: 'pulse 1s ease-in-out infinite'
               }}/>
               {ipStatus || '正在获取IP...'}
+            </div>
+          </div>
+        )}
+        {myIP === '获取失败' && (
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: 'rgba(220, 53, 69, 0.15)',
+            borderRadius: 12,
+            border: '1px solid rgba(220, 53, 69, 0.3)',
+            color: 'var(--text-primary)'
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#DC3545' }}>
+              ❌ 无法获取公网IP
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.8, lineHeight: 1.6 }}>
+              已尝试以下 {failedDetails.length} 个服务：
+              <div style={{ marginTop: 4 }}>
+                {failedDetails.map((f, i) => (
+                  <div key={i} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10 }}>
+                    · {f.service} ({f.reason})
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                请检查网络连接，或直接使用手机联网状态下的IP
+              </div>
             </div>
           </div>
         )}

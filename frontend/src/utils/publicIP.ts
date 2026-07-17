@@ -58,6 +58,8 @@ export interface FetchIPProgress {
   ip?: string
   index: number
   total: number
+  triedServices?: string[]  // 已经尝试过的服务列表
+  failedServices?: Array<{ service: string; reason: string }>  // 失败的服务及原因
 }
 
 /**
@@ -70,14 +72,20 @@ export async function fetchPublicIP(
   onProgress?: (progress: FetchIPProgress) => void,
   timeout = 3000
 ): Promise<string> {
+  const triedServices: string[] = []
+  const failedServices: Array<{ service: string; reason: string }> = []
+
   for (let i = 0; i < IP_SERVICES.length; i++) {
     const service = IP_SERVICES[i]
+    triedServices.push(service.name)
 
     onProgress?.({
       status: 'trying',
       service: service.name,
       index: i + 1,
-      total: IP_SERVICES.length
+      total: IP_SERVICES.length,
+      triedServices: [...triedServices],
+      failedServices: [...failedServices]
     })
 
     try {
@@ -94,7 +102,9 @@ export async function fetchPublicIP(
       clearTimeout(timer)
 
       if (!resp.ok) {
+        const reason = `HTTP ${resp.status}`
         console.warn(`[fetchPublicIP] ${service.name} returned ${resp.status}`)
+        failedServices.push({ service: service.name, reason })
         continue
       }
 
@@ -113,12 +123,18 @@ export async function fetchPublicIP(
           service: service.name,
           ip,
           index: i + 1,
-          total: IP_SERVICES.length
+          total: IP_SERVICES.length,
+          triedServices: [...triedServices],
+          failedServices: [...failedServices]
         })
         return ip
+      } else {
+        failedServices.push({ service: service.name, reason: 'IP格式错误' })
       }
-    } catch (err) {
+    } catch (err: any) {
+      const reason = err?.name === 'AbortError' ? '超时' : (err?.message || '网络错误')
       console.warn(`[fetchPublicIP] Failed with ${service.name}:`, err)
+      failedServices.push({ service: service.name, reason })
       continue
     }
   }
@@ -127,7 +143,9 @@ export async function fetchPublicIP(
     status: 'failed',
     service: '',
     index: IP_SERVICES.length,
-    total: IP_SERVICES.length
+    total: IP_SERVICES.length,
+    triedServices: [...triedServices],
+    failedServices: [...failedServices]
   })
   return '获取失败'
 }
