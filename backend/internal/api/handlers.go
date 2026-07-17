@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -774,9 +775,24 @@ type VersionInfo struct {
 
 // GetLatestVersion 获取最新版本信息（从腾讯云COS）
 func (h *Handler) GetLatestVersion(c *gin.Context) {
-	// 从环境变量获取COS URL，或使用默认值
-	cosURL := "https://cloudpilot-1234567890.cos.ap-guangzhou.myqcloud.com/releases/latest.json"
-	
+	// 通过环境变量配置COS域名
+	bucket := os.Getenv("COS_BUCKET")
+	region := os.Getenv("COS_REGION")
+	accelerate := os.Getenv("COS_ACCELERATE")
+
+	var cosURL string
+	if bucket == "" {
+		bucket = "cloudpilot-1334049535"
+	}
+	if accelerate == "true" {
+		cosURL = "https://" + bucket + ".cos.accelerate.myqcloud.com/releases/latest.json"
+	} else {
+		if region == "" {
+			region = "ap-guangzhou"
+		}
+		cosURL = "https://" + bucket + ".cos." + region + ".myqcloud.com/releases/latest.json"
+	}
+
 	// 从COS获取版本信息
 	resp, err := http.Get(cosURL)
 	if err != nil {

@@ -59,13 +59,21 @@ jobs:
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
           COS_BUCKET: ${{ secrets.COS_BUCKET }}
           COS_REGION: ${{ secrets.COS_REGION }}
+          COS_ACCELERATE: ${{ secrets.COS_ACCELERATE }}
         run: |
+          # 根据是否启用全球加速决定下载域名
+          if [ "$COS_ACCELERATE" = "true" ]; then
+            DOWNLOAD_DOMAIN="${COS_BUCKET}.cos.accelerate.myqcloud.com"
+          else
+            DOWNLOAD_DOMAIN="${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com"
+          fi
+
           # 生成版本信息JSON
           cat > latest.json << EOF
           {
             "version": "${{ steps.version.outputs.version }}",
             "build": "${{ steps.version.outputs.build_sha }}",
-            "download_url": "https://${{ env.COS_BUCKET }}.cos.${{ env.COS_REGION }}.myqcloud.com/releases/cloudpilot-latest.apk",
+            "download_url": "https://${DOWNLOAD_DOMAIN}/releases/cloudpilot-latest.apk",
             "changelog": "$(git log -1 --pretty=%B | head -1)",
             "required": false,
             "file_size": ${{ steps.version.outputs.file_size }},
