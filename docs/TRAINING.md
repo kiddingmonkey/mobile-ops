@@ -135,12 +135,15 @@ frontend/
 │   ├── pages/
 │   │   ├── Home.tsx           # 首页（集群概览）
 │   │   ├── Monitor.tsx        # 监控（Grafana面板）
-│   │   ├── Alerts.tsx         # 告警中心
+│   │   ├── Alerts.tsx         # 告警中心 + 测试通知
 │   │   ├── Logs.tsx           # 日志（CLS + 容器）
 │   │   ├── Scale.tsx          # 扩容向导
 │   │   ├── Operations.tsx     # 操作记录
 │   │   ├── Settings.tsx       # 设置页
-│   │   ├── Login.tsx          # 登录页
+│   │   ├── Login.tsx          # 登录页 + 安全组入口
+│   │   ├── ClusterResources.tsx  # 集群资源列表（9种资源类型）
+│   │   ├── PodDetail.tsx      # Pod详情（9个Tab）
+│   │   ├── ResourceDetail.tsx # 通用资源详情页（Deploy/SVC/CM等）
 │   │   └── settings/          # 设置子页面
 │   ├── store/
 │   │   └── index.ts           # Zustand状态管理
@@ -150,8 +153,11 @@ frontend/
 │       ├── otaUpdater.ts      # OTA热更新逻辑
 │       ├── appUpdate.ts       # APK自动更新
 │       ├── publicIP.ts        # 公网IP获取（多源）
-│       ├── alertNotifier.ts   # 本地通知推送
-│       ├── sgStorage.ts       # 安全组模板存储
+│       ├── alertNotifier.ts   # 本地通知推送（震动+TTS+悬浮窗）
+│       ├── floatingAlert.ts   # 自定义悬浮窗插件封装
+│       ├── logShare.ts        # 日志下载/分享统一工具
+│       ├── sgStorage.ts       # 安全组模板存储（客户端）
+│       ├── tencentCloudAPI.ts # 腾讯云API客户端调用
 │       └── format.ts          # 格式化工具
 ├── android/                   # Capacitor Android项目
 ├── capacitor.config.ts        # Capacitor配置
@@ -179,10 +185,13 @@ body.mo-light {
 
 | 能力 | 插件 | 用途 |
 |------|------|------|
-| 文件系统 | @capacitor/filesystem | OTA更新存储 |
+| 文件系统 | @capacitor/filesystem | OTA更新存储、日志下载 |
 | 本地通知 | @capacitor/local-notifications | 告警推送 |
-| 触觉反馈 | @capacitor/haptics | 操作反馈 |
-| App生命周期 | @capacitor/app | 前后台切换 |
+| 触觉反馈 | @capacitor/haptics | 告警震动 |
+| App生命周期 | @capacitor/app | 返回键、前后台切换 |
+| 系统分享 | @capacitor/share | 分享日志到微信/飞书 |
+| 语音播报 | @capacitor-community/text-to-speech | 紧急告警TTS |
+| 悬浮窗 | FloatingAlertPlugin (自定义) | 覆盖其他App的告警 |
 
 ---
 
@@ -232,17 +241,32 @@ backend/
   POST /alertmanager/webhook      # AlertManager回调
 
 鉴权接口（需要JWT）：
-  GET  /api/v1/me                 # 当前用户
-  GET  /api/v1/clusters           # 集群列表
-  GET  /api/v1/clusters/:id/overview  # 集群概览
-  GET  /api/v1/clusters/:id/metrics   # 集群指标
-  POST /api/v1/scale/precheck     # 扩容预检
-  POST /api/v1/scale/submit       # 扩容提交
-  GET  /api/v1/alerts             # 告警列表
-  POST /api/v1/cls/search         # CLS日志搜索
-  GET  /api/v1/security-groups/whitelists   # 白名单列表
-  POST /api/v1/security-groups/whitelists   # 创建白名单
-  ...
+  # 用户 & 集群
+  GET  /api/v1/me
+  GET  /api/v1/clusters
+  GET  /api/v1/clusters/:id/overview
+  GET  /api/v1/clusters/:id/metrics
+
+  # K8s 资源（Pods/Deployments/StatefulSets/DaemonSets/Services/Ingresses/ConfigMaps/Secrets/Nodes）
+  GET  /api/v1/clusters/:id/resources/:type              # 列资源
+  GET  /api/v1/clusters/:id/resources/:type/yaml         # 资源 YAML
+  GET  /api/v1/clusters/:id/resources/:type/events       # 资源事件
+
+  # Pod 深度操作
+  GET  /api/v1/clusters/:id/pods/:ns/:name               # 详情（含调度/资源/卷）
+  GET  /api/v1/clusters/:id/pods/:ns/:name/events        # 事件
+  GET  /api/v1/clusters/:id/pods/:ns/:name/logs         # 日志（tail/-p）
+  GET  /api/v1/clusters/:id/pods/:ns/:name/files        # 容器文件浏览
+  GET  /api/v1/clusters/:id/pods/:ns/:name/file         # 读取文件内容
+  POST /api/v1/clusters/:id/pods/:ns/:name/exec         # 容器内执行命令
+
+  # 扩容 & 告警 & 云日志 & 安全组
+  POST /api/v1/scale/precheck
+  POST /api/v1/scale/submit
+  GET  /api/v1/alerts
+  POST /api/v1/cls/search
+  GET  /api/v1/security-groups/whitelists
+  POST /api/v1/security-groups/whitelists
 ```
 
 ### 4.3 多集群K8s管理
@@ -487,9 +511,24 @@ IP获取源（按优先级）：
 功能：
   - 集群列表 + 健康状态
   - 节点池管理
-  - Pod管理（列表/详情/日志/事件）
   - Namespace管理
-  - K8s资源查看（Deployment/Service/ConfigMap等）
+
+支持的 K8s 资源类型（全部支持列表 + YAML + 事件）：
+  Workloads: Pods / Deployments / StatefulSets / DaemonSets
+  Network:   Services / Ingresses
+  Config:    ConfigMaps / Secrets
+  Infra:     Nodes
+
+Pod 详情（9 个 Tab）：
+  详情 / 容器 / 事件 / 监控 / 日志 / 文件 / 终端 / YAML
+  - 详情：状态、基础信息、Labels、资源需求、调度信息（NodeSelector/Tolerations/Affinity）、Volumes、Conditions
+  - 监控：时间范围切换 + Grafana面板嵌入
+  - 日志：容器切换 + tail行数（100/200/500/1000/2000） + 上次崩溃(-p) + 字体调整 + 下载/分享
+  - 文件：路径导航 + 常用路径快捷方式 + 文件预览 + 下载/分享
+  - 终端：sh -c 命令执行 + 快捷命令 + 输出染色
+
+通用资源详情（Deployment/Service/CM 等，3 个 Tab）：
+  基础信息 / 事件 / YAML（可下载分享）
 ```
 
 ### 7.3 Grafana监控嵌入
@@ -523,18 +562,28 @@ IP获取源（按优先级）：
 
 ```
 告警链路：
-  Prometheus → AlertManager → Webhook → 后端 → 手机通知
+  Prometheus → AlertManager → Webhook → 后端 → 手机
+                                              ↓
+                                        本地通知 + 震动 + TTS + 悬浮窗
 
 后端处理：
   1. 接收AlertManager webhook
   2. 解析告警信息（labels/annotations）
   3. 存储到数据库
-  4. 下次App打开时展示
+  4. 前端定时轮询拉取
 
-本地通知：
-  - Capacitor Local Notifications
-  - 告警未读计数
-  - 振动提醒
+前端通知能力（alertNotifier.ts）：
+  - 本地通知（Capacitor Local Notifications）
+  - 震动模式：critical=连续3次强震动 / warning=单次
+  - 语音播报（@capacitor-community/text-to-speech）
+  - 悬浮窗（自定义 FloatingAlertPlugin，可覆盖抖音等其他App）
+  - 三个开关独立控制（TTS/悬浮/通知）
+
+告警页测试功能：
+  - 测试紧急告警（全功能触发）
+  - 测试警告告警（震动+通知）
+  - 单独测试 TTS 语音播报
+  - 权限申请引导（悬浮窗需 SYSTEM_ALERT_WINDOW）
 ```
 
 ### 7.6 云日志(CLS)
@@ -542,17 +591,85 @@ IP获取源（按优先级）：
 ```
 功能：
   - 选择地域/日志集/日志主题
-  - 无关键词查看最新日志
+  - 时间范围选择（5m/15m/30m/1h/3h/6h/12h/24h）
+  - 无关键词查看最新日志（默认发送 * 查询）
   - 关键词搜索（支持CLS语法）
-  - JSON日志自动解析为字段
+  - JSON日志自动解析为字段列表
   - 字段点击自动生成查询语句
-  - 日志下载
+  - 日志下载 + 分享到微信/飞书
 
 CLS查询语法：
   - * (全部)
   - keyword (关键词)
   - field:"value" (字段精确匹配)
   - level:ERROR (日志级别)
+```
+
+### 7.7 日志下载与分享 (utils/logShare.ts)
+
+```
+统一工具，容器日志/云日志/文件内容全部通用：
+
+downloadLog(content, filename):
+  - Web端: 触发浏览器 <a download> 下载
+  - App端: 写入 Filesystem.Cache
+
+shareLog({content, filename, title}):
+  - Web端: Web Share API 或降级下载
+  - App端: @capacitor/share 弹出系统分享面板
+           → 用户选择微信/飞书/邮件/QQ...
+
+makeLogFilename(prefix):
+  - 生成安全文件名：prefix_YYYYMMDD_HHmmss.log
+  - 过滤非法字符
+```
+
+### 7.8 容器文件浏览 & 终端
+
+```
+文件浏览 (FilesTab):
+  - 容器切换
+  - 路径导航：上级 / 根目录 / 刷新
+  - 快捷路径：/var/log /tmp /app /etc /root /home
+  - 目录浏览：ls -la 解析，点击进入
+  - 文件预览：head -c 5MB 限制
+  - 字体调整（A- / A+）
+  - 下载 + 分享
+
+容器终端 (TerminalTab):
+  - 通过 kubectl exec (SPDY) 一次性执行
+  - 命令：sh -c "..." 支持管道/重定向
+  - 快捷命令：ls -la, pwd, df -h, free -h, ps aux, env, cat /etc/hostname
+  - 历史记录：时间戳 + stdout(白)/stderr(黄)/error(红) 染色
+  - 字体调整、清空历史
+
+后端实现 (backend/internal/clients/k8s.go)：
+  - K8sClient.ExecInPod: SPDY executor
+  - K8sClient.ListFilesInPod: ls -la 输出解析
+  - K8sClient.CatFileInPod / TailFileInPod
+  - shellEscape 防注入
+```
+
+### 7.9 APK 自动更新（GitHub Releases + 镜像加速）
+
+```
+版本发布流程：
+  1. GitHub Actions 编译 APK
+  2. 自动创建 GitHub Release + tag v{version}
+  3. 上传 cloudpilot-latest.apk / cloudpilot-v{ver}.apk / version.json / dist.zip
+
+App 检查更新：
+  1. App 启动 5 秒后自动检查
+  2. 请求后端 /api/v1/version/latest
+  3. 后端调 GitHub API 拿最新 Release
+  4. 对比版本号，弹出更新提示
+  5. 用户点击 → 下载（ghproxy.com 镜像）→ 系统安装
+
+关键点：
+  - permissions: contents: write（Actions需要）
+  - workflow中 make_latest: true
+  - version.json 里 download_url 走镜像
+  - 国内访问 GitHub 慢 → 用 ghproxy.com / gh.ddlc.top
 ```
 
 ---
@@ -737,7 +854,53 @@ APK整包更新：
 
 ```
 原因：部分IP查询服务被墙或超时
-解决：多源冗余（6个服务依次尝试）
+解决：多源冗余（6个服务依次尝试，含 ipinfo/ip.sb/ipify/icanhazip 等）
+      UI显示实时进度：正在通过 xxx 获取 (N/M)
+      失败时列出每个服务的失败原因（超时/HTTP错误/网络错误）
+```
+
+### Q6: 深色主题下选择框看不见文字
+
+```
+原因：antd-mobile 组件默认样式没适配深色
+解决：global.css 覆盖 .adm-* 类的 color 变量
+```
+
+### Q7: 云日志显示"未找到匹配的日志"但期望有
+
+```
+原因：默认只查最近 15 分钟
+解决：切换时间范围（5m/15m/30m/1h/3h/6h/12h/24h）
+```
+
+### Q8: 白名单加了IP还是登不上
+
+```
+原因：
+  1. 安全组只加了 SSH 22 端口，没加 18443
+  2. 手机运营商 NAT 出口 IP 和 ipinfo.io 查到的不一致
+解决：
+  1. 确认端口开 TCP:18443
+  2. 切换 WiFi/移动网络对比验证
+  3. 极端情况可临时对 0.0.0.0/0 开放 18443
+```
+
+### Q9: COS 上传超时（GitHub Actions → 腾讯云）
+
+```
+原因：GitHub Actions runner 到国内 COS 网络不稳定
+解决：改用 GitHub Releases + 国内镜像加速（ghproxy.com）
+      COS 方案因禁止用默认域名分发 APK 已放弃
+```
+
+### Q10: 侧滑手势直接退出 App
+
+```
+原因：Android/iOS 系统侧滑手势没被 WebView 拦截
+解决：
+  - iOS: allowsBackForwardNavigationGestures: false
+  - Android: 监听 @capacitor/app backButton 事件，
+            canGoBack 时走 history.back()
 ```
 
 ---
@@ -774,4 +937,14 @@ mobile-ops/
 
 ---
 
-*文档版本: v1.0 | 更新日期: 2026-07-17*
+## 十三、变更历史
+
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v1.0 | 2026-07-17 | 初始版本，覆盖架构/前后端/CI-CD/部署 |
+| v1.1 | 2026-07-17 | 补齐 K8s 全资源类型 (StatefulSet/DaemonSet/Ingress)；Pod 详情增强 (NodeSelector/Tolerations/Affinity/Volumes/资源汇总)；ResourceDetail 通用详情页；Pod 监控 Tab (Grafana嵌入)；容器文件浏览 + 终端；日志下载/分享；APK 更新改走 GitHub Releases + ghproxy 镜像；深色主题适配；侧滑手势拦截；告警 TTS + 悬浮窗 + 测试功能；FAQ 扩展到 10 条 |
+
+---
+
+*文档版本: v1.1 | 最近更新: 2026-07-17 | 项目: CloudPilot 云驾*
+*每次功能改动请同步更新此文档，与代码一起 commit*
