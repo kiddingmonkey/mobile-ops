@@ -12,7 +12,14 @@ export default function RemoteStatusBanner() {
   const check = async () => {
     setChecking(true)
     const r = await pingRemote()
-    setMsg(r.ok ? null : (r.error || '后端不可达'))
+    if (r.ok) {
+      setMsg(null)
+    } else if (r.error === '请求超时' || r.error?.includes('网络不通')) {
+      // 后端超时或网络不通：99%是IP不在安全组白名单
+      setMsg('后端无响应 · 你的IP可能不在安全组白名单，请点击右上角"安全组"更新')
+    } else {
+      setMsg(r.error || '后端不可达')
+    }
     setChecking(false)
   }
 
