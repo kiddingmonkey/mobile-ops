@@ -118,6 +118,22 @@ export default function PodDetailPage() {
                 onLoad={loadLogs}
               />
             </Tabs.Tab>
+            <Tabs.Tab title="文件" key="files">
+              <FilesTab
+                clusterId={Number(clusterId)}
+                namespace={namespace!}
+                podName={name!}
+                containers={detail.containers || []}
+              />
+            </Tabs.Tab>
+            <Tabs.Tab title="终端" key="terminal">
+              <TerminalTab
+                clusterId={Number(clusterId)}
+                namespace={namespace!}
+                podName={name!}
+                containers={detail.containers || []}
+              />
+            </Tabs.Tab>
             <Tabs.Tab title="YAML" key="yaml">
               <YamlTab yaml={yaml} />
             </Tabs.Tab>
@@ -528,6 +544,444 @@ function InfoRow({ label, value, style }: { label: string; value: string; style?
     <div style={{ display: 'flex', marginBottom: 6, fontSize: 12, ...style }}>
       <span style={{ color: 'var(--text-tertiary)', minWidth: 100 }}>{label}</span>
       <span style={{ color: 'var(--text-primary)', flex: 1, wordBreak: 'break-all' }}>{value}</span>
+    </div>
+  )
+}
+
+// 文件浏览 Tab
+function FilesTab({ clusterId, namespace, podName, containers }: {
+  clusterId: number
+  namespace: string
+  podName: string
+  containers: any[]
+}) {
+  const [selectedContainer, setSelectedContainer] = useState<string>(containers?.[0]?.name || '')
+  const [currentPath, setCurrentPath] = useState<string>('/')
+  const [entries, setEntries] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [fileContent, setFileContent] = useState<string>('')
+  const [viewingFile, setViewingFile] = useState<string>('')
+  const [fontSize, setFontSize] = useState<number>(10)
+
+  const loadDir = async (path: string) => {
+    if (!selectedContainer) {
+      Toast.show({ content: '请先选择容器', icon: 'fail' })
+      return
+    }
+    setLoading(true)
+    setViewingFile('')
+    setFileContent('')
+    try {
+      const r = await api.listPodFiles(clusterId, namespace, podName, selectedContainer, path)
+      setEntries(r.entries || [])
+      setCurrentPath(r.path || path)
+    } catch (e: any) {
+      Toast.show({ content: '加载失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedContainer) loadDir('/')
+  }, [selectedContainer])
+
+  const goUp = () => {
+    if (currentPath === '/' || currentPath === '') return
+    const parts = currentPath.split('/').filter(Boolean)
+    parts.pop()
+    const parent = '/' + parts.join('/')
+    loadDir(parent || '/')
+  }
+
+  const openEntry = (entry: any) => {
+    if (entry.is_dir) {
+      loadDir(entry.path)
+    } else {
+      viewFile(entry.path)
+    }
+  }
+
+  const viewFile = async (path: string) => {
+    setLoading(true)
+    try {
+      const r = await api.getPodFile(clusterId, namespace, podName, selectedContainer, path)
+      setFileContent(r.content || '')
+      setViewingFile(path)
+    } catch (e: any) {
+      Toast.show({ content: '读取失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const downloadFile = async () => {
+    if (!viewingFile || !fileContent) return
+    const parts = viewingFile.split('/')
+    const filename = parts[parts.length - 1] || 'file.txt'
+    const result = await downloadLog(fileContent, filename)
+    Toast.show({ content: result ? '已下载' : '下载失败', icon: result ? 'success' : 'fail' })
+  }
+
+  const shareFile = async () => {
+    if (!viewingFile || !fileContent) return
+    const parts = viewingFile.split('/')
+    const filename = parts[parts.length - 1] || 'file.txt'
+    try {
+      await shareLog({ content: fileContent, filename, title: `文件 - ${filename}` })
+    } catch {
+      Toast.show({ content: '分享失败', icon: 'fail' })
+    }
+  }
+
+  return (
+    <div style={{ padding: '10px 10px 60px' }}>
+      {/* 容器选择 */}
+      <div style={{
+        background: 'var(--bg-elevated)',
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 8
+      }}>
+        {containers.length > 1 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>容器</div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {containers.map((c: any) => (
+                <span
+                  key={c.name}
+                  onClick={() => setSelectedContainer(c.name)}
+                  style={{
+                    padding: '3px 8px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+                    background: selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                    color: selectedContainer === c.name ? '#fff' : 'var(--text-primary)',
+                    border: '1px solid ' + (selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--border-color)')
+                  }}
+                >
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 路径导航 */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+          <Button size="mini" onClick={goUp} disabled={currentPath === '/' || currentPath === ''}>
+            ⬆️ 上级
+          </Button>
+          <Button size="mini" onClick={() => loadDir('/')}>
+            🏠 根目录
+          </Button>
+          <Button size="mini" onClick={() => loadDir(currentPath)}>
+            🔄 刷新
+          </Button>
+        </div>
+        <div style={{
+          fontSize: 11,
+          fontFamily: 'ui-monospace, monospace',
+          color: 'var(--text-secondary)',
+          wordBreak: 'break-all',
+          background: 'var(--bg-secondary)',
+          padding: '4px 8px',
+          borderRadius: 4
+        }}>
+          📁 {currentPath}
+        </div>
+
+        {/* 常用路径 */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+          {['/var/log', '/tmp', '/app', '/etc', '/root', '/home'].map(p => (
+            <span
+              key={p}
+              onClick={() => loadDir(p)}
+              style={{
+                padding: '2px 6px', fontSize: 10, cursor: 'pointer',
+                background: 'var(--bg-secondary)', color: 'var(--accent-blue)',
+                borderRadius: 3, border: '1px solid var(--border-color)'
+              }}
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 文件内容查看 */}
+      {viewingFile ? (
+        <div style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 8,
+          padding: 10
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 6
+          }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', wordBreak: 'break-all', flex: 1 }}>
+              📄 {viewingFile}
+            </div>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span
+                onClick={() => setFontSize(Math.max(7, fontSize - 1))}
+                style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+                  background: 'var(--bg-secondary)', borderRadius: 3, border: '1px solid var(--border-color)' }}
+              >A-</span>
+              <span
+                onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+                  background: 'var(--bg-secondary)', borderRadius: 3, border: '1px solid var(--border-color)' }}
+              >A+</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <Button size="mini" onClick={downloadFile}>📥 下载</Button>
+            <Button size="mini" color="primary" fill="outline" onClick={shareFile}>📤 分享</Button>
+            <Button size="mini" onClick={() => { setViewingFile(''); setFileContent('') }}>← 返回列表</Button>
+          </div>
+          <div style={{
+            background: '#1E293B',
+            color: '#E2E8F0',
+            padding: 8,
+            borderRadius: 6,
+            fontSize,
+            fontFamily: 'ui-monospace, monospace',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+            maxHeight: '60vh',
+            overflowY: 'auto'
+          }}>
+            {fileContent || '(空文件)'}
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 8,
+          padding: 8,
+          minHeight: 200
+        }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-tertiary)' }}>加载中...</div>
+          ) : entries.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-tertiary)' }}>空目录</div>
+          ) : (
+            entries.map((e: any, i: number) => (
+              <div
+                key={i}
+                onClick={() => openEntry(e)}
+                style={{
+                  padding: '6px 8px',
+                  borderBottom: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{e.is_dir ? '📁' : '📄'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', wordBreak: 'break-all' }}>{e.name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                    {e.permissions} · {e.size} B {e.mod_time && '· ' + e.mod_time}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 终端 Tab
+function TerminalTab({ clusterId, namespace, podName, containers }: {
+  clusterId: number
+  namespace: string
+  podName: string
+  containers: any[]
+}) {
+  const [selectedContainer, setSelectedContainer] = useState<string>(containers?.[0]?.name || '')
+  const [command, setCommand] = useState<string>('')
+  const [history, setHistory] = useState<Array<{ cmd: string; stdout: string; stderr: string; error?: string; time: string }>>([])
+  const [executing, setExecuting] = useState(false)
+  const [fontSize, setFontSize] = useState<number>(11)
+
+  const runCommand = async () => {
+    if (!command.trim()) return
+    if (!selectedContainer) {
+      Toast.show({ content: '请先选择容器', icon: 'fail' })
+      return
+    }
+
+    // 支持简单shell命令 (sh -c)
+    const cmdArgs = ['sh', '-c', command]
+    const time = new Date().toLocaleTimeString()
+
+    setExecuting(true)
+    try {
+      const result = await api.execInPod(clusterId, namespace, podName, selectedContainer, cmdArgs)
+      setHistory(h => [...h, {
+        cmd: command,
+        stdout: result.stdout || '',
+        stderr: result.stderr || '',
+        error: result.error,
+        time
+      }])
+      setCommand('')
+    } catch (e: any) {
+      setHistory(h => [...h, {
+        cmd: command,
+        stdout: '',
+        stderr: '',
+        error: e?.response?.data?.error || e?.message || '执行失败',
+        time
+      }])
+    } finally {
+      setExecuting(false)
+    }
+  }
+
+  const clearHistory = () => setHistory([])
+
+  const QUICK_CMDS = ['ls -la', 'pwd', 'df -h', 'free -h', 'ps aux', 'env', 'cat /etc/hostname']
+
+  return (
+    <div style={{ padding: '10px 10px 60px' }}>
+      {/* 容器选择 */}
+      <div style={{
+        background: 'var(--bg-elevated)',
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 8
+      }}>
+        {containers.length > 1 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>容器</div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {containers.map((c: any) => (
+                <span
+                  key={c.name}
+                  onClick={() => setSelectedContainer(c.name)}
+                  style={{
+                    padding: '3px 8px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+                    background: selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                    color: selectedContainer === c.name ? '#fff' : 'var(--text-primary)',
+                    border: '1px solid ' + (selectedContainer === c.name ? 'var(--accent-blue)' : 'var(--border-color)')
+                  }}
+                >
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 命令输入 */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+          <input
+            type="text"
+            value={command}
+            onChange={e => setCommand(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') runCommand() }}
+            placeholder="输入命令，如: ls -la"
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              fontFamily: 'ui-monospace, monospace'
+            }}
+          />
+          <Button color="primary" size="small" onClick={runCommand} loading={executing}>
+            执行
+          </Button>
+        </div>
+
+        {/* 快捷命令 */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+          {QUICK_CMDS.map(c => (
+            <span
+              key={c}
+              onClick={() => setCommand(c)}
+              style={{
+                padding: '2px 6px', fontSize: 10, cursor: 'pointer',
+                background: 'var(--bg-secondary)', color: 'var(--accent-blue)',
+                borderRadius: 3, border: '1px solid var(--border-color)',
+                fontFamily: 'ui-monospace, monospace'
+              }}
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <Button size="mini" onClick={clearHistory} disabled={history.length === 0}>清空</Button>
+          <div style={{ flex: 1 }} />
+          <span
+            onClick={() => setFontSize(Math.max(7, fontSize - 1))}
+            style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+              background: 'var(--bg-secondary)', borderRadius: 3, border: '1px solid var(--border-color)' }}
+          >A-</span>
+          <span
+            onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+            style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer',
+              background: 'var(--bg-secondary)', borderRadius: 3, border: '1px solid var(--border-color)' }}
+          >A+</span>
+        </div>
+      </div>
+
+      {/* 输出历史 */}
+      <div style={{
+        background: '#0F1A2E',
+        color: '#E2E8F0',
+        borderRadius: 8,
+        padding: 10,
+        fontSize,
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+        maxHeight: '60vh',
+        overflowY: 'auto',
+        minHeight: 200
+      }}>
+        {history.length === 0 ? (
+          <div style={{ color: '#64748B', textAlign: 'center', padding: 20 }}>
+            输入命令后回车执行，如: ls -la /tmp
+          </div>
+        ) : (
+          history.map((h, i) => (
+            <div key={i} style={{ marginBottom: 12, borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: 8 }}>
+              <div style={{ color: '#94A3B8', fontSize: fontSize - 1, marginBottom: 2 }}>
+                [{h.time}]
+              </div>
+              <div style={{ color: '#60A5FA', marginBottom: 4 }}>
+                $ {h.cmd}
+              </div>
+              {h.stdout && (
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#E2E8F0' }}>
+                  {h.stdout}
+                </div>
+              )}
+              {h.stderr && (
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#FBBF24' }}>
+                  {h.stderr}
+                </div>
+              )}
+              {h.error && (
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#F87171' }}>
+                  ❌ {h.error}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }

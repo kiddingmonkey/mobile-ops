@@ -843,3 +843,126 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 		Required:    false,
 	})
 }
+
+// ============ Pod 容器文件浏览 & 终端 ============
+
+// ListPodFiles GET /clusters/:id/pods/:namespace/:name/files?container=xxx&path=/var/log
+func (h *Handler) ListPodFiles(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+	container := c.Query("container")
+	path := c.DefaultQuery("path", "/")
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	files, err := client.ListFilesInPod(ctx, ns, name, container, path)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"path": path, "entries": files})
+}
+
+// GetPodFile GET /clusters/:id/pods/:namespace/:name/file?container=xxx&path=/var/log/xxx.log&tail=500
+func (h *Handler) GetPodFile(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+	container := c.Query("container")
+	path := c.Query("path")
+	tailStr := c.Query("tail")
+	download := c.Query("download") == "1"
+
+	if path == "" {
+		c.JSON(400, gin.H{"error": "path is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+
+	var content string
+	if tailStr != "" {
+		tail, _ := strconv.Atoi(tailStr)
+		content, err = client.TailFileInPod(ctx, ns, name, container, path, tail)
+	} else {
+		// 默认最大1MB
+		content, err = client.CatFileInPod(ctx, ns, name, container, path, 5*1024*1024)
+	}
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if download {
+		// 触发下载
+		filename := path
+		if idx := lastIndex(filename, "/"); idx >= 0 {
+			filename = filename[idx+1:]
+		}
+		c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
+		c.Header("Content-Type", "application/octet-stream")
+		c.String(200, content)
+		return
+	}
+	c.JSON(200, gin.H{"path": path, "content": content, "size": len(content)})
+}
+
+// ExecInPod POST /clusters/:id/pods/:namespace/:name/exec
+// Body: { "container": "xxx", "command": ["ls", "-la"] }
+func (h *Handler) ExecInPod(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	ns := c.Param("namespace")
+	name := c.Param("name")
+
+	var req struct {
+		Container string   `json:"container"`
+		Command   []string `json:"command" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request: " + err.Error()})
+		return
+	}
+
+	if len(req.Command) == 0 {
+		c.JSON(400, gin.H{"error": "command is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+
+	stdout, stderr, execErr := client.ExecInPod(ctx, ns, name, req.Container, req.Command)
+	result := gin.H{
+		"stdout":  stdout,
+		"stderr":  stderr,
+		"command": req.Command,
+	}
+	if execErr != nil {
+		result["error"] = execErr.Error()
+	}
+	c.JSON(200, result)
+}
+
+func lastIndex(s, sub string) int {
+	last := -1
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			last = i
+		}
+	}
+	return last
+}

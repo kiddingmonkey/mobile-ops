@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -9,7 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -17,6 +21,7 @@ import (
 type K8sClient struct {
 	Clientset *kubernetes.Clientset
 	Metrics   *metricsclient.Clientset
+	RestCfg   *rest.Config
 	Name      string
 }
 
@@ -36,7 +41,7 @@ func NewK8sClient(name, kubeconfigYAML string) (*K8sClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("metrics: %w", err)
 	}
-	return &K8sClient{Clientset: cs, Metrics: ms, Name: name}, nil
+	return &K8sClient{Clientset: cs, Metrics: ms, RestCfg: restCfg, Name: name}, nil
 }
 
 func (k *K8sClient) Ping(ctx context.Context) error {
@@ -660,4 +665,271 @@ type SecretInfo struct {
 	DataCount int               `json:"data_count"`
 	Age       time.Time         `json:"age"`
 	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// ExecInPod 在Pod容器中执行命令（非交互式，一次性执行返回结果）
+func (k *K8sClient) ExecInPod(ctx context.Context, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
+	if k.RestCfg == nil {
+		return "", "", fmt.Errorf("rest config not available")
+	}
+
+	req := k.Clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+
+	req.VersionedParams(&corev1.PodExecOptions{
+		Container: containerName,
+		Command:   command,
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(k.RestCfg, "POST", req.URL())
+	if err != nil {
+		return "", "", fmt.Errorf("create executor: %w", err)
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdoutBuf,
+		Stderr: &stderrBuf,
+		Tty:    false,
+	})
+	return stdoutBuf.String(), stderrBuf.String(), err
+}
+
+// FileEntry 容器内文件/目录信息
+type FileEntry struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	IsDir       bool   `json:"is_dir"`
+	Size        int64  `json:"size,omitempty"`
+	Permissions string `json:"permissions,omitempty"`
+	ModTime     string `json:"mod_time,omitempty"`
+}
+
+// ListFilesInPod 列出容器指定路径下的文件
+func (k *K8sClient) ListFilesInPod(ctx context.Context, namespace, podName, containerName, path string) ([]FileEntry, error) {
+	if path == "" {
+		path = "/"
+	}
+	// 使用ls -la格式输出
+	stdout, stderr, err := k.ExecInPod(ctx, namespace, podName, containerName, []string{
+		"sh", "-c", fmt.Sprintf("ls -la --time-style=long-iso %s 2>&1 || ls -la %s", shellEscape(path), shellEscape(path)),
+	})
+	if err != nil {
+		if stderr != "" {
+			return nil, fmt.Errorf("ls failed: %s", stderr)
+		}
+		return nil, err
+	}
+	return parseLsOutput(stdout, path), nil
+}
+
+// CatFileInPod 读取容器内文件内容（限制大小）
+func (k *K8sClient) CatFileInPod(ctx context.Context, namespace, podName, containerName, path string, maxBytes int64) (string, error) {
+	if maxBytes <= 0 {
+		maxBytes = 1024 * 1024 // 默认1MB
+	}
+	stdout, stderr, err := k.ExecInPod(ctx, namespace, podName, containerName, []string{
+		"sh", "-c", fmt.Sprintf("head -c %d %s", maxBytes, shellEscape(path)),
+	})
+	if err != nil {
+		if stderr != "" {
+			return "", fmt.Errorf("cat failed: %s", stderr)
+		}
+		return "", err
+	}
+	return stdout, nil
+}
+
+// TailFileInPod 读取文件末尾N行
+func (k *K8sClient) TailFileInPod(ctx context.Context, namespace, podName, containerName, path string, lines int) (string, error) {
+	if lines <= 0 {
+		lines = 500
+	}
+	stdout, stderr, err := k.ExecInPod(ctx, namespace, podName, containerName, []string{
+		"sh", "-c", fmt.Sprintf("tail -n %d %s", lines, shellEscape(path)),
+	})
+	if err != nil {
+		if stderr != "" {
+			return "", fmt.Errorf("tail failed: %s", stderr)
+		}
+		return "", err
+	}
+	return stdout, nil
+}
+
+// shellEscape 简单的shell参数转义
+func shellEscape(s string) string {
+	// 只允许安全字符，否则用单引号包裹
+	safe := true
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+			c == '/' || c == '.' || c == '-' || c == '_') {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	// 用单引号包裹，把内部的单引号替换成 '"'"'
+	result := "'"
+	for _, c := range s {
+		if c == '\'' {
+			result += `'"'"'`
+		} else {
+			result += string(c)
+		}
+	}
+	result += "'"
+	return result
+}
+
+// parseLsOutput 解析 ls -la 输出
+func parseLsOutput(output, basePath string) []FileEntry {
+	entries := []FileEntry{}
+	lines := splitLines(output)
+	for _, line := range lines {
+		line = trimSpace(line)
+		if line == "" || startsWithPrefix(line, "total ") {
+			continue
+		}
+		// 格式: drwxr-xr-x 2 root root 4096 2024-01-01 12:00 name
+		fields := splitFields(line, 8)
+		if len(fields) < 8 {
+			continue
+		}
+		perm := fields[0]
+		size := parseInt64(fields[4])
+		date := fields[5]
+		timeStr := fields[6]
+		name := fields[7]
+
+		// 跳过 . 和 ..
+		if name == "." || name == ".." {
+			continue
+		}
+		// 处理符号链接 name -> target
+		if idx := indexOf(name, " -> "); idx > 0 {
+			name = name[:idx]
+		}
+
+		isDir := len(perm) > 0 && perm[0] == 'd'
+		fullPath := basePath
+		if !endsWithChar(fullPath, '/') {
+			fullPath += "/"
+		}
+		fullPath += name
+
+		entries = append(entries, FileEntry{
+			Name:        name,
+			Path:        fullPath,
+			IsDir:       isDir,
+			Size:        size,
+			Permissions: perm,
+			ModTime:     date + " " + timeStr,
+		})
+	}
+	return entries
+}
+
+// 简单字符串工具
+func splitLines(s string) []string {
+	result := []string{}
+	current := ""
+	for _, c := range s {
+		if c == '\n' {
+			result = append(result, current)
+			current = ""
+		} else if c != '\r' {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		result = append(result, current)
+	}
+	return result
+}
+
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
+}
+
+func startsWithPrefix(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	return s[:len(prefix)] == prefix
+}
+
+func endsWithChar(s string, c byte) bool {
+	return len(s) > 0 && s[len(s)-1] == c
+}
+
+func indexOf(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
+}
+
+// splitFields 按空白切分，保留最后一列
+func splitFields(s string, max int) []string {
+	result := []string{}
+	current := ""
+	count := 0
+	for i, c := range s {
+		if c == ' ' || c == '\t' {
+			if current != "" {
+				count++
+				if count == max {
+					// 剩余部分作为最后一个字段
+					rest := trimSpace(s[i:])
+					if current != "" {
+						result = append(result, current)
+					}
+					if rest != "" {
+						result = append(result, rest)
+					}
+					return result
+				}
+				result = append(result, current)
+				current = ""
+			}
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		result = append(result, current)
+	}
+	return result
+}
+
+func parseInt64(s string) int64 {
+	var n int64
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int64(c-'0')
+		} else {
+			break
+		}
+	}
+	return n
 }

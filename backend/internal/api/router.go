@@ -79,6 +79,11 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/pods/:namespace/:name/events", h.ListPodEvents)
 		priv.GET("/clusters/:id/pods/:namespace/:name/logs", h.GetPodLogs)
 
+		// Pod 容器文件浏览 & 终端
+		priv.GET("/clusters/:id/pods/:namespace/:name/files", h.ListPodFiles)
+		priv.GET("/clusters/:id/pods/:namespace/:name/file", h.GetPodFile)
+		priv.POST("/clusters/:id/pods/:namespace/:name/exec", h.ExecInPod)
+
 		// 扩容
 		priv.POST("/scale/precheck", h.ScalePrecheck)
 		priv.POST("/scale/submit", h.ScaleSubmit)

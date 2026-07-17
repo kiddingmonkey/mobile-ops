@@ -254,6 +254,23 @@ class ApiClient {
     return (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}/logs`, { params })).data
   }
 
+  // ============ Pod 文件浏览 & 终端 ============
+  async listPodFiles(clusterId: number, namespace: string, name: string, container: string, path: string) {
+    const params = { container, path }
+    const r = (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}/files`, { params })).data
+    return r as { path: string; entries: any[] }
+  }
+  async getPodFile(clusterId: number, namespace: string, name: string, container: string, path: string, tail?: number) {
+    const params: any = { container, path }
+    if (tail) params.tail = tail
+    const r = (await this.http.get(`/clusters/${clusterId}/pods/${namespace}/${name}/file`, { params })).data
+    return r as { path: string; content: string; size: number }
+  }
+  async execInPod(clusterId: number, namespace: string, name: string, container: string, command: string[]) {
+    const r = (await this.http.post(`/clusters/${clusterId}/pods/${namespace}/${name}/exec`, { container, command })).data
+    return r as { stdout: string; stderr: string; command: string[]; error?: string }
+  }
+
   // ============ 节点池详情 ============
   async getNodePoolDetail(clusterId: number, poolId: number) {
     return (await this.http.get(`/clusters/${clusterId}/node-pools/${poolId}`)).data
