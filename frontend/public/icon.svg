@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A7EF8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6E9BFF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lightGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFC837;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFE066;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆形 -->
+  <circle cx="256" cy="256" r="256" fill="#1A1F2E"/>
+
+  <!-- 云朵形状 - 象征云端 -->
+  <path d="M 180 280 Q 160 240 180 200 Q 200 160 240 160 Q 260 140 300 160 Q 340 160 360 200 Q 380 240 360 280 Z"
+        fill="url(#cloudGradient)" opacity="0.9"/>
+
+  <!-- 驾驶舵轮 - 象征掌控 -->
+  <circle cx="256" cy="280" r="70" fill="none" stroke="url(#lightGradient)" stroke-width="12"/>
+  <circle cx="256" cy="280" r="25" fill="url(#lightGradient)"/>
+
+  <!-- 舵轮辐条 -->
+  <line x1="256" y1="210" x2="256" y2="235" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="256" y1="325" x2="256" y2="350" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="186" y1="280" x2="211" y2="280" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="301" y1="280" x2="326" y2="280" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- 对角线辐条 -->
+  <line x1="206.5" y1="230.5" x2="224" y2="248" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="305.5" y1="329.5" x2="288" y2="312" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="305.5" y1="230.5" x2="288" y2="248" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+  <line x1="206.5" y1="329.5" x2="224" y2="312" stroke="url(#lightGradient)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Kubernetes 六边形轮廓 - 技术感 -->
+  <path d="M 256 120 L 310 145 L 310 195 L 256 220 L 202 195 L 202 145 Z"
+        fill="none" stroke="#6E9BFF" stroke-width="6" opacity="0.6"/>
+
+  <!-- 信号线 - 象征连接 -->
+  <path d="M 340 320 Q 360 340 380 360" fill="none" stroke="#4A7EF8" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+  <circle cx="385" cy="365" r="5" fill="#4A7EF8" opacity="0.5"/>
+
+  <path d="M 172 320 Q 152 340 132 360" fill="none" stroke="#4A7EF8" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+  <circle cx="127" cy="365" r="5" fill="#4A7EF8" opacity="0.5"/>
+</svg>

@@ -121,7 +121,8 @@ export default function App() {
           <Route path="/settings/clusters" element={<Protected><ClustersSettingsPage /></Protected>} />
           <Route path="/settings/clusters/new" element={<Protected><ClusterNewPage /></Protected>} />
           <Route path="/settings/clusters/:id/edit" element={<Protected><ClusterEditPage /></Protected>} />
-          <Route path="/settings/security-groups" element={<Protected><SecurityGroupsPage /></Protected>} />
+          {/* 安全组页面：支持未登录访问（只需要公网IP和腾讯云API，不依赖后端） */}
+          <Route path="/settings/security-groups" element={<SecurityGroupsPage />} />
           <Route path="/settings/security-groups/new" element={<Protected><SecurityGroupNewPage /></Protected>} />
 
           {/* 主界面（含底部 TabBar） */}

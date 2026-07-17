@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Mobile-Ops</string>
-    <string name="title_activity_main">Mobile-Ops</string>
+    <string name="app_name">CloudPilot</string>
+    <string name="title_activity_main">CloudPilot 云驾</string>
     <string name="package_name">com.mobileops.app</string>
     <string name="custom_url_scheme">com.mobileops.app</string>
 </resources>

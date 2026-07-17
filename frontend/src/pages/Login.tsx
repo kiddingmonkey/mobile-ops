@@ -153,17 +153,38 @@ export default function LoginPage() {
         marginBottom: 48,
         textAlign: 'left'
       }}>
+        {/* CloudPilot 图标 - 云+舵轮设计 */}
         <div style={{
-          width: 64, height: 64,
-          background: 'linear-gradient(135deg, var(--accent-blue) 0%, #6E9BFF 100%)',
-          borderRadius: 18,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 28, color: 'white', fontWeight: 700,
-          boxShadow: '0 8px 24px rgba(74, 126, 248, 0.3)',
-          marginBottom: 24
-        }}>⚡</div>
-        <h1 className="text-h1" style={{ marginBottom: 6 }}>欢迎回来</h1>
-        <div className="text-sm">登录 Mobile-Ops，随时随地掌控你的集群</div>
+          width: 72, height: 72,
+          background: 'linear-gradient(135deg, #4A7EF8 0%, #6E9BFF 100%)',
+          borderRadius: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 36,
+          color: 'white',
+          fontWeight: 700,
+          boxShadow: '0 12px 32px rgba(74, 126, 248, 0.4)',
+          marginBottom: 24,
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* 云朵符号 */}
+          <div style={{
+            position: 'absolute',
+            top: '18px',
+            fontSize: '28px',
+            opacity: 0.3
+          }}>☁</div>
+          {/* 舵轮符号 */}
+          <div style={{
+            position: 'absolute',
+            bottom: '14px',
+            fontSize: '32px'
+          }}>⎈</div>
+        </div>
+        <h1 className="text-h1" style={{ marginBottom: 6 }}>CloudPilot 云驾</h1>
+        <div className="text-sm">手机运维 · 单手掌控 K8s 集群</div>
       </div>
 
       {/* 表单 —— 用原生 input 非受控，直读 ref */}
@@ -287,7 +308,7 @@ export default function LoginPage() {
           marginTop: 20, textAlign: 'center',
           fontSize: 12, color: 'var(--text-tertiary)'
         }}>
-          手机运维 · 单手掌控 K8s 集群
+          CloudPilot 云驾 · 单手掌控 K8s 集群
         </div>
       </div>
     </div>
