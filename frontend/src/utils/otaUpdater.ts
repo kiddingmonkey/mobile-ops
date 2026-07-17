@@ -183,12 +183,17 @@ export async function downloadAndApply(
   })
   const absPath = uri.uri.replace(/^file:\/\//, '')
 
-  // 5. 切 WebView 到新目录
+  // 5. 切 WebView 到新目录（带超时保护）
   const webview = await tryGetWebViewPlugin()
   if (!webview) {
     throw new Error('当前 Capacitor 版本不支持 WebView.setServerBasePath, 请重装 APK')
   }
-  await webview.setServerBasePath({ path: absPath })
+
+  // setServerBasePath 可能不resolve，加超时保护
+  await Promise.race([
+    webview.setServerBasePath({ path: absPath }),
+    new Promise(resolve => setTimeout(resolve, 3000))
+  ])
 
   // 6. 保存版本号
   localStorage.setItem(CURRENT_VERSION_KEY, info.version)
