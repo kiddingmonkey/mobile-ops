@@ -507,6 +507,13 @@ body.mo-light .adm-list-body {
   color: white !important;
 }
 
+/* 原生 select/option 深色适配 */
+select,
+option {
+  color: var(--text-primary) !important;
+  background: var(--bg-secondary) !important;
+}
+
 /* Picker弹窗背景 */
 .adm-picker-popup .adm-popup-body,
 .adm-cascader-popup .adm-popup-body {

@@ -105,7 +105,13 @@ export default function PodDetailPage() {
               <DetailTab detail={detail} />
             </Tabs.Tab>
             <Tabs.Tab title="容器" key="containers">
-              <ContainersTab detail={detail} onSelectLog={loadLogs} />
+              <ContainersTab
+                detail={detail}
+                onSelectLog={(containerName) => {
+                  setTab('logs')
+                  setTimeout(() => loadLogs(containerName), 100)
+                }}
+              />
             </Tabs.Tab>
             <Tabs.Tab title="事件" key="events">
               <EventsTab events={events} />
@@ -584,13 +590,13 @@ function LogsTab({ logs, containers, podName, onLoad }: {
 
         {/* 操作按钮 */}
         <div style={{ display: 'flex', gap: 6 }}>
-          <Button block color="primary" size="small" onClick={doLoad}>
+          <Button color="primary" size="mini" onClick={doLoad} style={{ flex: 1 }}>
             加载日志
           </Button>
-          <Button size="small" onClick={doDownload} disabled={!logs}>
+          <Button size="mini" onClick={doDownload} disabled={!logs}>
             📥 下载
           </Button>
-          <Button size="small" color="primary" fill="outline" onClick={doShare} disabled={!logs}>
+          <Button size="mini" color="primary" fill="outline" onClick={doShare} disabled={!logs}>
             📤 分享
           </Button>
         </div>
@@ -611,7 +617,27 @@ function LogsTab({ logs, containers, podName, onLoad }: {
         overflowY: 'auto',
         lineHeight: 1.4
       }}>
-        {logs || '点击"加载日志"按钮查看容器日志'}
+        {logs ? (
+          logs.split('\n').map((line, i) => {
+            const isError = /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(line)
+            return (
+              <div
+                key={i}
+                style={{
+                  background: isError ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
+                  color: isError ? '#FCA5A5' : '#E2E8F0',
+                  padding: isError ? '2px 4px' : '0',
+                  margin: isError ? '1px 0' : '0',
+                  borderLeft: isError ? '3px solid #DC2626' : 'none'
+                }}
+              >
+                {line || ' '}
+              </div>
+            )
+          })
+        ) : (
+          '点击"加载日志"按钮查看容器日志'
+        )}
       </div>
     </div>
   )
@@ -851,7 +877,27 @@ function FilesTab({ clusterId, namespace, podName, containers }: {
             maxHeight: '60vh',
             overflowY: 'auto'
           }}>
-            {fileContent || '(空文件)'}
+            {fileContent ? (
+              fileContent.split('\n').map((line, i) => {
+                const isError = /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(line)
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      background: isError ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
+                      color: isError ? '#FCA5A5' : '#E2E8F0',
+                      padding: isError ? '2px 4px' : '0',
+                      margin: isError ? '1px 0' : '0',
+                      borderLeft: isError ? '3px solid #DC2626' : 'none'
+                    }}
+                  >
+                    {line || ' '}
+                  </div>
+                )
+              })
+            ) : (
+              '(空文件)'
+            )}
           </div>
         </div>
       ) : (
@@ -1053,7 +1099,7 @@ function TerminalTab({ clusterId, namespace, podName, containers }: {
             输入命令后回车执行，如: ls -la /tmp
           </div>
         ) : (
-          history.map((h, i) => (
+          [...history].reverse().map((h, i) => (
             <div key={i} style={{ marginBottom: 12, borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: 8 }}>
               <div style={{ color: '#94A3B8', fontSize: fontSize - 1, marginBottom: 2 }}>
                 [{h.time}]

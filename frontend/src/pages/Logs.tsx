@@ -80,6 +80,10 @@ export default function LogsPage() {
     try {
       const logsets = await api.listCLSLogsets(selectedRegion)
       setLogsets(logsets || [])
+      // 自动选择第一个日志集
+      if (logsets && logsets.length > 0 && !selectedLogset) {
+        setSelectedLogset(logsets[0].logset_id)
+      }
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '获取日志集失败', icon: 'fail' })
       setLogsets([])
@@ -697,7 +701,27 @@ export default function LogsPage() {
                       overflowY: 'auto',
                       lineHeight: 1.4
                     }}>
-                      {podLogs}
+                      {podLogs ? (
+                        podLogs.split('\n').map((line, i) => {
+                          const isError = /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(line)
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                background: isError ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
+                                color: isError ? '#FCA5A5' : '#d4d4d4',
+                                padding: isError ? '2px 4px' : '0',
+                                margin: isError ? '1px 0' : '0',
+                                borderLeft: isError ? '3px solid #DC2626' : 'none'
+                              }}
+                            >
+                              {line || ' '}
+                            </div>
+                          )
+                        })
+                      ) : (
+                        '选择 Pod 和容器后点击加载日志'
+                      )}
                     </div>
                   </div>
                 )}
@@ -785,7 +809,10 @@ function CLSLogItem({ log, onFieldClick }: { log: any; onFieldClick: (key: strin
                 color: 'var(--text-primary)',
                 fontFamily: 'ui-monospace, monospace',
                 wordBreak: 'break-all',
-                flex: 1
+                flex: 1,
+                background: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
+                borderLeft: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? '3px solid #DC2626' : 'none',
+                padding: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? '2px 4px' : '0'
               }}>
                 {f.value}
               </span>
@@ -812,7 +839,10 @@ function CLSLogItem({ log, onFieldClick }: { log: any; onFieldClick: (key: strin
           fontFamily: 'ui-monospace, Monaco, Menlo, monospace',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-all',
-          color: 'var(--text-primary)'
+          color: 'var(--text-primary)',
+          background: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
+          borderLeft: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? '3px solid #DC2626' : 'none',
+          padding: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? '6px' : '0'
         }}>
           {log.content}
         </div>
