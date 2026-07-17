@@ -1,0 +1,9 @@
+{
+  "version": "1.1.0",
+  "build": "12c2c89",
+  "download_url": "https://cloudpilot-1234567890.cos.ap-guangzhou.myqcloud.com/releases/cloudpilot-v1.1.0.apk",
+  "changelog": "1. 白名单模板改为客户端存储\n2. 支持导出/导入配置\n3. 修复安全组未登录访问问题\n4. 应用重命名为 CloudPilot 云驾\n5. 新增APK自动更新功能",
+  "required": false,
+  "file_size": 52428800,
+  "published_at": "2024-01-20T10:00:00Z"
+}

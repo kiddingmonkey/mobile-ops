@@ -34,7 +34,18 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiTarget = env.VITE_API_TARGET || 'http://10.211.79.100:8090'
 
+  // 获取版本号
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'))
+  let sha = process.env.GITHUB_SHA || ''
+  if (!sha) {
+    try { sha = execSync('git rev-parse HEAD').toString().trim() } catch {}
+  }
+  const appVersion = `${pkg.version}+${sha.slice(0, 8) || 'local'}`
+
   return {
+    define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version)
+    },
     plugins: [
       react(),
       versionJsonPlugin(),

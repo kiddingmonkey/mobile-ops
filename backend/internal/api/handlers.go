@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -756,4 +758,50 @@ func (h *Handler) GetNodePoolDetail(c *gin.Context) {
 		return
 	}
 	c.JSON(200, detail)
+}
+
+// ============ 版本管理 ============
+
+type VersionInfo struct {
+	Version     string `json:"version"`
+	Build       string `json:"build"`
+	DownloadURL string `json:"download_url"`
+	Changelog   string `json:"changelog"`
+	Required    bool   `json:"required"`
+	FileSize    int64  `json:"file_size"`
+	PublishedAt string `json:"published_at"`
+}
+
+// GetLatestVersion 获取最新版本信息（从腾讯云COS）
+func (h *Handler) GetLatestVersion(c *gin.Context) {
+	// 从环境变量获取COS URL，或使用默认值
+	cosURL := "https://cloudpilot-1234567890.cos.ap-guangzhou.myqcloud.com/releases/latest.json"
+	
+	// 从COS获取版本信息
+	resp, err := http.Get(cosURL)
+	if err != nil {
+		// 降级：返回默认版本
+		c.JSON(200, VersionInfo{
+			Version:     "1.1.0",
+			Build:       "12c2c89",
+			DownloadURL: "",
+			Changelog:   "当前版本",
+			Required:    false,
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		c.JSON(503, gin.H{"error": "无法获取版本信息"})
+		return
+	}
+
+	var versionInfo VersionInfo
+	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
+		c.JSON(500, gin.H{"error": "解析版本信息失败"})
+		return
+	}
+
+	c.JSON(200, versionInfo)
 }

@@ -32,6 +32,7 @@ import PromNewPage from '@/pages/settings/PromNew'
 import CloudNewPage from '@/pages/settings/CloudNew'
 import ClusterNewPage from '@/pages/settings/ClusterNew'
 import ClusterEditPage from '@/pages/settings/ClusterEdit'
+import UpdateChecker from '@/components/UpdateChecker'
 
 const CURRENT_VERSION_KEY = 'mobile_ops_dist_version'
 const WEBROOT_DIR = 'webroot'
@@ -103,6 +104,7 @@ export default function App() {
   return (
     <ErrorBoundary>
     <ConfigProvider locale={zhCN}>
+      <UpdateChecker />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
