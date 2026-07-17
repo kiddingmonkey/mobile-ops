@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Button, Toast, Dialog, Tag, PullToRefresh, SwipeAction } from 'antd-mobile'
-import { AddOutline, LockOutline } from 'antd-mobile-icons'
+import { AddOutline, LockOutline, DownCircleOutline, UpCircleOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
 import { api, friendlyApiError } from '@/api/client'
+import { loadTemplates, deleteTemplate, exportTemplates, importTemplates, migrateFromServer } from '@/utils/sgStorage'
+import type { SGTemplate } from '@/utils/sgStorage'
 import dayjs from 'dayjs'
 
 export default function SecurityGroupsPage() {
   const nav = useNavigate()
-  const [list, setList] = useState<any[]>([])
+  const [list, setList] = useState<SGTemplate[]>([])
   const [myIP, setMyIP] = useState<string>('...')
   const [loading, setLoading] = useState(false)
-  const [applying, setApplying] = useState<number | null>(null)
+  const [applying, setApplying] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -35,20 +37,27 @@ export default function SecurityGroupsPage() {
         }
       }
 
-      // 尝试加载白名单列表（可能因为未登录而失败）
-      let rows: any[] = []
-      try {
-        rows = await api.listSGWhitelists()
-      } catch (e: any) {
-        // 未登录或网络不通时，不显示列表但不报错
-        if (e?.response?.status === 401 || e?.response?.status === 403) {
-          console.log('[SecurityGroups] Not logged in, skip loading list')
-        } else {
-          Toast.show({ content: friendlyApiError(e), icon: 'fail' })
+      // 从客户端加载白名单模板（不依赖服务器）
+      const templates = loadTemplates()
+
+      // 首次使用时，尝试从服务器迁移数据（可选）
+      if (templates.length === 0) {
+        try {
+          const serverTemplates = await api.listSGWhitelists()
+          if (serverTemplates && serverTemplates.length > 0) {
+            const migrated = await migrateFromServer(serverTemplates)
+            if (migrated > 0) {
+              Toast.show({ content: `已迁移${migrated}个白名单模板到本地`, icon: 'success' })
+              setList(loadTemplates())
+            }
+          }
+        } catch (e) {
+          // 迁移失败不影响使用
+          console.log('[SecurityGroups] Server migration skipped:', e)
         }
       }
 
-      setList(rows)
+      setList(templates)
       setMyIP(ipResult)
     } catch (e: any) {
       Toast.show({ content: friendlyApiError(e), icon: 'fail' })
@@ -59,15 +68,15 @@ export default function SecurityGroupsPage() {
 
   useEffect(() => { load() }, [])
 
-  const applyOne = async (row: any) => {
+  const applyOne = async (row: SGTemplate) => {
     const ok = await Dialog.confirm({
       title: '确认更新安全组',
       content: (
         <div style={{ fontSize: 13 }}>
           <div>安全组: <b>{row.sg_id}</b></div>
-          <div>端口: {row.port} · {row.protocol}</div>
+          <div>地域: {row.region}</div>
           <div style={{ marginTop: 6, color: 'var(--text-tertiary)', fontSize: 11 }}>
-            按备注匹配现有规则: 找到就改 IP, 没找到就新增. 放行当前 IP: <b>{myIP}</b>
+            将当前 IP <b>{myIP}</b> 加入安全组白名单
           </div>
         </div>
       ),
@@ -77,7 +86,10 @@ export default function SecurityGroupsPage() {
     setApplying(row.id)
     Toast.show({ content: '更新中...', icon: 'loading', duration: 0 })
     try {
-      const r = await api.applySGWhitelist(row.id)
+      // 临时方案：使用时间戳作为ID调用后端
+      // TODO: 后续改为直接调用腾讯云API
+      const numericId = parseInt(row.id) || Date.now()
+      const r = await api.applySGWhitelist(numericId, myIP)
       Toast.clear()
       const action = r.mode === 'updated' ? '已改写规则为' : '已新增规则放行'
       const extra = r.matched > 1 ? ` (匹配 ${r.matched} 条,只改了第一条)` : ''
@@ -86,10 +98,18 @@ export default function SecurityGroupsPage() {
         icon: 'success',
         duration: 2500
       })
-      await load()
     } catch (e: any) {
       Toast.clear()
-      showApplyError(e)
+      // 如果是404错误（模板不存在于服务器），提示用户
+      if (e?.response?.status === 404) {
+        Toast.show({
+          content: '模板仅存储在本地，后端接口暂不可用。请等待功能更新。',
+          icon: 'fail',
+          duration: 3000
+        })
+      } else {
+        showApplyError(e)
+      }
     } finally {
       setApplying(null)
     }
@@ -182,16 +202,62 @@ export default function SecurityGroupsPage() {
     })
   }
 
-  const del = async (row: any) => {
+  const del = async (row: SGTemplate) => {
     const ok = await Dialog.confirm({ content: `删除白名单 "${row.name}"？` })
     if (!ok) return
     try {
-      await api.deleteSGWhitelist(row.id)
-      Toast.show({ content: '已删除', icon: 'success' })
-      await load()
+      const success = deleteTemplate(row.id)
+      if (success) {
+        Toast.show({ content: '已删除', icon: 'success' })
+        setList(loadTemplates())
+      } else {
+        Toast.show({ content: '删除失败', icon: 'fail' })
+      }
     } catch (e: any) {
       Toast.show({ content: friendlyApiError(e), icon: 'fail' })
     }
+  }
+
+  // 导出配置
+  const handleExport = () => {
+    try {
+      const json = exportTemplates()
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `cloudpilot-sg-templates-${dayjs().format('YYYYMMDD-HHmmss')}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      Toast.show({ content: '已导出', icon: 'success' })
+    } catch (e: any) {
+      Toast.show({ content: '导出失败', icon: 'fail' })
+    }
+  }
+
+  // 导入配置
+  const handleImport = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'application/json'
+    input.onchange = async (e: any) => {
+      const file = e.target?.files?.[0]
+      if (!file) return
+
+      try {
+        const text = await file.text()
+        const result = importTemplates(text, false) // 覆盖模式
+        if (result.success) {
+          Toast.show({ content: `已导入${result.count}个模板`, icon: 'success' })
+          setList(loadTemplates())
+        } else {
+          Toast.show({ content: result.error || '导入失败', icon: 'fail' })
+        }
+      } catch (e: any) {
+        Toast.show({ content: '读取文件失败', icon: 'fail' })
+      }
+    }
+    input.click()
   }
 
   return (
@@ -242,28 +308,61 @@ export default function SecurityGroupsPage() {
             </div>
           </div>
 
-          {/* 新建按钮 */}
-          {list.length > 0 ? (
-            <Button
-              block
-              color="primary"
-              fill="outline"
-              size="small"
-              onClick={() => nav('/settings/security-groups/new')}
-              style={{ marginBottom: 12 }}
-            >
-              <AddOutline /> 新建白名单模板
-            </Button>
-          ) : (
-            <Button
-              block
-              color="primary"
-              size="small"
-              onClick={() => nav('/login')}
-              style={{ marginBottom: 12 }}
-            >
-              返回登录页
-            </Button>
+          {/* 操作按钮 */}
+          <div style={{ display: 'grid', gridTemplateColumns: list.length > 0 ? '1fr 1fr 1fr' : '1fr', gap: 8, marginBottom: 12 }}>
+            {list.length > 0 ? (
+              <>
+                <Button
+                  color="primary"
+                  fill="outline"
+                  size="small"
+                  onClick={() => nav('/settings/security-groups/new')}
+                >
+                  <AddOutline /> 新建
+                </Button>
+                <Button
+                  color="primary"
+                  fill="outline"
+                  size="small"
+                  onClick={handleExport}
+                  disabled={list.length === 0}
+                >
+                  <DownCircleOutline /> 导出
+                </Button>
+                <Button
+                  color="primary"
+                  fill="outline"
+                  size="small"
+                  onClick={handleImport}
+                >
+                  <UpCircleOutline /> 导入
+                </Button>
+              </>
+            ) : (
+              <Button
+                block
+                color="primary"
+                size="small"
+                onClick={() => nav('/login')}
+              >
+                返回登录页
+              </Button>
+            )}
+          </div>
+
+          {/* 客户端存储提示 */}
+          {list.length > 0 && (
+            <div style={{
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              padding: '8px 12px',
+              background: 'var(--bg-elevated)',
+              borderRadius: 8,
+              marginBottom: 12,
+              lineHeight: 1.5
+            }}>
+              💡 白名单模板存储在本地，不依赖服务器。导出备份后可在其他设备导入。
+            </div>
           )}
 
           {/* 列表 */}

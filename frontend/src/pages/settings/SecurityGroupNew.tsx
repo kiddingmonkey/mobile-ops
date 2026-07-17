@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
 import NativeInput from '@/components/NativeInput'
 import { api, friendlyApiError } from '@/api/client'
+import { createTemplate } from '@/utils/sgStorage'
 
 const TENCENT_REGIONS = [
   'ap-beijing', 'ap-shanghai', 'ap-guangzhou', 'ap-chengdu',
@@ -50,17 +51,26 @@ export default function SecurityGroupNewPage() {
 
     try {
       const v = await form.validateFields()
-      const payload: any = {
-        name: v.name,
-        cloud_account_id: Array.isArray(v.cloud_account_id) ? v.cloud_account_id[0] : v.cloud_account_id,
-        region: Array.isArray(v.region) ? v.region[0] : v.region,
-        sg_id: v.sg_id,
-        port: v.port,
-        protocol: Array.isArray(v.protocol) ? v.protocol[0] : v.protocol,
-        description: v.description
+
+      // 查找选中的云账号，获取AK/SK
+      const selectedCloudId = Array.isArray(v.cloud_account_id) ? v.cloud_account_id[0] : v.cloud_account_id
+      const cloudAccount = clouds.find(c => c.id === selectedCloudId)
+
+      if (!cloudAccount) {
+        Toast.show({ content: '请选择云账号', icon: 'fail' })
+        return
       }
-      setLoading(true)
-      await api.createSGWhitelist(payload)
+
+      // 保存到客户端存储
+      const template = createTemplate({
+        name: v.name,
+        sg_id: v.sg_id,
+        region: Array.isArray(v.region) ? v.region[0] : v.region,
+        secret_id: cloudAccount.secret_id,
+        secret_key: cloudAccount.secret_key,
+        description: v.description
+      })
+
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)
     } catch (e: any) {
