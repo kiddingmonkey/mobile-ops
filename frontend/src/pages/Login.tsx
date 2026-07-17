@@ -134,8 +134,6 @@ export default function LoginPage() {
       flexDirection: 'column',
       padding: 'env(safe-area-inset-top) 24px calc(24px + env(safe-area-inset-bottom))'
     }}>
-      <RemoteStatusBanner />
-
       {/* 右上角安全组按钮 */}
       <div style={{
         position: 'absolute',
@@ -250,6 +248,9 @@ export default function LoginPage() {
 
       {/* 底部按钮区 */}
       <div>
+        {/* 后端不可达警告（醒目卡片） */}
+        <RemoteStatusBanner />
+
         {/* 当前IP显示 */}
         {(myIP === '获取中...' || myIP === '准备中...') && (
           <div style={{
