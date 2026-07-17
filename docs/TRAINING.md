@@ -943,8 +943,9 @@ mobile-ops/
 |------|------|----------|
 | v1.0 | 2026-07-17 | 初始版本，覆盖架构/前后端/CI-CD/部署 |
 | v1.1 | 2026-07-17 | 补齐 K8s 全资源类型 (StatefulSet/DaemonSet/Ingress)；Pod 详情增强 (NodeSelector/Tolerations/Affinity/Volumes/资源汇总)；ResourceDetail 通用详情页；Pod 监控 Tab (Grafana嵌入)；容器文件浏览 + 终端；日志下载/分享；APK 更新改走 GitHub Releases + ghproxy 镜像；深色主题适配；侧滑手势拦截；告警 TTS + 悬浮窗 + 测试功能；FAQ 扩展到 10 条 |
+| v1.2 | 2026-07-17 | 【UX优化】深色模式select文字可见、云日志自动展示、日志按钮缩小、终端倒序、查看日志跳转；【功能】所有日志ERROR高亮（红底+左边框）；【监控】Pod监控Tab改用ECharts时序图（CPU/内存/网络），从Prometheus拉数据；【修复】OTA卡住（getUri超时保护+兜底reload）；【文档】新增推广方案(PROMOTION.md): 宣传视频制作/多端安装/证书信任/飞书微信集成/数据同步架构 |
 
 ---
 
-*文档版本: v1.1 | 最近更新: 2026-07-17 | 项目: CloudPilot 云驾*
+*文档版本: v1.2 | 最近更新: 2026-07-17 | 项目: CloudPilot 云驾*
 *每次功能改动请同步更新此文档，与代码一起 commit*
