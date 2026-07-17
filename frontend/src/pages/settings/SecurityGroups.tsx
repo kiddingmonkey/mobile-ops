@@ -16,9 +16,6 @@ export default function SecurityGroupsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // 并行加载列表和获取IP
-      const rowsPromise = api.listSGWhitelists()
-
       // 优先使用公网服务获取IP（不受18443端口限制）
       let ipResult = '获取中...'
       try {
@@ -38,7 +35,19 @@ export default function SecurityGroupsPage() {
         }
       }
 
-      const rows = await rowsPromise
+      // 尝试加载白名单列表（可能因为未登录而失败）
+      let rows: any[] = []
+      try {
+        rows = await api.listSGWhitelists()
+      } catch (e: any) {
+        // 未登录或网络不通时，不显示列表但不报错
+        if (e?.response?.status === 401 || e?.response?.status === 403) {
+          console.log('[SecurityGroups] Not logged in, skip loading list')
+        } else {
+          Toast.show({ content: friendlyApiError(e), icon: 'fail' })
+        }
+      }
+
       setList(rows)
       setMyIP(ipResult)
     } catch (e: any) {
@@ -205,11 +214,25 @@ export default function SecurityGroupsPage() {
             <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85, lineHeight: 1.5 }}>
               {myIP !== '获取失败' && myIP !== '未知' ? (
                 <>
-                  点击任意白名单的"一键更新"按钮，将此 IP 加入对应安全组
-                  <br />
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>
-                    💡 如果一键更新失败，请手动到腾讯云控制台添加此IP
-                  </span>
+                  {list.length > 0 ? (
+                    <>
+                      点击任意白名单的"一键更新"按钮，将此 IP 加入对应安全组
+                      <br />
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>
+                        💡 如果一键更新失败，请手动到腾讯云控制台添加此IP
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ color: '#FFB020' }}>
+                        ⚠️ 未登录或暂无白名单模板，无法使用一键更新
+                      </span>
+                      <br />
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>
+                        请先登录并创建白名单模板，或手动到腾讯云控制台添加 {myIP}
+                      </span>
+                    </>
+                  )}
                 </>
               ) : (
                 <span style={{ color: '#FFB020' }}>
@@ -220,16 +243,28 @@ export default function SecurityGroupsPage() {
           </div>
 
           {/* 新建按钮 */}
-          <Button
-            block
-            color="primary"
-            fill="outline"
-            size="small"
-            onClick={() => nav('/settings/security-groups/new')}
-            style={{ marginBottom: 12 }}
-          >
-            <AddOutline /> 新建白名单模板
-          </Button>
+          {list.length > 0 ? (
+            <Button
+              block
+              color="primary"
+              fill="outline"
+              size="small"
+              onClick={() => nav('/settings/security-groups/new')}
+              style={{ marginBottom: 12 }}
+            >
+              <AddOutline /> 新建白名单模板
+            </Button>
+          ) : (
+            <Button
+              block
+              color="primary"
+              size="small"
+              onClick={() => nav('/login')}
+              style={{ marginBottom: 12 }}
+            >
+              返回登录页
+            </Button>
+          )}
 
           {/* 列表 */}
           {list.length === 0 ? (
@@ -239,8 +274,12 @@ export default function SecurityGroupsPage() {
             }}>
               <LockOutline fontSize={40} style={{ opacity: 0.4, marginBottom: 8 }} />
               <div>还没有白名单模板</div>
-              <div style={{ fontSize: 11, marginTop: 6 }}>
-                配置一次,以后一键就能把当前 IP 加入安全组
+              <div style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                配置一次，以后一键就能把当前 IP 加入安全组
+                <br />
+                <span style={{ color: 'var(--warning)' }}>
+                  💡 需要先登录才能创建和使用白名单模板
+                </span>
               </div>
             </div>
           ) : list.map((row: any) => (

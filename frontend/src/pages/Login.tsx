@@ -128,6 +128,25 @@ export default function LoginPage() {
       padding: 'env(safe-area-inset-top) 24px calc(24px + env(safe-area-inset-bottom))'
     }}>
       <RemoteStatusBanner />
+
+      {/* 右上角安全组按钮 */}
+      <div style={{
+        position: 'absolute',
+        top: 'calc(env(safe-area-inset-top) + 12px)',
+        right: 24,
+        zIndex: 10
+      }}>
+        <Button
+          size="small"
+          color="primary"
+          fill="outline"
+          onClick={() => nav('/settings/security-groups')}
+          style={{ fontSize: 12 }}
+        >
+          🔐 安全组
+        </Button>
+      </div>
+
       {/* 顶部品牌区 */}
       <div style={{
         marginTop: 'calc(env(safe-area-inset-top) + 60px)',
