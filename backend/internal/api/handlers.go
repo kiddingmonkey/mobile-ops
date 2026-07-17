@@ -864,3 +864,85 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 		PublishedAt: releaseData.PublishedAt,
 	})
 }
+
+// DownloadAPK 代理下载APK（解决国内访问GitHub慢的问题）
+func (h *Handler) DownloadAPK(c *gin.Context) {
+	// 获取最新Release信息
+	githubAPI := "https://api.github.com/repos/kiddingmonkey/mobile-ops/releases/latest"
+	resp, err := http.Get(githubAPI)
+	if err != nil {
+		c.JSON(503, gin.H{"error": "无法获取版本信息"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		c.JSON(503, gin.H{"error": "无法获取版本信息"})
+		return
+	}
+
+	var releaseData struct {
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+			Size               int64  `json:"size"`
+		} `json:"assets"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releaseData); err != nil {
+		c.JSON(500, gin.H{"error": "解析版本信息失败"})
+		return
+	}
+
+	// 查找APK文件
+	var apkURL string
+	var fileSize int64
+	for _, asset := range releaseData.Assets {
+		if asset.Name == "cloudpilot-latest.apk" {
+			apkURL = asset.BrowserDownloadURL
+			fileSize = asset.Size
+			break
+		}
+	}
+
+	if apkURL == "" {
+		c.JSON(404, gin.H{"error": "APK文件不存在"})
+		return
+	}
+
+	// 从GitHub下载APK
+	apkResp, err := http.Get(apkURL)
+	if err != nil {
+		c.JSON(503, gin.H{"error": "下载APK失败"})
+		return
+	}
+	defer apkResp.Body.Close()
+
+	if apkResp.StatusCode != 200 {
+		c.JSON(503, gin.H{"error": "下载APK失败"})
+		return
+	}
+
+	// 设置响应头
+	c.Header("Content-Type", "application/vnd.android.package-archive")
+	c.Header("Content-Disposition", "attachment; filename=cloudpilot-latest.apk")
+	c.Header("Content-Length", strconv.FormatInt(fileSize, 10))
+
+	// 流式转发给客户端
+	_, err = c.Writer.Write([]byte{})
+	c.Writer.Flush()
+
+	buffer := make([]byte, 32*1024) // 32KB缓冲区
+	for {
+		n, err := apkResp.Body.Read(buffer)
+		if n > 0 {
+			if _, writeErr := c.Writer.Write(buffer[:n]); writeErr != nil {
+				return
+			}
+			c.Writer.Flush()
+		}
+		if err != nil {
+			break
+		}
+	}
+}

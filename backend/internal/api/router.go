@@ -35,7 +35,8 @@ func (h *Handler) Register(r *gin.Engine) {
 	// 公开接口
 	r.POST("/api/v1/auth/login", h.Login)
 	r.POST(h.cfg.AlertManager.WebhookPath, h.AlertWebhook)
-	r.GET("/api/v1/version/latest", h.GetLatestVersion) // APK版本检查（无需登录）
+	r.GET("/api/v1/version/latest", h.GetLatestVersion)         // APK版本检查（无需登录）
+	r.GET("/api/v1/download/apk", h.DownloadAPK)                // APK代理下载（无需登录）
 
 	// 鉴权接口
 	priv := r.Group("/api/v1")
