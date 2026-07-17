@@ -175,25 +175,38 @@ export async function downloadAndApply(
     }
   }
 
-  // 4. 拿绝对路径
+  // 4. 拿绝对路径（加超时保护）
   onStatus?.('正在应用更新...')
-  const uri = await Filesystem.getUri({
-    path: versionDir,
-    directory: Directory.Data
-  })
-  const absPath = uri.uri.replace(/^file:\/\//, '')
+  let absPath = ''
+  try {
+    const uri = await Promise.race([
+      Filesystem.getUri({
+        path: versionDir,
+        directory: Directory.Data
+      }),
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout')), 5000))
+    ])
+    absPath = uri.uri.replace(/^file:\/\//, '')
+  } catch (e) {
+    console.warn('getUri failed or timeout, fallback to direct reload', e)
+    // 如果getUri失败，直接reload让App重新检测
+    localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+    window.location.reload()
+    return
+  }
 
   // 5. 切 WebView 到新目录（带超时保护）
   const webview = await tryGetWebViewPlugin()
-  if (!webview) {
-    throw new Error('当前 Capacitor 版本不支持 WebView.setServerBasePath, 请重装 APK')
+  if (webview) {
+    try {
+      await Promise.race([
+        webview.setServerBasePath({ path: absPath }),
+        new Promise((resolve) => setTimeout(resolve, 3000))
+      ])
+    } catch (e) {
+      console.warn('setServerBasePath failed, will reload anyway', e)
+    }
   }
-
-  // setServerBasePath 可能不resolve，加超时保护
-  await Promise.race([
-    webview.setServerBasePath({ path: absPath }),
-    new Promise(resolve => setTimeout(resolve, 3000))
-  ])
 
   // 6. 保存版本号
   localStorage.setItem(CURRENT_VERSION_KEY, info.version)
