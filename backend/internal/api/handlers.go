@@ -573,6 +573,12 @@ func (h *Handler) ListK8sResources(c *gin.Context) {
 		result, queryErr = client.ListConfigMaps(ctx, namespace)
 	case "secrets":
 		result, queryErr = client.ListSecrets(ctx, namespace)
+	case "statefulsets":
+		result, queryErr = client.ListStatefulSets(ctx, namespace)
+	case "daemonsets":
+		result, queryErr = client.ListDaemonSets(ctx, namespace)
+	case "ingresses":
+		result, queryErr = client.ListIngresses(ctx, namespace)
 	case "nodes":
 		result, queryErr = client.ListNodes(ctx)
 	default:
@@ -611,6 +617,20 @@ func (h *Handler) GetK8sResourceYAML(c *gin.Context) {
 	switch resourceType {
 	case "pods":
 		result, queryErr = client.GetPodYAML(ctx, namespace, name)
+	case "deployments":
+		result, queryErr = client.GetDeploymentYAML(ctx, namespace, name)
+	case "services":
+		result, queryErr = client.GetServiceYAML(ctx, namespace, name)
+	case "configmaps":
+		result, queryErr = client.GetConfigMapYAML(ctx, namespace, name)
+	case "secrets":
+		result, queryErr = client.GetSecretYAML(ctx, namespace, name)
+	case "statefulsets":
+		result, queryErr = client.GetStatefulSetYAML(ctx, namespace, name)
+	case "daemonsets":
+		result, queryErr = client.GetDaemonSetYAML(ctx, namespace, name)
+	case "nodes":
+		result, queryErr = client.GetNodeYAML(ctx, name)
 	default:
 		c.JSON(400, gin.H{"error": "unsupported resource type"})
 		return
@@ -965,4 +985,46 @@ func lastIndex(s, sub string) int {
 		}
 	}
 	return last
+}
+
+// GetResourceEvents 通用资源事件查询
+// GET /clusters/:id/resources/:type/events?namespace=xxx&name=xxx
+func (h *Handler) GetResourceEvents(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	resourceType := c.Param("type")
+	namespace := c.Query("namespace")
+	name := c.Query("name")
+
+	if name == "" {
+		c.JSON(400, gin.H{"error": "name is required"})
+		return
+	}
+
+	// 资源类型 → K8s Kind
+	kindMap := map[string]string{
+		"pods":         "Pod",
+		"deployments":  "Deployment",
+		"services":     "Service",
+		"configmaps":   "ConfigMap",
+		"secrets":      "Secret",
+		"statefulsets": "StatefulSet",
+		"daemonsets":   "DaemonSet",
+		"ingresses":    "Ingress",
+		"nodes":        "Node",
+	}
+	kind := kindMap[resourceType]
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+
+	events, err := client.ListResourceEvents(ctx, namespace, name, kind)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, events)
 }

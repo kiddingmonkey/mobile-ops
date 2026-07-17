@@ -20,6 +20,7 @@ import ScalePage from '@/pages/Scale'
 import SettingsPage from '@/pages/Settings'
 import ClusterResourcesPage from '@/pages/ClusterResources'
 import PodDetailPage from '@/pages/PodDetail'
+import ResourceDetailPage from '@/pages/ResourceDetail'
 import NodePoolDetailPage from '@/pages/NodePoolDetail'
 import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
 import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/scale" element={<Protected><ScalePage /></Protected>} />
           <Route path="/clusters/:id/resources" element={<Protected><ClusterResourcesPage /></Protected>} />
           <Route path="/clusters/:clusterId/pods/:namespace/:name" element={<Protected><PodDetailPage /></Protected>} />
+          <Route path="/clusters/:clusterId/resources/:resourceType/:namespace/:name" element={<Protected><ResourceDetailPage /></Protected>} />
           <Route path="/clusters/:clusterId/node-pools/:poolId" element={<Protected><NodePoolDetailPage /></Protected>} />
           <Route path="/settings/grafana" element={<Protected><GrafanaSettingsPage /></Protected>} />
           <Route path="/settings/grafana/new" element={<Protected><GrafanaNewPage /></Protected>} />

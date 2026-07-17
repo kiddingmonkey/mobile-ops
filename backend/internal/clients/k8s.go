@@ -297,6 +297,42 @@ type PodDetail struct {
 	InitContainers []ContainerStatus `json:"init_containers,omitempty"`
 	TotalRestarts int32            `json:"total_restarts"`
 	LastRestartAt *time.Time       `json:"last_restart_at,omitempty"`
+
+	// 调度相关信息
+	NodeSelector map[string]string `json:"node_selector,omitempty"`
+	Tolerations  []PodToleration   `json:"tolerations,omitempty"`
+	Affinity     *PodAffinityInfo  `json:"affinity,omitempty"`
+
+	// 资源汇总（所有容器 requests/limits 之和，方便概览）
+	TotalRequests map[string]string `json:"total_requests,omitempty"`
+	TotalLimits   map[string]string `json:"total_limits,omitempty"`
+
+	// PriorityClass
+	PriorityClassName string `json:"priority_class_name,omitempty"`
+	Priority          *int32 `json:"priority,omitempty"`
+
+	// Volumes概况
+	Volumes []PodVolumeInfo `json:"volumes,omitempty"`
+}
+
+type PodToleration struct {
+	Key               string `json:"key,omitempty"`
+	Operator          string `json:"operator,omitempty"`
+	Value             string `json:"value,omitempty"`
+	Effect            string `json:"effect,omitempty"`
+	TolerationSeconds *int64 `json:"toleration_seconds,omitempty"`
+}
+
+type PodAffinityInfo struct {
+	NodeAffinity    string `json:"node_affinity,omitempty"`     // 简化后的字符串描述
+	PodAffinity     string `json:"pod_affinity,omitempty"`
+	PodAntiAffinity string `json:"pod_anti_affinity,omitempty"`
+}
+
+type PodVolumeInfo struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`   // configMap / secret / persistentVolumeClaim / emptyDir 等
+	Source string `json:"source,omitempty"`
 }
 
 type PodCondition struct {
@@ -370,7 +406,137 @@ func (k *K8sClient) GetPodDetail(ctx context.Context, namespace, name string) (*
 	if !lastRestart.IsZero() {
 		d.LastRestartAt = &lastRestart
 	}
+
+	// NodeSelector
+	if len(pod.Spec.NodeSelector) > 0 {
+		d.NodeSelector = pod.Spec.NodeSelector
+	}
+
+	// Tolerations
+	for _, t := range pod.Spec.Tolerations {
+		pt := PodToleration{
+			Key:      t.Key,
+			Operator: string(t.Operator),
+			Value:    t.Value,
+			Effect:   string(t.Effect),
+		}
+		if t.TolerationSeconds != nil {
+			pt.TolerationSeconds = t.TolerationSeconds
+		}
+		d.Tolerations = append(d.Tolerations, pt)
+	}
+
+	// Affinity（简化为字符串描述）
+	if pod.Spec.Affinity != nil {
+		aff := &PodAffinityInfo{}
+		if pod.Spec.Affinity.NodeAffinity != nil {
+			if pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+				aff.NodeAffinity = "required"
+			} else if len(pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
+				aff.NodeAffinity = "preferred"
+			}
+		}
+		if pod.Spec.Affinity.PodAffinity != nil {
+			aff.PodAffinity = fmt.Sprintf("required:%d preferred:%d",
+				len(pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution),
+				len(pod.Spec.Affinity.PodAffinity.PreferredDuringSchedulingIgnoredDuringExecution))
+		}
+		if pod.Spec.Affinity.PodAntiAffinity != nil {
+			aff.PodAntiAffinity = fmt.Sprintf("required:%d preferred:%d",
+				len(pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution),
+				len(pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution))
+		}
+		if aff.NodeAffinity != "" || aff.PodAffinity != "" || aff.PodAntiAffinity != "" {
+			d.Affinity = aff
+		}
+	}
+
+	// Total Requests / Limits
+	var totalCPUReq, totalMemReq, totalCPULim, totalMemLim int64
+	for _, c := range pod.Spec.Containers {
+		if v, ok := c.Resources.Requests[corev1.ResourceCPU]; ok {
+			totalCPUReq += v.MilliValue()
+		}
+		if v, ok := c.Resources.Requests[corev1.ResourceMemory]; ok {
+			totalMemReq += v.Value()
+		}
+		if v, ok := c.Resources.Limits[corev1.ResourceCPU]; ok {
+			totalCPULim += v.MilliValue()
+		}
+		if v, ok := c.Resources.Limits[corev1.ResourceMemory]; ok {
+			totalMemLim += v.Value()
+		}
+	}
+	if totalCPUReq > 0 || totalMemReq > 0 {
+		d.TotalRequests = map[string]string{}
+		if totalCPUReq > 0 {
+			d.TotalRequests["cpu"] = fmt.Sprintf("%dm", totalCPUReq)
+		}
+		if totalMemReq > 0 {
+			d.TotalRequests["memory"] = formatBytes(totalMemReq)
+		}
+	}
+	if totalCPULim > 0 || totalMemLim > 0 {
+		d.TotalLimits = map[string]string{}
+		if totalCPULim > 0 {
+			d.TotalLimits["cpu"] = fmt.Sprintf("%dm", totalCPULim)
+		}
+		if totalMemLim > 0 {
+			d.TotalLimits["memory"] = formatBytes(totalMemLim)
+		}
+	}
+
+	// PriorityClass
+	d.PriorityClassName = pod.Spec.PriorityClassName
+	d.Priority = pod.Spec.Priority
+
+	// Volumes
+	for _, v := range pod.Spec.Volumes {
+		vi := PodVolumeInfo{Name: v.Name}
+		switch {
+		case v.ConfigMap != nil:
+			vi.Type = "configMap"
+			vi.Source = v.ConfigMap.Name
+		case v.Secret != nil:
+			vi.Type = "secret"
+			vi.Source = v.Secret.SecretName
+		case v.PersistentVolumeClaim != nil:
+			vi.Type = "pvc"
+			vi.Source = v.PersistentVolumeClaim.ClaimName
+		case v.EmptyDir != nil:
+			vi.Type = "emptyDir"
+		case v.HostPath != nil:
+			vi.Type = "hostPath"
+			vi.Source = v.HostPath.Path
+		case v.Projected != nil:
+			vi.Type = "projected"
+		case v.NFS != nil:
+			vi.Type = "nfs"
+			vi.Source = v.NFS.Server + ":" + v.NFS.Path
+		default:
+			vi.Type = "other"
+		}
+		d.Volumes = append(d.Volumes, vi)
+	}
+
 	return d, nil
+}
+
+func formatBytes(n int64) string {
+	const (
+		Ki = 1024
+		Mi = 1024 * Ki
+		Gi = 1024 * Mi
+	)
+	switch {
+	case n >= Gi:
+		return fmt.Sprintf("%.2fGi", float64(n)/Gi)
+	case n >= Mi:
+		return fmt.Sprintf("%.2fMi", float64(n)/Mi)
+	case n >= Ki:
+		return fmt.Sprintf("%.2fKi", float64(n)/Ki)
+	}
+	return fmt.Sprintf("%dB", n)
 }
 
 func buildContainerStatuses(specs []corev1.Container, statuses []corev1.ContainerStatus) []ContainerStatus {
@@ -932,4 +1098,271 @@ func parseInt64(s string) int64 {
 		}
 	}
 	return n
+}
+
+// ============ StatefulSet ============
+type StatefulSetInfo struct {
+	Name        string    `json:"name"`
+	Namespace   string    `json:"namespace"`
+	Replicas    int32     `json:"replicas"`
+	Ready       int32     `json:"ready"`
+	Age         time.Time `json:"age"`
+	Image       string    `json:"image,omitempty"`
+	ServiceName string    `json:"service_name,omitempty"`
+}
+
+func (k *K8sClient) ListStatefulSets(ctx context.Context, namespace string) ([]StatefulSetInfo, error) {
+	if namespace == "" {
+		namespace = metav1.NamespaceAll
+	}
+	list, err := k.Clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StatefulSetInfo, 0, len(list.Items))
+	for _, s := range list.Items {
+		info := StatefulSetInfo{
+			Name:        s.Name,
+			Namespace:   s.Namespace,
+			Ready:       s.Status.ReadyReplicas,
+			Age:         s.CreationTimestamp.Time,
+			ServiceName: s.Spec.ServiceName,
+		}
+		if s.Spec.Replicas != nil {
+			info.Replicas = *s.Spec.Replicas
+		}
+		if len(s.Spec.Template.Spec.Containers) > 0 {
+			info.Image = s.Spec.Template.Spec.Containers[0].Image
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func (k *K8sClient) GetStatefulSetYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	s, err := k.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "StatefulSet",
+		"metadata":   s.ObjectMeta,
+		"spec":       s.Spec,
+		"status":     s.Status,
+	}, nil
+}
+
+// ============ DaemonSet ============
+type DaemonSetInfo struct {
+	Name           string    `json:"name"`
+	Namespace      string    `json:"namespace"`
+	Desired        int32     `json:"desired"`
+	Current        int32     `json:"current"`
+	Ready          int32     `json:"ready"`
+	UpToDate       int32     `json:"up_to_date"`
+	Available      int32     `json:"available"`
+	Age            time.Time `json:"age"`
+	Image          string    `json:"image,omitempty"`
+}
+
+func (k *K8sClient) ListDaemonSets(ctx context.Context, namespace string) ([]DaemonSetInfo, error) {
+	if namespace == "" {
+		namespace = metav1.NamespaceAll
+	}
+	list, err := k.Clientset.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DaemonSetInfo, 0, len(list.Items))
+	for _, d := range list.Items {
+		info := DaemonSetInfo{
+			Name:      d.Name,
+			Namespace: d.Namespace,
+			Desired:   d.Status.DesiredNumberScheduled,
+			Current:   d.Status.CurrentNumberScheduled,
+			Ready:     d.Status.NumberReady,
+			UpToDate:  d.Status.UpdatedNumberScheduled,
+			Available: d.Status.NumberAvailable,
+			Age:       d.CreationTimestamp.Time,
+		}
+		if len(d.Spec.Template.Spec.Containers) > 0 {
+			info.Image = d.Spec.Template.Spec.Containers[0].Image
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func (k *K8sClient) GetDaemonSetYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	d, err := k.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "DaemonSet",
+		"metadata":   d.ObjectMeta,
+		"spec":       d.Spec,
+		"status":     d.Status,
+	}, nil
+}
+
+// ============ Ingress ============
+type IngressInfo struct {
+	Name      string    `json:"name"`
+	Namespace string    `json:"namespace"`
+	Class     string    `json:"class,omitempty"`
+	Hosts     []string  `json:"hosts,omitempty"`
+	Address   []string  `json:"address,omitempty"`
+	Age       time.Time `json:"age"`
+}
+
+func (k *K8sClient) ListIngresses(ctx context.Context, namespace string) ([]IngressInfo, error) {
+	if namespace == "" {
+		namespace = metav1.NamespaceAll
+	}
+	list, err := k.Clientset.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]IngressInfo, 0, len(list.Items))
+	for _, ing := range list.Items {
+		hosts := []string{}
+		for _, r := range ing.Spec.Rules {
+			if r.Host != "" {
+				hosts = append(hosts, r.Host)
+			}
+		}
+		addrs := []string{}
+		for _, l := range ing.Status.LoadBalancer.Ingress {
+			if l.IP != "" {
+				addrs = append(addrs, l.IP)
+			}
+			if l.Hostname != "" {
+				addrs = append(addrs, l.Hostname)
+			}
+		}
+		info := IngressInfo{
+			Name:      ing.Name,
+			Namespace: ing.Namespace,
+			Hosts:     hosts,
+			Address:   addrs,
+			Age:       ing.CreationTimestamp.Time,
+		}
+		if ing.Spec.IngressClassName != nil {
+			info.Class = *ing.Spec.IngressClassName
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// ============ 通用 YAML ============
+func (k *K8sClient) GetDeploymentYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	d, err := k.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   d.ObjectMeta,
+		"spec":       d.Spec,
+		"status":     d.Status,
+	}, nil
+}
+
+func (k *K8sClient) GetServiceYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	s, err := k.Clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata":   s.ObjectMeta,
+		"spec":       s.Spec,
+		"status":     s.Status,
+	}, nil
+}
+
+func (k *K8sClient) GetConfigMapYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	cm, err := k.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   cm.ObjectMeta,
+		"data":       cm.Data,
+	}, nil
+}
+
+func (k *K8sClient) GetSecretYAML(ctx context.Context, namespace, name string) (map[string]any, error) {
+	s, err := k.Clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	// secret的data保持base64，避免泄露原文；用户想看可以自行decode
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"metadata":   s.ObjectMeta,
+		"type":       s.Type,
+		"data":       s.Data,
+	}, nil
+}
+
+func (k *K8sClient) GetNodeYAML(ctx context.Context, name string) (map[string]any, error) {
+	n, err := k.Clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   n.ObjectMeta,
+		"spec":       n.Spec,
+		"status":     n.Status,
+	}, nil
+}
+
+// ============ 通用事件 ============
+type ResourceEvent struct {
+	Type      string    `json:"type"`
+	Reason    string    `json:"reason"`
+	Message   string    `json:"message"`
+	Count     int32     `json:"count"`
+	FirstAt   time.Time `json:"first_at"`
+	LastAt    time.Time `json:"last_at"`
+	Component string    `json:"component,omitempty"`
+}
+
+// ListResourceEvents 按对象名字/命名空间查事件
+func (k *K8sClient) ListResourceEvents(ctx context.Context, namespace, name, kind string) ([]ResourceEvent, error) {
+	fieldSelector := fmt.Sprintf("involvedObject.name=%s", name)
+	if kind != "" {
+		fieldSelector += ",involvedObject.kind=" + kind
+	}
+	list, err := k.Clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fieldSelector,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ResourceEvent, 0, len(list.Items))
+	for _, e := range list.Items {
+		out = append(out, ResourceEvent{
+			Type:      e.Type,
+			Reason:    e.Reason,
+			Message:   e.Message,
+			Count:     e.Count,
+			FirstAt:   e.FirstTimestamp.Time,
+			LastAt:    e.LastTimestamp.Time,
+			Component: e.Source.Component,
+		})
+	}
+	return out, nil
 }

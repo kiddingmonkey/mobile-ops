@@ -1,11 +1,23 @@
 import { useEffect, useState } from 'react'
-import { List, Tabs, PullToRefresh, Card, Tag, Button, Dialog, TextArea, Toast } from 'antd-mobile'
+import { List, Tabs, PullToRefresh, Toast } from 'antd-mobile'
 import { useNavigate, useParams } from 'react-router-dom'
 import { RightOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
 import PageShell from '@/components/PageShell'
 
-type ResourceType = 'pods' | 'deployments' | 'services' | 'configmaps' | 'secrets' | 'nodes'
+type ResourceType = 'pods' | 'deployments' | 'services' | 'configmaps' | 'secrets' | 'statefulsets' | 'daemonsets' | 'ingresses' | 'nodes'
+
+const TABS: { key: ResourceType; label: string }[] = [
+  { key: 'pods', label: 'Pods' },
+  { key: 'deployments', label: 'Deployments' },
+  { key: 'statefulsets', label: 'StatefulSets' },
+  { key: 'daemonsets', label: 'DaemonSets' },
+  { key: 'services', label: 'Services' },
+  { key: 'ingresses', label: 'Ingresses' },
+  { key: 'configmaps', label: 'ConfigMaps' },
+  { key: 'secrets', label: 'Secrets' },
+  { key: 'nodes', label: 'Nodes' }
+]
 
 export default function ClusterResourcesPage() {
   const nav = useNavigate()
@@ -29,58 +41,33 @@ export default function ClusterResourcesPage() {
       const data = await api.get(`/clusters/${clusterId}/resources/${type}`)
       setResources(data || [])
     } catch (e: any) {
-      Toast.show({ content: e?.message || '加载失败', icon: 'fail' })
+      Toast.show({ content: e?.response?.data?.error || '加载失败', icon: 'fail' })
       setResources([])
     } finally {
       setLoading(false)
     }
   }
 
-  const viewYAML = async (resource: any) => {
-    try {
-      Toast.show({ content: '加载中...', icon: 'loading', duration: 0 })
-      const yaml = await api.get(`/clusters/${clusterId}/resources/${tab}/yaml`, {
-        params: { namespace: resource.namespace, name: resource.name }
-      })
-      Toast.clear()
-
-      Dialog.alert({
-        title: resource.name,
-        content: (
-          <div>
-            <div style={{ marginBottom: 8 }}>
-              <Tag color="primary" style={{ marginRight: 4 }}>{resource.namespace}</Tag>
-              <Tag color={resource.status === 'Running' ? 'success' : 'warning'}>{resource.status}</Tag>
-            </div>
-            <pre style={{
-              fontSize: 11,
-              overflow: 'auto',
-              maxHeight: '60vh',
-              background: '#1E293B',
-              color: '#F8FAFC',
-              padding: 12,
-              borderRadius: 8
-            }}>{JSON.stringify(yaml, null, 2)}</pre>
-          </div>
-        ),
-        closeOnMaskClick: true
-      })
-    } catch (e: any) {
-      Toast.show({ content: e?.message || '加载失败', icon: 'fail' })
+  const openDetail = (r: any) => {
+    if (tab === 'pods') {
+      nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)
+      return
     }
+    if (tab === 'nodes') {
+      nav(`/clusters/${clusterId}/resources/nodes/-/${r.name}`)
+      return
+    }
+    // 其他资源统一进ResourceDetail
+    nav(`/clusters/${clusterId}/resources/${tab}/${r.namespace}/${r.name}`)
   }
 
   return (
     <PageShell title={cluster?.display_name || '集群资源'} onBack={() => nav(-1)}>
       <Tabs activeKey={tab} onChange={k => setTab(k as ResourceType)} style={{
-        '--title-font-size': '13px',
+        '--title-font-size': '12px',
         '--active-title-color': 'var(--accent-blue)'
       } as any}>
-        <Tabs.Tab title="Pods" key="pods" />
-        <Tabs.Tab title="Deployments" key="deployments" />
-        <Tabs.Tab title="Services" key="services" />
-        <Tabs.Tab title="ConfigMaps" key="configmaps" />
-        <Tabs.Tab title="Nodes" key="nodes" />
+        {TABS.map(t => <Tabs.Tab title={t.label} key={t.key} />)}
       </Tabs>
 
       <PullToRefresh onRefresh={() => loadResources(tab)}>
@@ -98,35 +85,7 @@ export default function ClusterResourcesPage() {
               '--prefix-width': '0px'
             } as any}>
               {resources.map((r, i) => {
-                let description = ''
-                let statusColor = 'var(--success)'
-
-                switch (tab) {
-                  case 'pods':
-                    description = `${r.namespace} · ${r.ready} · Restarts: ${r.restarts || 0}`
-                    statusColor = r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
-                    break
-                  case 'deployments':
-                    description = `${r.namespace} · ${r.ready} · Available: ${r.available}`
-                    statusColor = r.available > 0 ? 'var(--success)' : 'var(--warning)'
-                    break
-                  case 'services':
-                    description = `${r.namespace} · ${r.type} · ${r.cluster_ip}`
-                    statusColor = 'var(--accent-blue)'
-                    break
-                  case 'configmaps':
-                    description = `${r.namespace} · Keys: ${r.data_count}`
-                    statusColor = 'var(--accent-blue)'
-                    break
-                  case 'secrets':
-                    description = `${r.namespace} · ${r.type} · Keys: ${r.data_count}`
-                    statusColor = 'var(--warning)'
-                    break
-                  case 'nodes':
-                    description = `${r.status || 'Ready'} · ${r.version || 'N/A'}`
-                    statusColor = r.status === 'Ready' ? 'var(--success)' : 'var(--error)'
-                    break
-                }
+                const { description, statusColor } = getRowInfo(tab, r)
 
                 return (
                   <List.Item
@@ -150,13 +109,7 @@ export default function ClusterResourcesPage() {
                       padding: '8px 12px',
                       fontSize: 13
                     }}
-                    onClick={() => {
-                      if (tab === 'pods') {
-                        nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)
-                      } else {
-                        viewYAML(r)
-                      }
-                    }}
+                    onClick={() => openDetail(r)}
                   >
                     {r.name}
                   </List.Item>
@@ -168,4 +121,54 @@ export default function ClusterResourcesPage() {
       </PullToRefresh>
     </PageShell>
   )
+}
+
+function getRowInfo(tab: ResourceType, r: any): { description: string; statusColor: string } {
+  switch (tab) {
+    case 'pods':
+      return {
+        description: `${r.namespace} · ${r.ready} · Restarts: ${r.restarts || 0}`,
+        statusColor: r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
+      }
+    case 'deployments':
+      return {
+        description: `${r.namespace} · ${r.ready} · Available: ${r.available}`,
+        statusColor: r.available > 0 ? 'var(--success)' : 'var(--warning)'
+      }
+    case 'statefulsets':
+      return {
+        description: `${r.namespace} · ${r.ready}/${r.replicas}`,
+        statusColor: r.ready === r.replicas ? 'var(--success)' : 'var(--warning)'
+      }
+    case 'daemonsets':
+      return {
+        description: `${r.namespace} · Ready ${r.ready}/${r.desired}`,
+        statusColor: r.ready === r.desired ? 'var(--success)' : 'var(--warning)'
+      }
+    case 'services':
+      return {
+        description: `${r.namespace} · ${r.type} · ${r.cluster_ip}`,
+        statusColor: 'var(--accent-blue)'
+      }
+    case 'ingresses':
+      return {
+        description: `${r.namespace} · ${(r.hosts || []).slice(0, 2).join(', ') || '-'}`,
+        statusColor: 'var(--accent-blue)'
+      }
+    case 'configmaps':
+      return {
+        description: `${r.namespace} · Keys: ${r.data_count}`,
+        statusColor: 'var(--accent-blue)'
+      }
+    case 'secrets':
+      return {
+        description: `${r.namespace} · ${r.type} · Keys: ${r.data_count}`,
+        statusColor: 'var(--warning)'
+      }
+    case 'nodes':
+      return {
+        description: `${r.ready === 'True' ? 'Ready' : r.ready} · ${r.zone || '-'}`,
+        statusColor: r.ready === 'True' ? 'var(--success)' : 'var(--danger)'
+      }
+  }
 }

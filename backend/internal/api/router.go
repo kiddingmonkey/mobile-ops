@@ -71,6 +71,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		// K8s 资源管理
 		priv.GET("/clusters/:id/resources/:type", h.ListK8sResources)
 		priv.GET("/clusters/:id/resources/:type/yaml", h.GetK8sResourceYAML)
+		priv.GET("/clusters/:id/resources/:type/events", h.GetResourceEvents)
 
 		// Pod 相关
 		priv.GET("/clusters/:id/namespaces", h.ListNamespaces)

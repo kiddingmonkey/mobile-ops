@@ -110,6 +110,14 @@ export default function PodDetailPage() {
             <Tabs.Tab title="事件" key="events">
               <EventsTab events={events} />
             </Tabs.Tab>
+            <Tabs.Tab title="监控" key="metrics">
+              <MetricsTab
+                clusterId={Number(clusterId)}
+                namespace={namespace!}
+                podName={name!}
+                detail={detail}
+              />
+            </Tabs.Tab>
             <Tabs.Tab title="日志" key="logs">
               <LogsTab
                 logs={logs}
@@ -193,6 +201,96 @@ function DetailTab({ detail }: { detail: any }) {
               </Tag>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* 资源汇总 */}
+      {(detail.total_requests || detail.total_limits) && (
+        <Card title="资源需求" style={{ marginBottom: 12 }}>
+          {detail.total_requests && (
+            <InfoRow
+              label="Requests"
+              value={`CPU: ${detail.total_requests.cpu || '-'} / Memory: ${detail.total_requests.memory || '-'}`}
+            />
+          )}
+          {detail.total_limits && (
+            <InfoRow
+              label="Limits"
+              value={`CPU: ${detail.total_limits.cpu || '-'} / Memory: ${detail.total_limits.memory || '-'}`}
+            />
+          )}
+          {detail.priority_class_name && (
+            <InfoRow label="PriorityClass" value={detail.priority_class_name} />
+          )}
+        </Card>
+      )}
+
+      {/* 调度信息 */}
+      {(detail.node_selector || detail.tolerations || detail.affinity) && (
+        <Card title="调度信息" style={{ marginBottom: 12 }}>
+          {/* NodeSelector */}
+          {detail.node_selector && Object.keys(detail.node_selector).length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>NodeSelector</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {Object.entries(detail.node_selector).map(([k, v]: [string, any]) => (
+                  <Tag key={k} color="primary" style={{ fontSize: 10 }}>
+                    {k}={String(v)}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Affinity */}
+          {detail.affinity && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Affinity</div>
+              {detail.affinity.node_affinity && (
+                <InfoRow label="Node" value={detail.affinity.node_affinity} />
+              )}
+              {detail.affinity.pod_affinity && (
+                <InfoRow label="Pod" value={detail.affinity.pod_affinity} />
+              )}
+              {detail.affinity.pod_anti_affinity && (
+                <InfoRow label="PodAnti" value={detail.affinity.pod_anti_affinity} />
+              )}
+            </div>
+          )}
+
+          {/* Tolerations */}
+          {detail.tolerations && detail.tolerations.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>
+                Tolerations ({detail.tolerations.length})
+              </div>
+              {detail.tolerations.slice(0, 5).map((t: any, i: number) => (
+                <div key={i} style={{ fontSize: 11, fontFamily: 'ui-monospace, monospace', color: 'var(--text-secondary)', marginBottom: 2 }}>
+                  {t.key || '*'} {t.operator} {t.value || ''} → {t.effect || '*'}
+                </div>
+              ))}
+              {detail.tolerations.length > 5 && (
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>...还有 {detail.tolerations.length - 5} 条</div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Volumes */}
+      {detail.volumes && detail.volumes.length > 0 && (
+        <Card title={`Volumes (${detail.volumes.length})`} style={{ marginBottom: 12 }}>
+          {detail.volumes.map((v: any, i: number) => (
+            <div key={i} style={{ marginBottom: 6, fontSize: 12, display: 'flex', gap: 6, alignItems: 'baseline' }}>
+              <Tag color="primary" style={{ fontSize: 10 }}>{v.type}</Tag>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{v.name}</span>
+              {v.source && (
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 11, wordBreak: 'break-all' }}>
+                  → {v.source}
+                </span>
+              )}
+            </div>
+          ))}
         </Card>
       )}
 
@@ -982,6 +1080,141 @@ function TerminalTab({ clusterId, namespace, podName, containers }: {
           ))
         )}
       </div>
+    </div>
+  )
+}
+
+// 监控 Tab
+function MetricsTab({ clusterId, namespace, podName, detail }: {
+  clusterId: number
+  namespace: string
+  podName: string
+  detail: any
+}) {
+  const [grafanaUrl, setGrafanaUrl] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [timeRange, setTimeRange] = useState('now-1h')
+
+  useEffect(() => {
+    // 尝试获取集群关联的Grafana面板URL
+    const loadGrafana = async () => {
+      try {
+        // 请求集群配置，看是否有关联的Grafana
+        const cluster = await api.getCluster(clusterId)
+        if (cluster?.grafana_source_id) {
+          // 请求Pod监控面板URL（后端可能已有此接口）
+          try {
+            const r = await api.get(`/clusters/${clusterId}/grafana/panel`, {
+              params: {
+                type: 'pod',
+                namespace,
+                pod: podName,
+                from: timeRange,
+                to: 'now'
+              }
+            })
+            if (r?.url) setGrafanaUrl(r.url)
+          } catch {}
+        }
+      } catch {}
+      setLoading(false)
+    }
+    loadGrafana()
+  }, [clusterId, namespace, podName, timeRange])
+
+  return (
+    <div style={{ padding: '12px 12px 60px' }}>
+      {/* 资源使用（从metrics-server取的实时数据，如果PodDetail有的话） */}
+      <Card title="资源使用" style={{ marginBottom: 12 }}>
+        {detail.total_requests || detail.total_limits ? (
+          <>
+            {detail.total_requests && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Requests</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detail.total_requests.cpu && (
+                    <Tag color="primary" style={{ fontSize: 11 }}>CPU: {detail.total_requests.cpu}</Tag>
+                  )}
+                  {detail.total_requests.memory && (
+                    <Tag color="primary" style={{ fontSize: 11 }}>Mem: {detail.total_requests.memory}</Tag>
+                  )}
+                </div>
+              </div>
+            )}
+            {detail.total_limits && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Limits</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detail.total_limits.cpu && (
+                    <Tag color="warning" style={{ fontSize: 11 }}>CPU: {detail.total_limits.cpu}</Tag>
+                  )}
+                  {detail.total_limits.memory && (
+                    <Tag color="warning" style={{ fontSize: 11 }}>Mem: {detail.total_limits.memory}</Tag>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>此Pod未设置资源限制</div>
+        )}
+      </Card>
+
+      {/* 时间范围 */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {[
+            { label: '5m', value: 'now-5m' },
+            { label: '15m', value: 'now-15m' },
+            { label: '1h', value: 'now-1h' },
+            { label: '6h', value: 'now-6h' },
+            { label: '24h', value: 'now-24h' }
+          ].map(t => (
+            <span
+              key={t.value}
+              onClick={() => setTimeRange(t.value)}
+              style={{
+                padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                background: timeRange === t.value ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                color: timeRange === t.value ? '#fff' : 'var(--text-primary)',
+                borderRadius: 4, border: '1px solid ' + (timeRange === t.value ? 'var(--accent-blue)' : 'var(--border-color)')
+              }}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Grafana嵌入 */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>加载中...</div>
+      ) : grafanaUrl ? (
+        <div style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          height: '60vh'
+        }}>
+          <iframe
+            src={grafanaUrl}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            title="Pod Metrics"
+          />
+        </div>
+      ) : (
+        <Card>
+          <div style={{ padding: 20, textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+              未配置Grafana监控
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+              请在集群设置中关联Grafana数据源
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
