@@ -178,29 +178,55 @@ func (k *K8sClient) ListPods(ctx context.Context, namespace string) ([]PodInfo, 
 				ready++
 			}
 		}
+
+		// 提取容器列表（用于日志查询时选择）
+		containers := make([]ContainerInfo, 0, len(p.Spec.Containers))
+		for _, c := range p.Spec.Containers {
+			isReady := false
+			for _, cs := range p.Status.ContainerStatuses {
+				if cs.Name == c.Name && cs.Ready {
+					isReady = true
+					break
+				}
+			}
+			containers = append(containers, ContainerInfo{
+				Name:  c.Name,
+				Image: c.Image,
+				Ready: isReady,
+			})
+		}
+
 		out = append(out, PodInfo{
-			Name:      p.Name,
-			Namespace: p.Namespace,
-			Status:    string(p.Status.Phase),
-			Ready:     fmt.Sprintf("%d/%d", ready, total),
-			Restarts:  sumRestarts(p.Status.ContainerStatuses),
-			Age:       p.CreationTimestamp.Time,
-			Node:      p.Spec.NodeName,
-			Labels:    p.Labels,
+			Name:       p.Name,
+			Namespace:  p.Namespace,
+			Status:     string(p.Status.Phase),
+			Ready:      fmt.Sprintf("%d/%d", ready, total),
+			Restarts:   sumRestarts(p.Status.ContainerStatuses),
+			Age:        p.CreationTimestamp.Time,
+			Node:       p.Spec.NodeName,
+			Labels:     p.Labels,
+			Containers: containers,
 		})
 	}
 	return out, nil
 }
 
 type PodInfo struct {
-	Name      string            `json:"name"`
-	Namespace string            `json:"namespace"`
-	Status    string            `json:"status"`
-	Ready     string            `json:"ready"`
-	Restarts  int32             `json:"restarts"`
-	Age       time.Time         `json:"age"`
-	Node      string            `json:"node,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	Name       string            `json:"name"`
+	Namespace  string            `json:"namespace"`
+	Status     string            `json:"status"`
+	Ready      string            `json:"ready"`
+	Restarts   int32             `json:"restarts"`
+	Age        time.Time         `json:"age"`
+	Node       string            `json:"node,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Containers []ContainerInfo   `json:"containers,omitempty"`
+}
+
+type ContainerInfo struct {
+	Name  string `json:"name"`
+	Image string `json:"image,omitempty"`
+	Ready bool   `json:"ready"`
 }
 
 func sumRestarts(statuses []corev1.ContainerStatus) int32 {

@@ -146,40 +146,47 @@ export default function LogsPage() {
     }
   }
 
-  const searchClsLogs = async () => {
+  const searchClsLogs = async (silent = false) => {
     if (!selectedRegion) {
-      Toast.show({ content: '请先选择地域', icon: 'fail' })
+      if (!silent) Toast.show({ content: '请先选择地域', icon: 'fail' })
       return
     }
     if (!selectedLogset) {
-      Toast.show({ content: '请先选择日志集', icon: 'fail' })
-      return
-    }
-    if (!clsKeyword.trim()) {
-      Toast.show({ content: '请输入搜索关键词', icon: 'fail' })
+      if (!silent) Toast.show({ content: '请先选择日志集', icon: 'fail' })
       return
     }
     setClsLoading(true)
     try {
+      // 无关键词时使用 * 查询全部（腾讯云CLS语法）
+      const query = clsKeyword.trim() || '*'
       const result = await api.searchCLSLogs({
         region: selectedRegion,
         logset_id: selectedLogset,
-        query: clsKeyword,
+        query,
         limit: 100
       })
       setClsLogs(result.logs || [])
-      if (result.logs && result.logs.length > 0) {
-        Toast.show({ content: `找到 ${result.logs.length} 条日志`, icon: 'success' })
-      } else {
-        Toast.show({ content: '未找到匹配的日志', icon: 'fail' })
+      if (!silent) {
+        if (result.logs && result.logs.length > 0) {
+          Toast.show({ content: `找到 ${result.logs.length} 条日志`, icon: 'success' })
+        } else {
+          Toast.show({ content: '未找到匹配的日志', icon: 'fail' })
+        }
       }
     } catch (e: any) {
-      Toast.show({ content: e?.response?.data?.error || '查询失败', icon: 'fail' })
+      if (!silent) Toast.show({ content: e?.response?.data?.error || '查询失败', icon: 'fail' })
       setClsLogs([])
     } finally {
       setClsLoading(false)
     }
   }
+
+  // 选择日志集后自动加载最近日志
+  useEffect(() => {
+    if (selectedRegion && selectedLogset && activeTab === 'cloud') {
+      searchClsLogs(true)
+    }
+  }, [selectedLogset])
 
   return (
     <div className="page">
@@ -307,7 +314,7 @@ export default function LogsPage() {
                       placeholder="输入关键词搜索日志"
                       value={clsKeyword}
                       onChange={setClsKeyword}
-                      onEnterPress={searchClsLogs}
+                      onEnterPress={() => searchClsLogs(false)}
                       clearable
                       style={{ '--font-size': '12px' } as any}
                     />
@@ -317,11 +324,11 @@ export default function LogsPage() {
                     block
                     color="primary"
                     size="small"
-                    onClick={searchClsLogs}
+                    onClick={() => searchClsLogs(false)}
                     loading={clsLoading}
                     disabled={!selectedRegion || !selectedLogset}
                   >
-                    搜索日志
+                    {clsKeyword.trim() ? '搜索日志' : '查看最新日志'}
                   </Button>
                 </div>
 
@@ -335,13 +342,16 @@ export default function LogsPage() {
                   <div className="card">
                     <div style={{
                       marginBottom: 12,
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 600,
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      color: 'var(--text-primary)'
                     }}>
-                      <span>搜索结果（共 {clsLogs.length} 条）</span>
+                      <span>
+                        日志量: <span style={{ color: 'var(--accent-blue)' }}>{clsLogs.length}</span> 条
+                      </span>
                       <Button
                         size="mini"
                         color="primary"
@@ -363,19 +373,19 @@ export default function LogsPage() {
                         下载
                       </Button>
                     </div>
-                    <List mode="card" style={{ '--border-inner': '0px' } as any}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {clsLogs.map((log: any, idx: number) => (
-                        <List.Item key={idx}>
-                          <div style={{ fontSize: 12, fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                            {log.content}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>{fmtTime(log.timestamp)}</span>
-                            {log.source && <span>来源: {log.source}</span>}
-                          </div>
-                        </List.Item>
+                        <CLSLogItem
+                          key={idx}
+                          log={log}
+                          onFieldClick={(key, value) => {
+                            const query = `${key}:"${value}"`
+                            setClsKeyword(query)
+                            Toast.show({ content: `已设置查询: ${query}`, icon: 'success' })
+                          }}
+                        />
                       ))}
-                    </List>
+                    </div>
                   </div>
                 )}
               </Tabs.Tab>
@@ -547,6 +557,117 @@ export default function LogsPage() {
             </Tabs>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// 单条日志展示组件（可展开、字段可点击）
+function CLSLogItem({ log, onFieldClick }: { log: any; onFieldClick: (key: string, value: string) => void }) {
+  const [expanded, setExpanded] = useState(false)
+
+  // 尝试将内容解析为JSON对象，如果是键值对则展示为字段列表
+  let parsedFields: { key: string; value: string }[] | null = null
+  try {
+    if (log.content && typeof log.content === 'string') {
+      const obj = JSON.parse(log.content)
+      if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+        parsedFields = Object.entries(obj).map(([key, value]) => ({
+          key,
+          value: typeof value === 'object' ? JSON.stringify(value) : String(value)
+        }))
+      }
+    }
+  } catch {}
+
+  return (
+    <div style={{
+      background: 'var(--bg-elevated)',
+      borderRadius: 8,
+      padding: 10,
+      border: '1px solid var(--border-color)'
+    }}>
+      {/* 时间戳 */}
+      <div style={{
+        fontSize: 11,
+        color: 'var(--text-tertiary)',
+        marginBottom: 6,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <span style={{ fontFamily: 'ui-monospace, monospace' }}>
+          {fmtTime(log.timestamp)}
+        </span>
+        {log.source && (
+          <span
+            onClick={() => onFieldClick('source', log.source)}
+            style={{
+              background: 'var(--accent-blue-bg)',
+              color: 'var(--accent-blue)',
+              padding: '2px 6px',
+              borderRadius: 4,
+              cursor: 'pointer'
+            }}
+          >
+            {log.source}
+          </span>
+        )}
+      </div>
+
+      {/* 内容 */}
+      {parsedFields && parsedFields.length > 0 ? (
+        <div>
+          {(expanded ? parsedFields : parsedFields.slice(0, 5)).map((f, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, fontSize: 12, alignItems: 'flex-start' }}>
+              <span
+                onClick={() => onFieldClick(f.key, f.value)}
+                style={{
+                  color: 'var(--accent-blue)',
+                  fontWeight: 600,
+                  fontFamily: 'ui-monospace, monospace',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  minWidth: 80
+                }}
+              >
+                {f.key}
+              </span>
+              <span style={{
+                color: 'var(--text-primary)',
+                fontFamily: 'ui-monospace, monospace',
+                wordBreak: 'break-all',
+                flex: 1
+              }}>
+                {f.value}
+              </span>
+            </div>
+          ))}
+          {parsedFields.length > 5 && (
+            <div
+              onClick={() => setExpanded(!expanded)}
+              style={{
+                fontSize: 11,
+                color: 'var(--accent-blue)',
+                cursor: 'pointer',
+                marginTop: 4,
+                textAlign: 'center'
+              }}
+            >
+              {expanded ? '收起' : `展开全部 (${parsedFields.length} 个字段)`}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          fontSize: 12,
+          fontFamily: 'ui-monospace, Monaco, Menlo, monospace',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          color: 'var(--text-primary)'
+        }}>
+          {log.content}
+        </div>
       )}
     </div>
   )
