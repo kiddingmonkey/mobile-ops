@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -773,33 +772,18 @@ type VersionInfo struct {
 	PublishedAt string `json:"published_at"`
 }
 
-// GetLatestVersion 获取最新版本信息（从腾讯云COS）
+// GetLatestVersion 获取最新版本信息（从GitHub Releases）
 func (h *Handler) GetLatestVersion(c *gin.Context) {
-	// 通过环境变量配置COS域名
-	bucket := os.Getenv("COS_BUCKET")
-	region := os.Getenv("COS_REGION")
-	accelerate := os.Getenv("COS_ACCELERATE")
+	// GitHub Releases API
+	githubAPI := "https://api.github.com/repos/kiddingmonkey/mobile-ops/releases/latest"
 
-	var cosURL string
-	if bucket == "" {
-		bucket = "cloudpilot-1334049535"
-	}
-	if accelerate == "true" {
-		cosURL = "https://" + bucket + ".cos.accelerate.myqcloud.com/releases/latest.json"
-	} else {
-		if region == "" {
-			region = "ap-guangzhou"
-		}
-		cosURL = "https://" + bucket + ".cos." + region + ".myqcloud.com/releases/latest.json"
-	}
-
-	// 从COS获取版本信息
-	resp, err := http.Get(cosURL)
+	// 获取最新Release信息
+	resp, err := http.Get(githubAPI)
 	if err != nil {
 		// 降级：返回默认版本
 		c.JSON(200, VersionInfo{
 			Version:     "1.1.0",
-			Build:       "12c2c89",
+			Build:       "3d09822",
 			DownloadURL: "",
 			Changelog:   "当前版本",
 			Required:    false,
@@ -813,11 +797,70 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 		return
 	}
 
-	var versionInfo VersionInfo
-	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
+	// 解析GitHub Release响应
+	var releaseData struct {
+		TagName string `json:"tag_name"`
+		Body    string `json:"body"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+			Size               int64  `json:"size"`
+		} `json:"assets"`
+		PublishedAt string `json:"published_at"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releaseData); err != nil {
 		c.JSON(500, gin.H{"error": "解析版本信息失败"})
 		return
 	}
 
-	c.JSON(200, versionInfo)
+	// 查找version.json文件
+	var versionFileURL string
+	for _, asset := range releaseData.Assets {
+		if asset.Name == "version.json" {
+			versionFileURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	// 如果有version.json，直接使用
+	if versionFileURL != "" {
+		versionResp, err := http.Get(versionFileURL)
+		if err == nil && versionResp.StatusCode == 200 {
+			var versionInfo VersionInfo
+			if json.NewDecoder(versionResp.Body).Decode(&versionInfo) == nil {
+				versionResp.Body.Close()
+				c.JSON(200, versionInfo)
+				return
+			}
+			versionResp.Body.Close()
+		}
+	}
+
+	// 降级：从Release信息构建版本信息
+	var downloadURL string
+	var fileSize int64
+	for _, asset := range releaseData.Assets {
+		if asset.Name == "cloudpilot-latest.apk" {
+			downloadURL = asset.BrowserDownloadURL
+			fileSize = asset.Size
+			break
+		}
+	}
+
+	// 提取版本号（去掉v前缀）
+	version := releaseData.TagName
+	if len(version) > 0 && version[0] == 'v' {
+		version = version[1:]
+	}
+
+	c.JSON(200, VersionInfo{
+		Version:     version,
+		Build:       "release",
+		DownloadURL: downloadURL,
+		Changelog:   releaseData.Body,
+		Required:    false,
+		FileSize:    fileSize,
+		PublishedAt: releaseData.PublishedAt,
+	})
 }

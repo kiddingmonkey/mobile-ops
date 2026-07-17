@@ -83,7 +83,7 @@ jobs:
           path: frontend/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
-      # ===== 上传到腾讯云COS =====
+      # ===== 获取版本信息 =====
       - name: Get version info
         id: version
         run: |
@@ -92,75 +92,82 @@ jobs:
           BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           APK_PATH=$(find frontend/android/app/build/outputs/apk/debug -name "*.apk" | head -1)
           FILE_SIZE=$(stat -c%s "$APK_PATH")
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_sha=$BUILD_SHA" >> $GITHUB_OUTPUT
           echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
 
-      - name: Install coscli
-        if: env.COS_SECRET_ID != ''
-        env:
-          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
-        run: |
-          wget -q https://cosbrowser.cloud.tencent.com/software/coscli/coscli-linux -O /tmp/coscli
-          chmod +x /tmp/coscli
-
-      - name: Upload to COS
-        if: env.COS_SECRET_ID != ''
-        env:
-          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
-          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
-          COS_BUCKET: ${{ secrets.COS_BUCKET }}
-          COS_REGION: ${{ secrets.COS_REGION }}
-          COS_ACCELERATE: ${{ secrets.COS_ACCELERATE }}
+      - name: Rename APK for release
         run: |
           APK=${{ steps.version.outputs.apk_path }}
           VER=${{ steps.version.outputs.version }}
+          DIR=$(dirname "$APK")
+          cp "$APK" "$DIR/cloudpilot-v${VER}.apk"
+          cp "$APK" "$DIR/cloudpilot-latest.apk"
 
-          # 上传APK（直接在命令中传入认证参数）
-          /tmp/coscli cp "$APK" "cos://${COS_BUCKET}/releases/cloudpilot-v${VER}.apk" \
-            -e "cos.${COS_REGION}.myqcloud.com" \
-            -i "${COS_SECRET_ID}" \
-            -k "${COS_SECRET_KEY}"
+      # ===== 创建GitHub Release =====
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CHANGELOG=$(git log -1 --pretty=%B)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          /tmp/coscli cp "$APK" "cos://${COS_BUCKET}/releases/cloudpilot-latest.apk" \
-            -e "cos.${COS_REGION}.myqcloud.com" \
-            -i "${COS_SECRET_ID}" \
-            -k "${COS_SECRET_KEY}"
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: CloudPilot v${{ steps.version.outputs.version }}
+          body: |
+            **版本**: ${{ steps.version.outputs.version }}
+            **构建**: ${{ steps.version.outputs.build_sha }}
+            **大小**: ${{ steps.version.outputs.file_size }} 字节
+            **发布时间**: ${{ steps.version.outputs.build_time }}
 
-          # 生成下载域名
-          if [ "$COS_ACCELERATE" = "true" ]; then
-            DOMAIN="${COS_BUCKET}.cos.accelerate.myqcloud.com"
-          else
-            DOMAIN="${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com"
-          fi
+            ## 更新内容
 
-          # 生成并上传版本信息
-          cat > /tmp/latest.json << EOF
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## 下载
+
+            - [cloudpilot-latest.apk](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/cloudpilot-latest.apk) - 推荐下载
+            - [cloudpilot-v${{ steps.version.outputs.version }}.apk](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/cloudpilot-v${{ steps.version.outputs.version }}.apk) - 带版本号
+
+          files: |
+            frontend/android/app/build/outputs/apk/debug/cloudpilot-v${{ steps.version.outputs.version }}.apk
+            frontend/android/app/build/outputs/apk/debug/cloudpilot-latest.apk
+            frontend/dist.zip
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ===== 生成版本信息文件（供后端使用）=====
+      - name: Generate version.json
+        run: |
+          VER=${{ steps.version.outputs.version }}
+          cat > version.json << EOF
           {
             "version": "${VER}",
             "build": "${{ steps.version.outputs.build_sha }}",
-            "download_url": "https://${DOMAIN}/releases/cloudpilot-latest.apk",
-            "changelog": "$(git log -1 --pretty=%B | head -1 | sed 's/"/\\"/g')",
+            "download_url": "https://github.com/${{ github.repository }}/releases/download/v${VER}/cloudpilot-latest.apk",
+            "changelog": $(echo '${{ steps.changelog.outputs.changelog }}' | jq -Rs .),
             "required": false,
             "file_size": ${{ steps.version.outputs.file_size }},
             "published_at": "${{ steps.version.outputs.build_time }}"
           }
           EOF
+          cat version.json
 
-          /tmp/coscli cp /tmp/latest.json "cos://${COS_BUCKET}/releases/latest.json" \
-            -e "cos.${COS_REGION}.myqcloud.com" \
-            -i "${COS_SECRET_ID}" \
-            -k "${COS_SECRET_KEY}"
-
-          echo "✅ Uploaded to COS: https://${DOMAIN}/releases/cloudpilot-latest.apk"
-
-      - name: Create Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload version.json to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            frontend/android/app/build/outputs/apk/debug/*.apk
-            frontend/dist.zip
-          generate_release_notes: true
+          tag_name: v${{ steps.version.outputs.version }}
+          files: version.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
