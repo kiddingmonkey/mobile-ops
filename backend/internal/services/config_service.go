@@ -962,3 +962,18 @@ func firstFloat(s clients.PromSeries) float64 {
 	f, _ := strconv.ParseFloat(str, 64)
 	return f
 }
+
+// GetPromSource 获取PrometheusSource配置
+func (s *ConfigService) GetPromSource(ctx context.Context, id int64) (*models.PrometheusSource, error) {
+	var ps models.PrometheusSource
+	err := s.db.GetContext(ctx, &ps, `SELECT * FROM prometheus_sources WHERE id=$1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ps, nil
+}
+
+// DecryptAuth 解密auth字段
+func (s *ConfigService) DecryptAuth(encrypted []byte) (string, error) {
+	return s.cipher.Decrypt(encrypted)
+}

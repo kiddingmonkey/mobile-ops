@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"mobile-ops/internal/clients"
 	"mobile-ops/internal/models"
 	"mobile-ops/internal/services"
 )
@@ -1027,4 +1030,166 @@ func (h *Handler) GetResourceEvents(c *gin.Context) {
 		return
 	}
 	jsonList(c, events)
+}
+
+// GetPodMetrics 获取Pod监控数据（CPU/内存/网络/磁盘）
+// GET /clusters/:id/pods/:ns/:name/metrics?range=1h
+func (h *Handler) GetPodMetrics(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	timeRange := c.DefaultQuery("range", "1h")
+
+	ctx := c.Request.Context()
+
+	// 1. 拿集群配置，看是否关联Prom
+	cluster, err := h.config.GetCluster(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+	if cluster.PromSourceID == nil || *cluster.PromSourceID == 0 {
+		c.JSON(404, gin.H{"error": "cluster has no prom_source configured"})
+		return
+	}
+
+	// 2. 拿PromSource配置
+	promSource, err := h.config.GetPromSource(ctx, *cluster.PromSourceID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get prom source"})
+		return
+	}
+
+	// 解密auth
+	authStr := ""
+	if len(promSource.AuthEncrypted) > 0 {
+		decrypted, err := h.config.DecryptAuth(promSource.AuthEncrypted)
+		if err == nil {
+			authStr = decrypted
+		}
+	}
+
+	// 3. 创建PromClient并查询
+	promClient := clients.NewPromClient(promSource.URL, promSource.AuthType, authStr)
+
+	// 解析时间范围
+	duration := parseDuration(timeRange)
+	now := time.Now()
+	start := now.Add(-duration)
+	step := duration / 60 // 60个点
+
+	// 4. 并发查4个指标
+	type metricResult struct {
+		Name string
+		Data [][]interface{} // [[timestamp, value], ...]
+		Err  error
+	}
+
+	resultChan := make(chan metricResult, 4)
+
+	// CPU: container_cpu_usage_seconds_total rate
+	go func() {
+		query := fmt.Sprintf(
+			`rate(container_cpu_usage_seconds_total{namespace="%s",pod="%s",container!=""}[5m])`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			// 合并所有容器的CPU
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "cpu", Data: data, Err: err}
+	}()
+
+	// 内存: container_memory_working_set_bytes
+	go func() {
+		query := fmt.Sprintf(
+			`container_memory_working_set_bytes{namespace="%s",pod="%s",container!=""}`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "memory", Data: data, Err: err}
+	}()
+
+	// 网络接收: container_network_receive_bytes_total rate
+	go func() {
+		query := fmt.Sprintf(
+			`rate(container_network_receive_bytes_total{namespace="%s",pod="%s"}[5m])`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "network_rx", Data: data, Err: err}
+	}()
+
+	// 网络发送: container_network_transmit_bytes_total rate
+	go func() {
+		query := fmt.Sprintf(
+			`rate(container_network_transmit_bytes_total{namespace="%s",pod="%s"}[5m])`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "network_tx", Data: data, Err: err}
+	}()
+
+	// 收集结果
+	metrics := make(map[string][][]interface{})
+	for i := 0; i < 4; i++ {
+		r := <-resultChan
+		if r.Err == nil {
+			metrics[r.Name] = r.Data
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"cpu":        metrics["cpu"],
+		"memory":     metrics["memory"],
+		"network_rx": metrics["network_rx"],
+		"network_tx": metrics["network_tx"],
+	})
+}
+
+func parseDuration(s string) time.Duration {
+	// 支持 5m, 15m, 1h, 6h, 24h
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return time.Hour
+	}
+	return d
 }

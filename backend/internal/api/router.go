@@ -79,6 +79,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/pods/:namespace/:name", h.GetPodDetail)
 		priv.GET("/clusters/:id/pods/:namespace/:name/events", h.ListPodEvents)
 		priv.GET("/clusters/:id/pods/:namespace/:name/logs", h.GetPodLogs)
+		priv.GET("/clusters/:id/pods/:namespace/:name/metrics", h.GetPodMetrics)
 
 		// Pod 容器文件浏览 & 终端
 		priv.GET("/clusters/:id/pods/:namespace/:name/files", h.ListPodFiles)
