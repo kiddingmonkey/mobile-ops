@@ -772,26 +772,18 @@ type VersionInfo struct {
 	PublishedAt string `json:"published_at"`
 }
 
-// GetLatestVersion 获取最新版本信息（从腾讯云COS）
+// GetLatestVersion 获取最新版本信息（从GitHub Releases）
 func (h *Handler) GetLatestVersion(c *gin.Context) {
-	// 构建COS URL
-	bucket := "cloudpilot-1334049535"
-	accelerate := true // 使用全球加速
+	// GitHub Releases API
+	githubAPI := "https://api.github.com/repos/kiddingmonkey/mobile-ops/releases/latest"
 
-	var cosURL string
-	if accelerate {
-		cosURL = "https://" + bucket + ".cos.accelerate.myqcloud.com/releases/latest.json"
-	} else {
-		cosURL = "https://" + bucket + ".cos.ap-guangzhou.myqcloud.com/releases/latest.json"
-	}
-
-	// 从COS获取版本信息
-	resp, err := http.Get(cosURL)
+	// 获取最新Release信息
+	resp, err := http.Get(githubAPI)
 	if err != nil {
 		// 降级：返回默认版本
 		c.JSON(200, VersionInfo{
 			Version:     "1.1.0",
-			Build:       "2b14590",
+			Build:       "d053b04",
 			DownloadURL: "",
 			Changelog:   "当前版本",
 			Required:    false,
@@ -805,11 +797,49 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 		return
 	}
 
-	var versionInfo VersionInfo
-	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
+	// 解析GitHub Release响应
+	var releaseData struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releaseData); err != nil {
 		c.JSON(500, gin.H{"error": "解析版本信息失败"})
 		return
 	}
 
-	c.JSON(200, versionInfo)
+	// 查找version.json
+	var versionFileURL string
+	for _, asset := range releaseData.Assets {
+		if asset.Name == "version.json" {
+			versionFileURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	// 如果有version.json，直接使用
+	if versionFileURL != "" {
+		versionResp, err := http.Get(versionFileURL)
+		if err == nil && versionResp.StatusCode == 200 {
+			var versionInfo VersionInfo
+			if json.NewDecoder(versionResp.Body).Decode(&versionInfo) == nil {
+				versionResp.Body.Close()
+				c.JSON(200, versionInfo)
+				return
+			}
+			versionResp.Body.Close()
+		}
+	}
+
+	// 降级：返回默认信息
+	c.JSON(200, VersionInfo{
+		Version:     "1.1.0",
+		Build:       "latest",
+		DownloadURL: "",
+		Changelog:   "请更新到最新版本",
+		Required:    false,
+	})
 }
