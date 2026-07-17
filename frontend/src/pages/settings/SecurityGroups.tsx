@@ -12,15 +12,25 @@ import dayjs from 'dayjs'
 export default function SecurityGroupsPage() {
   const nav = useNavigate()
   const [list, setList] = useState<SGTemplate[]>([])
-  const [myIP, setMyIP] = useState<string>('...')
+  const [myIP, setMyIP] = useState<string>('准备中...')
+  const [ipStatus, setIpStatus] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      // 获取公网IP（使用国内可访问的服务）
-      const ipResult = await fetchPublicIP()
+      // 获取公网IP（使用国内可访问的服务，显示进度）
+      const ipResult = await fetchPublicIP((progress) => {
+        if (progress.status === 'trying') {
+          setMyIP('获取中...')
+          setIpStatus(`正在通过 ${progress.service} 获取 (${progress.index}/${progress.total})`)
+        } else if (progress.status === 'success') {
+          setIpStatus(`来自 ${progress.service}`)
+        } else {
+          setIpStatus('所有服务都失败了')
+        }
+      })
 
       // 从客户端加载白名单模板（不依赖服务器）
       const templates = loadTemplates()
@@ -258,10 +268,26 @@ export default function SecurityGroupsPage() {
             marginBottom: 12,
             marginTop: 8
           }}>
-            <div style={{ fontSize: 11, opacity: 0.9 }}>当前公网 IP</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, fontFamily: 'ui-monospace, monospace' }}>
-              {myIP}
+            <div style={{ fontSize: 11, opacity: 0.9 }}>
+              当前公网 IP {ipStatus && myIP !== '获取中...' && myIP !== '准备中...' && `· ${ipStatus}`}
             </div>
+            {(myIP === '获取中...' || myIP === '准备中...') ? (
+              <div style={{ fontSize: 14, marginTop: 6, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'white',
+                  animation: 'pulse 1s ease-in-out infinite'
+                }}/>
+                {ipStatus || '正在获取IP...'}
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, fontFamily: 'ui-monospace, monospace' }}>
+                {myIP}
+              </div>
+            )}
             <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85, lineHeight: 1.5 }}>
               {myIP !== '获取失败' && myIP !== '未知' ? (
                 <>

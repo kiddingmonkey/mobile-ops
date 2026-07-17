@@ -46,11 +46,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [remember, setRemember] = useState<RememberOption>('7d')
   const [autoTried, setAutoTried] = useState(false)
-  const [myIP, setMyIP] = useState<string>('获取中...')
+  const [myIP, setMyIP] = useState<string>('准备中...')
+  const [ipStatus, setIpStatus] = useState<string>('')
 
   // 获取当前IP（使用国内可访问的服务）
   useEffect(() => {
-    fetchPublicIP().then(ip => setMyIP(ip))
+    fetchPublicIP((progress) => {
+      if (progress.status === 'trying') {
+        setMyIP('获取中...')
+        setIpStatus(`正在通过 ${progress.service} 获取 (${progress.index}/${progress.total})`)
+      } else if (progress.status === 'success') {
+        setIpStatus(`已通过 ${progress.service} 获取`)
+      } else {
+        setIpStatus('所有服务都失败了')
+      }
+    }).then(ip => setMyIP(ip))
   }, [])
 
   const doLogin = async (username: string, password: string, silent = false) => {
@@ -239,7 +249,30 @@ export default function LoginPage() {
       {/* 底部按钮区 */}
       <div>
         {/* 当前IP显示 */}
-        {myIP !== '获取中...' && myIP !== '获取失败' && (
+        {(myIP === '获取中...' || myIP === '准备中...') && (
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: 'rgba(103, 126, 234, 0.15)',
+            borderRadius: 12,
+            border: '1px solid rgba(103, 126, 234, 0.3)',
+            color: 'var(--text-primary)'
+          }}>
+            <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4 }}>当前公网 IP</div>
+            <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: 'var(--accent-blue)',
+                animation: 'pulse 1s ease-in-out infinite'
+              }}/>
+              {ipStatus || '正在获取IP...'}
+            </div>
+          </div>
+        )}
+        {myIP !== '获取中...' && myIP !== '获取失败' && myIP !== '准备中...' && (
           <div style={{
             marginBottom: 16,
             padding: '12px 16px',
@@ -247,7 +280,9 @@ export default function LoginPage() {
             borderRadius: 12,
             color: 'white'
           }}>
-            <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 4 }}>当前公网 IP</div>
+            <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 4 }}>
+              当前公网 IP {ipStatus && `· ${ipStatus.replace('已通过 ', '来自 ')}`}
+            </div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>
               {myIP}
             </div>

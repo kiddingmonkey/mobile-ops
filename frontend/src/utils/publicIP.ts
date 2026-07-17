@@ -52,12 +52,34 @@ const IP_SERVICES: IPService[] = [
   }
 ]
 
+export interface FetchIPProgress {
+  status: 'trying' | 'success' | 'failed'
+  service: string
+  ip?: string
+  index: number
+  total: number
+}
+
 /**
  * 获取公网IP
  * 依次尝试多个服务，第一个成功的返回
+ * @param onProgress 进度回调，可以显示当前尝试的服务
+ * @param timeout 单个服务的超时时间（毫秒）
  */
-export async function fetchPublicIP(timeout = 3000): Promise<string> {
-  for (const service of IP_SERVICES) {
+export async function fetchPublicIP(
+  onProgress?: (progress: FetchIPProgress) => void,
+  timeout = 3000
+): Promise<string> {
+  for (let i = 0; i < IP_SERVICES.length; i++) {
+    const service = IP_SERVICES[i]
+
+    onProgress?.({
+      status: 'trying',
+      service: service.name,
+      index: i + 1,
+      total: IP_SERVICES.length
+    })
+
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), timeout)
@@ -65,7 +87,6 @@ export async function fetchPublicIP(timeout = 3000): Promise<string> {
       const resp = await fetch(service.url, {
         method: 'GET',
         signal: controller.signal,
-        // 避免CORS问题
         mode: 'cors',
         credentials: 'omit'
       })
@@ -87,6 +108,13 @@ export async function fetchPublicIP(timeout = 3000): Promise<string> {
       const ip = service.parse(data)
       if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
         console.log(`[fetchPublicIP] Got IP from ${service.name}: ${ip}`)
+        onProgress?.({
+          status: 'success',
+          service: service.name,
+          ip,
+          index: i + 1,
+          total: IP_SERVICES.length
+        })
         return ip
       }
     } catch (err) {
@@ -95,5 +123,11 @@ export async function fetchPublicIP(timeout = 3000): Promise<string> {
     }
   }
 
+  onProgress?.({
+    status: 'failed',
+    service: '',
+    index: IP_SERVICES.length,
+    total: IP_SERVICES.length
+  })
   return '获取失败'
 }
