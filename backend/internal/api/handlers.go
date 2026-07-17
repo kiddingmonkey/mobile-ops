@@ -772,18 +772,26 @@ type VersionInfo struct {
 	PublishedAt string `json:"published_at"`
 }
 
-// GetLatestVersion 获取最新版本信息（从GitHub Releases）
+// GetLatestVersion 获取最新版本信息（从腾讯云COS）
 func (h *Handler) GetLatestVersion(c *gin.Context) {
-	// GitHub Releases API
-	githubAPI := "https://api.github.com/repos/kiddingmonkey/mobile-ops/releases/latest"
+	// 构建COS URL
+	bucket := "cloudpilot-1334049535"
+	accelerate := true // 使用全球加速
 
-	// 获取最新Release信息
-	resp, err := http.Get(githubAPI)
+	var cosURL string
+	if accelerate {
+		cosURL = "https://" + bucket + ".cos.accelerate.myqcloud.com/releases/latest.json"
+	} else {
+		cosURL = "https://" + bucket + ".cos.ap-guangzhou.myqcloud.com/releases/latest.json"
+	}
+
+	// 从COS获取版本信息
+	resp, err := http.Get(cosURL)
 	if err != nil {
 		// 降级：返回默认版本
 		c.JSON(200, VersionInfo{
 			Version:     "1.1.0",
-			Build:       "3d09822",
+			Build:       "2b14590",
 			DownloadURL: "",
 			Changelog:   "当前版本",
 			Required:    false,
@@ -797,152 +805,11 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 		return
 	}
 
-	// 解析GitHub Release响应
-	var releaseData struct {
-		TagName string `json:"tag_name"`
-		Body    string `json:"body"`
-		Assets  []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-			Size               int64  `json:"size"`
-		} `json:"assets"`
-		PublishedAt string `json:"published_at"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&releaseData); err != nil {
+	var versionInfo VersionInfo
+	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
 		c.JSON(500, gin.H{"error": "解析版本信息失败"})
 		return
 	}
 
-	// 查找version.json文件
-	var versionFileURL string
-	for _, asset := range releaseData.Assets {
-		if asset.Name == "version.json" {
-			versionFileURL = asset.BrowserDownloadURL
-			break
-		}
-	}
-
-	// 如果有version.json，直接使用
-	if versionFileURL != "" {
-		versionResp, err := http.Get(versionFileURL)
-		if err == nil && versionResp.StatusCode == 200 {
-			var versionInfo VersionInfo
-			if json.NewDecoder(versionResp.Body).Decode(&versionInfo) == nil {
-				versionResp.Body.Close()
-				c.JSON(200, versionInfo)
-				return
-			}
-			versionResp.Body.Close()
-		}
-	}
-
-	// 降级：从Release信息构建版本信息
-	var downloadURL string
-	var fileSize int64
-	for _, asset := range releaseData.Assets {
-		if asset.Name == "cloudpilot-latest.apk" {
-			downloadURL = asset.BrowserDownloadURL
-			fileSize = asset.Size
-			break
-		}
-	}
-
-	// 提取版本号（去掉v前缀）
-	version := releaseData.TagName
-	if len(version) > 0 && version[0] == 'v' {
-		version = version[1:]
-	}
-
-	c.JSON(200, VersionInfo{
-		Version:     version,
-		Build:       "release",
-		DownloadURL: downloadURL,
-		Changelog:   releaseData.Body,
-		Required:    false,
-		FileSize:    fileSize,
-		PublishedAt: releaseData.PublishedAt,
-	})
-}
-
-// DownloadAPK 代理下载APK（解决国内访问GitHub慢的问题）
-func (h *Handler) DownloadAPK(c *gin.Context) {
-	// 获取最新Release信息
-	githubAPI := "https://api.github.com/repos/kiddingmonkey/mobile-ops/releases/latest"
-	resp, err := http.Get(githubAPI)
-	if err != nil {
-		c.JSON(503, gin.H{"error": "无法获取版本信息"})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		c.JSON(503, gin.H{"error": "无法获取版本信息"})
-		return
-	}
-
-	var releaseData struct {
-		Assets []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-			Size               int64  `json:"size"`
-		} `json:"assets"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&releaseData); err != nil {
-		c.JSON(500, gin.H{"error": "解析版本信息失败"})
-		return
-	}
-
-	// 查找APK文件
-	var apkURL string
-	var fileSize int64
-	for _, asset := range releaseData.Assets {
-		if asset.Name == "cloudpilot-latest.apk" {
-			apkURL = asset.BrowserDownloadURL
-			fileSize = asset.Size
-			break
-		}
-	}
-
-	if apkURL == "" {
-		c.JSON(404, gin.H{"error": "APK文件不存在"})
-		return
-	}
-
-	// 从GitHub下载APK
-	apkResp, err := http.Get(apkURL)
-	if err != nil {
-		c.JSON(503, gin.H{"error": "下载APK失败"})
-		return
-	}
-	defer apkResp.Body.Close()
-
-	if apkResp.StatusCode != 200 {
-		c.JSON(503, gin.H{"error": "下载APK失败"})
-		return
-	}
-
-	// 设置响应头
-	c.Header("Content-Type", "application/vnd.android.package-archive")
-	c.Header("Content-Disposition", "attachment; filename=cloudpilot-latest.apk")
-	c.Header("Content-Length", strconv.FormatInt(fileSize, 10))
-
-	// 流式转发给客户端
-	_, err = c.Writer.Write([]byte{})
-	c.Writer.Flush()
-
-	buffer := make([]byte, 32*1024) // 32KB缓冲区
-	for {
-		n, err := apkResp.Body.Read(buffer)
-		if n > 0 {
-			if _, writeErr := c.Writer.Write(buffer[:n]); writeErr != nil {
-				return
-			}
-			c.Writer.Flush()
-		}
-		if err != nil {
-			break
-		}
-	}
+	c.JSON(200, versionInfo)
 }

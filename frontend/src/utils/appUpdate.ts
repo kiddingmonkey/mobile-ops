@@ -77,11 +77,8 @@ export async function downloadAPK(
   onProgress?: (progress: number) => void
 ): Promise<string> {
   try {
-    // 优先使用后端代理下载（解决国内访问GitHub慢的问题）
-    const proxyURL = '/api/v1/download/apk'
-
-    // 使用fetch下载
-    const response = await fetch(proxyURL)
+    // 直接从COS下载APK
+    const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`下载失败: ${response.status}`)
     }

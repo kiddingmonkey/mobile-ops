@@ -110,7 +110,65 @@ jobs:
           cp "$APK" "$DIR/cloudpilot-v${VER}.apk"
           cp "$APK" "$DIR/cloudpilot-latest.apk"
 
-      # ===== 创建GitHub Release =====
+      # ===== 上传到腾讯云COS（使用官方Action）=====
+      - name: Generate version.json
+        run: |
+          VER=${{ steps.version.outputs.version }}
+          BUCKET=${{ secrets.COS_BUCKET }}
+          REGION=${{ secrets.COS_REGION }}
+          ACCELERATE=${{ secrets.COS_ACCELERATE }}
+
+          # 根据是否启用全球加速决定下载域名
+          if [ "$ACCELERATE" = "true" ]; then
+            DOMAIN="${BUCKET}.cos.accelerate.myqcloud.com"
+          else
+            DOMAIN="${BUCKET}.cos.${REGION}.myqcloud.com"
+          fi
+
+          cat > version.json << EOF
+          {
+            "version": "${VER}",
+            "build": "${{ steps.version.outputs.build_sha }}",
+            "download_url": "https://${DOMAIN}/releases/cloudpilot-latest.apk",
+            "changelog": $(git log -1 --pretty=%B | jq -Rs .),
+            "required": false,
+            "file_size": ${{ steps.version.outputs.file_size }},
+            "published_at": "${{ steps.version.outputs.build_time }}"
+          }
+          EOF
+          cat version.json
+
+      - name: Upload to Tencent Cloud COS
+        uses: TencentCloud/cos-action@v1
+        with:
+          secret_id: ${{ secrets.COS_SECRET_ID }}
+          secret_key: ${{ secrets.COS_SECRET_KEY }}
+          cos_bucket: ${{ secrets.COS_BUCKET }}
+          cos_region: ${{ secrets.COS_REGION }}
+          local_path: frontend/android/app/build/outputs/apk/debug/cloudpilot-v${{ steps.version.outputs.version }}.apk
+          remote_path: releases/cloudpilot-v${{ steps.version.outputs.version }}.apk
+
+      - name: Upload latest APK to COS
+        uses: TencentCloud/cos-action@v1
+        with:
+          secret_id: ${{ secrets.COS_SECRET_ID }}
+          secret_key: ${{ secrets.COS_SECRET_KEY }}
+          cos_bucket: ${{ secrets.COS_BUCKET }}
+          cos_region: ${{ secrets.COS_REGION }}
+          local_path: frontend/android/app/build/outputs/apk/debug/cloudpilot-latest.apk
+          remote_path: releases/cloudpilot-latest.apk
+
+      - name: Upload version.json to COS
+        uses: TencentCloud/cos-action@v1
+        with:
+          secret_id: ${{ secrets.COS_SECRET_ID }}
+          secret_key: ${{ secrets.COS_SECRET_KEY }}
+          cos_bucket: ${{ secrets.COS_BUCKET }}
+          cos_region: ${{ secrets.COS_REGION }}
+          local_path: version.json
+          remote_path: releases/latest.json
+
+      # ===== 同时创建GitHub Release作为备份 =====
       - name: Generate changelog
         id: changelog
         run: |
@@ -119,8 +177,7 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
-        id: create_release
+      - name: Create GitHub Release (backup)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -129,16 +186,13 @@ jobs:
             **版本**: ${{ steps.version.outputs.version }}
             **构建**: ${{ steps.version.outputs.build_sha }}
             **大小**: ${{ steps.version.outputs.file_size }} 字节
-            **发布时间**: ${{ steps.version.outputs.build_time }}
 
             ## 更新内容
-
             ${{ steps.changelog.outputs.changelog }}
 
-            ## 下载
-
-            - [cloudpilot-latest.apk](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/cloudpilot-latest.apk) - 推荐下载
-            - [cloudpilot-v${{ steps.version.outputs.version }}.apk](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/cloudpilot-v${{ steps.version.outputs.version }}.apk) - 带版本号
+            ## 下载（国内推荐腾讯云COS）
+            - 腾讯云COS（推荐）: https://${{ secrets.COS_BUCKET }}.cos.accelerate.myqcloud.com/releases/cloudpilot-latest.apk
+            - GitHub（备用）: [cloudpilot-latest.apk](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/cloudpilot-latest.apk)
 
           files: |
             frontend/android/app/build/outputs/apk/debug/cloudpilot-v${{ steps.version.outputs.version }}.apk
@@ -146,31 +200,5 @@ jobs:
             frontend/dist.zip
           draft: false
           prerelease: false
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ===== 生成版本信息文件（供后端使用）=====
-      - name: Generate version.json
-        run: |
-          VER=${{ steps.version.outputs.version }}
-          cat > version.json << EOF
-          {
-            "version": "${VER}",
-            "build": "${{ steps.version.outputs.build_sha }}",
-            "download_url": "https://github.com/${{ github.repository }}/releases/download/v${VER}/cloudpilot-latest.apk",
-            "changelog": $(echo '${{ steps.changelog.outputs.changelog }}' | jq -Rs .),
-            "required": false,
-            "file_size": ${{ steps.version.outputs.file_size }},
-            "published_at": "${{ steps.version.outputs.build_time }}"
-          }
-          EOF
-          cat version.json
-
-      - name: Upload version.json to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          files: version.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
