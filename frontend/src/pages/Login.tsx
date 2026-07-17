@@ -3,6 +3,7 @@ import { Button, Toast, Selector, Dialog } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api, friendlyApiError } from '@/api/client'
 import { useAuth } from '@/store'
+import { fetchPublicIP } from '@/utils/publicIP'
 import RemoteStatusBanner from '@/components/RemoteStatusBanner'
 
 // APK WebView + 国产输入法下 antd-mobile Input 的 onChange 有时不同步,
@@ -47,15 +48,9 @@ export default function LoginPage() {
   const [autoTried, setAutoTried] = useState(false)
   const [myIP, setMyIP] = useState<string>('获取中...')
 
-  // 获取当前IP（不需要登录）
+  // 获取当前IP（使用国内可访问的服务）
   useEffect(() => {
-    fetch('https://api.ipify.org?format=json', {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000)
-    })
-      .then(resp => resp.json())
-      .then(data => setMyIP(data.ip || '未知'))
-      .catch(() => setMyIP('获取失败'))
+    fetchPublicIP().then(ip => setMyIP(ip))
   }, [])
 
   const doLogin = async (username: string, password: string, silent = false) => {

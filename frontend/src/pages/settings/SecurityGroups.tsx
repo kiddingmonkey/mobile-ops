@@ -6,6 +6,7 @@ import PageShell from '@/components/PageShell'
 import { api, friendlyApiError } from '@/api/client'
 import { loadTemplates, deleteTemplate, exportTemplates, importTemplates, migrateFromServer } from '@/utils/sgStorage'
 import type { SGTemplate } from '@/utils/sgStorage'
+import { fetchPublicIP } from '@/utils/publicIP'
 import dayjs from 'dayjs'
 
 export default function SecurityGroupsPage() {
@@ -18,24 +19,8 @@ export default function SecurityGroupsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // 优先使用公网服务获取IP（不受18443端口限制）
-      let ipResult = '获取中...'
-      try {
-        const resp = await fetch('https://api.ipify.org?format=json', {
-          method: 'GET',
-          signal: AbortSignal.timeout(5000)
-        })
-        const data = await resp.json()
-        ipResult = data.ip || '未知'
-      } catch {
-        // 降级：尝试后端接口
-        try {
-          const whoami = await api.whoamiIP()
-          ipResult = whoami.ip || '未知'
-        } catch {
-          ipResult = '获取失败'
-        }
-      }
+      // 获取公网IP（使用国内可访问的服务）
+      const ipResult = await fetchPublicIP()
 
       // 从客户端加载白名单模板（不依赖服务器）
       const templates = loadTemplates()
