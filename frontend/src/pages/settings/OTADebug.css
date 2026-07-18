@@ -1,0 +1,86 @@
+.ota-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.ota-log-entry {
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 4px solid;
+  background: var(--ion-color-light);
+}
+
+.ota-log-entry.ota-log-info {
+  border-left-color: var(--ion-color-medium);
+}
+
+.ota-log-entry.ota-log-success {
+  border-left-color: var(--ion-color-success);
+  background: rgba(16, 220, 96, 0.05);
+}
+
+.ota-log-entry.ota-log-warn {
+  border-left-color: var(--ion-color-warning);
+  background: rgba(255, 206, 0, 0.05);
+}
+
+.ota-log-entry.ota-log-error {
+  border-left-color: var(--ion-color-danger);
+  background: rgba(235, 68, 90, 0.05);
+}
+
+.ota-log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ota-log-header ion-icon {
+  font-size: 18px;
+}
+
+.ota-log-time {
+  margin-left: auto;
+  font-size: 0.75em;
+  color: var(--ion-color-medium);
+  font-family: monospace;
+}
+
+.ota-log-message {
+  font-size: 0.9em;
+  line-height: 1.4;
+  color: var(--ion-color-dark);
+  margin-left: 26px;
+}
+
+.ota-log-details {
+  margin-top: 8px;
+  margin-left: 26px;
+}
+
+.ota-log-details summary {
+  cursor: pointer;
+  font-size: 0.85em;
+  color: var(--ion-color-primary);
+  user-select: none;
+  margin-bottom: 4px;
+}
+
+.ota-log-details summary:hover {
+  text-decoration: underline;
+}
+
+.ota-log-details pre {
+  font-size: 0.75em;
+  background: var(--ion-color-step-50);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0;
+  color: var(--ion-color-dark);
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+}

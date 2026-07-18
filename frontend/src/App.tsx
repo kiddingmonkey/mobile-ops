@@ -35,6 +35,7 @@ import CloudNewPage from '@/pages/settings/CloudNew'
 import ClusterNewPage from '@/pages/settings/ClusterNew'
 import ClusterEditPage from '@/pages/settings/ClusterEdit'
 import NotificationSettings from '@/pages/settings/NotificationSettings'
+import OTADebug from '@/pages/settings/OTADebug'
 import UpdateChecker from '@/components/UpdateChecker'
 
 const CURRENT_VERSION_KEY = 'mobile_ops_dist_version'
@@ -147,6 +148,7 @@ export default function App() {
           <Route path="/settings/clusters/new" element={<Protected><ClusterNewPage /></Protected>} />
           <Route path="/settings/clusters/:id/edit" element={<Protected><ClusterEditPage /></Protected>} />
           <Route path="/settings/notifications" element={<Protected><NotificationSettings /></Protected>} />
+          <Route path="/settings/ota-debug" element={<Protected><OTADebug /></Protected>} />
           {/* 安全组页面：支持未登录访问（只需要公网IP和腾讯云API，不依赖后端） */}
           <Route path="/settings/security-groups" element={<SecurityGroupsPage />} />
           <Route path="/settings/security-groups/new" element={<Protected><SecurityGroupNewPage /></Protected>} />

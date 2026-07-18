@@ -19,6 +19,80 @@ import { setActiveVersion, AppVersion } from './version'
 const CURRENT_VERSION_KEY = 'mobile_ops_dist_version'
 const WEBROOT_DIR = 'webroot'
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
+const OTA_DEBUG_LOG_KEY = 'mobile_ops_ota_debug_log'
+const MAX_LOG_ENTRIES = 200
+
+export interface OTALogEntry {
+  timestamp: number
+  level: 'info' | 'warn' | 'error' | 'success'
+  step: string
+  message: string
+  details?: any
+}
+
+class OTADebugLogger {
+  private logs: OTALogEntry[] = []
+
+  constructor() {
+    this.loadLogs()
+  }
+
+  private loadLogs() {
+    try {
+      const stored = localStorage.getItem(OTA_DEBUG_LOG_KEY)
+      if (stored) {
+        this.logs = JSON.parse(stored)
+      }
+    } catch (e) {
+      console.warn('[OTADebugLogger] Failed to load logs:', e)
+    }
+  }
+
+  private saveLogs() {
+    try {
+      // 只保留最近 MAX_LOG_ENTRIES 条
+      if (this.logs.length > MAX_LOG_ENTRIES) {
+        this.logs = this.logs.slice(-MAX_LOG_ENTRIES)
+      }
+      localStorage.setItem(OTA_DEBUG_LOG_KEY, JSON.stringify(this.logs))
+    } catch (e) {
+      console.warn('[OTADebugLogger] Failed to save logs:', e)
+    }
+  }
+
+  log(level: 'info' | 'warn' | 'error' | 'success', step: string, message: string, details?: any) {
+    const entry: OTALogEntry = {
+      timestamp: Date.now(),
+      level,
+      step,
+      message,
+      details
+    }
+    this.logs.push(entry)
+    this.saveLogs()
+
+    // 同时输出到 console
+    const prefix = `[OTA ${step}]`
+    if (level === 'error') {
+      console.error(prefix, message, details || '')
+    } else if (level === 'warn') {
+      console.warn(prefix, message, details || '')
+    } else {
+      console.log(prefix, message, details || '')
+    }
+  }
+
+  getLogs(): OTALogEntry[] {
+    return [...this.logs]
+  }
+
+  clearLogs() {
+    this.logs = []
+    localStorage.removeItem(OTA_DEBUG_LOG_KEY)
+  }
+}
+
+export const otaDebugLogger = new OTADebugLogger()
 
 export interface UpdateInfo {
   version: string
@@ -46,6 +120,8 @@ export async function checkForUpdate(): Promise<{
   error?: string
 }> {
   const currentVersion = localStorage.getItem(CURRENT_VERSION_KEY) || 'builtin'
+  otaDebugLogger.log('info', 'checkForUpdate', `开始检查更新，当前版本: ${currentVersion}`)
+
   try {
     const r = await axios.get(`${API_BASE}/updates/latest`, {
       timeout: 12000, // 12s (慢网络容错)
@@ -54,10 +130,19 @@ export async function checkForUpdate(): Promise<{
       }
     })
     const info = r.data as UpdateInfo
+    const hasUpdate = info.version !== currentVersion
+
+    otaDebugLogger.log(
+      hasUpdate ? 'success' : 'info',
+      'checkForUpdate',
+      hasUpdate ? `发现新版本: ${info.version}` : `已是最新版本: ${info.version}`,
+      { info }
+    )
+
     return {
       info,
       currentVersion,
-      hasUpdate: info.version !== currentVersion
+      hasUpdate
     }
   } catch (e: any) {
     let error = '检查失败'
@@ -74,6 +159,14 @@ export async function checkForUpdate(): Promise<{
     } else if (e.message) {
       error = e.message
     }
+
+    otaDebugLogger.log('error', 'checkForUpdate', error, {
+      code: e.code,
+      status: e.response?.status,
+      message: e.message,
+      stack: e.stack
+    })
+
     return {
       info: null,
       currentVersion,
@@ -89,159 +182,198 @@ export async function downloadAndApply(
   onProgress?: (loaded: number, total: number) => void,
   onStatus?: (status: string) => void
 ): Promise<void> {
+  otaDebugLogger.log('info', 'downloadAndApply', `开始下载并应用版本: ${info.version}`, { info })
+
   if (!Capacitor.isNativePlatform()) {
-    throw new Error('OTA 更新仅在 APK 内可用; 浏览器请刷新页面')
+    const error = 'OTA 更新仅在 APK 内可用; 浏览器请刷新页面'
+    otaDebugLogger.log('error', 'downloadAndApply', error)
+    throw new Error(error)
   }
   const token = localStorage.getItem('mobile_ops_token') || ''
 
   // 1. 下载 zip 二进制
   onStatus?.('正在下载更新包...')
-  const zipResp = await axios.get(`${API_BASE}/updates/dist.zip`, {
-    responseType: 'arraybuffer',
-    timeout: 120000,
-    headers: { Authorization: `Bearer ${token}` },
-    onDownloadProgress: (e) => {
-      if (onProgress) onProgress(e.loaded, e.total || info.size)
-    }
-  })
-  const zipData = new Uint8Array(zipResp.data)
-
-  // 2. 解压
-  onStatus?.('正在解压文件...')
-  const files = unzipSync(zipData)
-
-  // 从解压结果里读 version.json,更新活跃版本号
-  const versionEntry = files['version.json'] || files['dist/version.json']
-  if (versionEntry) {
-    try {
-      const v = JSON.parse(strFromU8(versionEntry)) as AppVersion
-      setActiveVersion(v)
-    } catch {}
-  }
-
-  // 3. 写入 Directory.Data/webroot/<version>/
-  const versionDir = `${WEBROOT_DIR}/${info.version}`
-
-  // 清理老的临时目录 (同名的 version 目录)
-  onStatus?.('正在准备存储目录...')
+  otaDebugLogger.log('info', 'download', '开始下载 dist.zip')
   try {
-    await Filesystem.rmdir({
+    const zipResp = await axios.get(`${API_BASE}/updates/dist.zip`, {
+      responseType: 'arraybuffer',
+      timeout: 120000,
+      headers: { Authorization: `Bearer ${token}` },
+      onDownloadProgress: (e) => {
+        if (onProgress) onProgress(e.loaded, e.total || info.size)
+      }
+    })
+    const zipData = new Uint8Array(zipResp.data)
+    otaDebugLogger.log('success', 'download', `下载完成，大小: ${zipData.length} 字节`)
+
+    // 2. 解压
+    onStatus?.('正在解压文件...')
+    otaDebugLogger.log('info', 'unzip', '开始解压文件')
+    const files = unzipSync(zipData)
+    const fileCount = Object.keys(files).length
+    otaDebugLogger.log('success', 'unzip', `解压完成，共 ${fileCount} 个文件`)
+
+    // 从解压结果里读 version.json,更新活跃版本号
+    const versionEntry = files['version.json'] || files['dist/version.json']
+    if (versionEntry) {
+      try {
+        const v = JSON.parse(strFromU8(versionEntry)) as AppVersion
+        setActiveVersion(v)
+        otaDebugLogger.log('info', 'version', `读取到 version.json: ${v.appVersion}`, v)
+      } catch (e) {
+        otaDebugLogger.log('warn', 'version', 'version.json 解析失败', e)
+      }
+    }
+
+    // 3. 写入 Directory.Data/webroot/<version>/
+    const versionDir = `${WEBROOT_DIR}/${info.version}`
+
+    // 清理老的临时目录 (同名的 version 目录)
+    onStatus?.('正在准备存储目录...')
+    otaDebugLogger.log('info', 'cleanup', `清理旧目录: ${versionDir}`)
+    try {
+      await Filesystem.rmdir({
+        path: versionDir,
+        directory: Directory.Data,
+        recursive: true
+      })
+      otaDebugLogger.log('info', 'cleanup', '旧目录清理完成')
+    } catch (e) {
+      otaDebugLogger.log('info', 'cleanup', '旧目录不存在，跳过清理')
+    }
+
+    otaDebugLogger.log('info', 'mkdir', `创建新目录: ${versionDir}`)
+    await Filesystem.mkdir({
       path: versionDir,
       directory: Directory.Data,
       recursive: true
     })
-  } catch {
-    // 不存在忽略
-  }
+    otaDebugLogger.log('success', 'mkdir', '目录创建完成')
 
-  await Filesystem.mkdir({
-    path: versionDir,
-    directory: Directory.Data,
-    recursive: true
-  })
+    // 逐个写文件. fflate 的 files 键可能带 dist/ 前缀,统一去掉
+    onStatus?.('正在写入文件...')
+    otaDebugLogger.log('info', 'writeFiles', `开始写入 ${fileCount} 个文件`)
+    const entries = Object.entries(files)
+    let writtenCount = 0
+    for (let i = 0; i < entries.length; i++) {
+      const [rawName, content] = entries[i]
+      if (rawName.endsWith('/')) continue // 目录
+      // 去掉 zip 里的顶层 dist/ 前缀,如果存在
+      let name = rawName.replace(/^dist\//, '')
+      if (!name) continue
 
-  // 逐个写文件. fflate 的 files 键可能带 dist/ 前缀,统一去掉
-  onStatus?.('正在写入文件...')
-  const entries = Object.entries(files)
-  for (let i = 0; i < entries.length; i++) {
-    const [rawName, content] = entries[i]
-    if (rawName.endsWith('/')) continue // 目录
-    // 去掉 zip 里的顶层 dist/ 前缀,如果存在
-    let name = rawName.replace(/^dist\//, '')
-    if (!name) continue
+      // 显示写入进度
+      if (i % 5 === 0) {
+        onStatus?.(`正在写入文件 ${i + 1}/${entries.length}`)
+      }
 
-    // 显示写入进度
-    if (i % 5 === 0) {
-      onStatus?.(`正在写入文件 ${i + 1}/${entries.length}`)
-    }
+      // 创建中间目录
+      const dir = name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : ''
+      if (dir) {
+        try {
+          await Filesystem.mkdir({
+            path: `${versionDir}/${dir}`,
+            directory: Directory.Data,
+            recursive: true
+          })
+        } catch {}
+      }
 
-    // 创建中间目录
-    const dir = name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : ''
-    if (dir) {
-      try {
-        await Filesystem.mkdir({
-          path: `${versionDir}/${dir}`,
+      // 二进制文件 base64 写入; 文本(*.html/js/css/json/svg)用 utf8 写入
+      const isText = /\.(html|js|css|json|svg|webmanifest|txt|map)$/i.test(name)
+      if (isText) {
+        await Filesystem.writeFile({
+          path: `${versionDir}/${name}`,
           directory: Directory.Data,
-          recursive: true
+          encoding: Encoding.UTF8,
+          data: strFromU8(content)
         })
-      } catch {}
+      } else {
+        // base64
+        let bin = ''
+        for (let j = 0; j < content.length; j++) bin += String.fromCharCode(content[j])
+        const b64 = btoa(bin)
+        await Filesystem.writeFile({
+          path: `${versionDir}/${name}`,
+          directory: Directory.Data,
+          data: b64
+        })
+      }
+      writtenCount++
     }
+    otaDebugLogger.log('success', 'writeFiles', `文件写入完成，共 ${writtenCount} 个文件`)
 
-    // 二进制文件 base64 写入; 文本(*.html/js/css/json/svg)用 utf8 写入
-    const isText = /\.(html|js|css|json|svg|webmanifest|txt|map)$/i.test(name)
-    if (isText) {
-      await Filesystem.writeFile({
-        path: `${versionDir}/${name}`,
-        directory: Directory.Data,
-        encoding: Encoding.UTF8,
-        data: strFromU8(content)
-      })
-    } else {
-      // base64
-      let bin = ''
-      for (let j = 0; j < content.length; j++) bin += String.fromCharCode(content[j])
-      const b64 = btoa(bin)
-      await Filesystem.writeFile({
-        path: `${versionDir}/${name}`,
-        directory: Directory.Data,
-        data: b64
-      })
-    }
-  }
-
-  // 4. 拿绝对路径（加超时保护）
-  onStatus?.('正在应用更新...')
-  console.log('[OTA] Step 4: Getting URI for', versionDir)
-  let absPath = ''
-  try {
-    const uri = await Promise.race([
-      Filesystem.getUri({
-        path: versionDir,
-        directory: Directory.Data
-      }),
-      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout after 8s')), 8000))
-    ])
-    absPath = uri.uri.replace(/^file:\/\//, '')
-    console.log('[OTA] URI obtained:', absPath)
-  } catch (e) {
-    console.warn('[OTA] getUri failed or timeout, fallback to direct reload', e)
-    // 如果getUri失败，直接reload让App重新检测
-    localStorage.setItem(CURRENT_VERSION_KEY, info.version)
-    console.log('[OTA] Saved version and reloading in 500ms...')
-    onStatus?.('准备重启...')
-    setTimeout(() => {
-      console.log('[OTA] Executing reload now')
-      window.location.reload()
-    }, 500)
-    return
-  }
-
-  // 5. 切 WebView 到新目录（带超时保护）
-  console.log('[OTA] Step 5: Switching WebView basePath')
-  const webview = await tryGetWebViewPlugin()
-  if (webview) {
+    // 4. 拿绝对路径（加超时保护）
+    onStatus?.('正在应用更新...')
+    otaDebugLogger.log('info', 'getUri', `获取目录绝对路径: ${versionDir}`)
+    let absPath = ''
     try {
-      await Promise.race([
-        webview.setServerBasePath({ path: absPath }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('setServerBasePath timeout')), 5000))
+      const uri = await Promise.race([
+        Filesystem.getUri({
+          path: versionDir,
+          directory: Directory.Data
+        }),
+        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout after 8s')), 8000))
       ])
-      console.log('[OTA] setServerBasePath done')
-    } catch (e) {
-      console.warn('[OTA] setServerBasePath failed/timeout, will reload anyway', e)
+      absPath = uri.uri.replace(/^file:\/\//, '')
+      otaDebugLogger.log('success', 'getUri', `获取到绝对路径: ${absPath}`)
+    } catch (e: any) {
+      otaDebugLogger.log('error', 'getUri', 'getUri 失败或超时，fallback 到直接 reload', {
+        message: e.message,
+        stack: e.stack
+      })
+      // 如果getUri失败，直接reload让App重新检测
+      localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+      otaDebugLogger.log('info', 'reload', '保存版本号并准备 reload（500ms 后）')
+      onStatus?.('准备重启...')
+      setTimeout(() => {
+        otaDebugLogger.log('info', 'reload', '执行 window.location.reload()')
+        window.location.reload()
+      }, 500)
+      return
     }
+
+    // 5. 切 WebView 到新目录（带超时保护）
+    otaDebugLogger.log('info', 'setServerBasePath', '尝试切换 WebView basePath')
+    const webview = await tryGetWebViewPlugin()
+    if (webview) {
+      try {
+        await Promise.race([
+          webview.setServerBasePath({ path: absPath }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('setServerBasePath timeout')), 5000))
+        ])
+        otaDebugLogger.log('success', 'setServerBasePath', 'WebView basePath 切换成功')
+      } catch (e: any) {
+        otaDebugLogger.log('warn', 'setServerBasePath', 'setServerBasePath 失败或超时，将继续 reload', {
+          message: e.message,
+          stack: e.stack
+        })
+      }
+    } else {
+      otaDebugLogger.log('warn', 'setServerBasePath', 'WebView plugin 不可用，跳过')
+    }
+
+    // 6. 保存版本号
+    otaDebugLogger.log('info', 'saveVersion', `保存版本号: ${info.version}`)
+    localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+    otaDebugLogger.log('success', 'saveVersion', '版本号保存成功')
+
+    // 7. reload 生效（延迟 300ms 确保 localStorage 写入完成）
+    otaDebugLogger.log('info', 'reload', '准备 reload（300ms 后）')
+    onStatus?.('更新完成，即将重启...')
+    setTimeout(() => {
+      otaDebugLogger.log('info', 'reload', '执行 window.location.reload()')
+      window.location.reload()
+    }, 300)
+  } catch (e: any) {
+    const errorMsg = e.message || '未知错误'
+    otaDebugLogger.log('error', 'downloadAndApply', `更新失败: ${errorMsg}`, {
+      message: e.message,
+      code: e.code,
+      stack: e.stack
+    })
+    throw e
   }
-
-  // 6. 保存版本号
-  console.log('[OTA] Step 6: Saving version', info.version)
-  localStorage.setItem(CURRENT_VERSION_KEY, info.version)
-
-  // 7. reload 生效（延迟 300ms 确保 localStorage 写入完成）
-  console.log('[OTA] Step 7: Scheduling reload in 300ms')
-  onStatus?.('更新完成，即将重启...')
-  setTimeout(() => {
-    console.log('[OTA] Executing reload now')
-    window.location.reload()
-  }, 300)
 }
 
 export function getCurrentVersion(): string {

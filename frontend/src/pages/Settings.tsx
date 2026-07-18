@@ -250,6 +250,13 @@ export default function SettingsPage() {
           >当前版本</List.Item>
           <List.Item extra="Capacitor 8">运行环境</List.Item>
           <List.Item onClick={handleCheckUpdate}>检查更新</List.Item>
+          {Capacitor.isNativePlatform() && (
+            <List.Item
+              arrow={<RightOutline />}
+              onClick={() => nav('/settings/ota-debug')}
+              description="查看 OTA 更新日志和调试信息"
+            >🔧 OTA 调试</List.Item>
+          )}
           {deferredPrompt && (
             <List.Item onClick={installPWA}>📲 安装到桌面 (PWA)</List.Item>
           )}
