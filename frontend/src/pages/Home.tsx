@@ -5,6 +5,7 @@ import { RightOutline } from 'antd-mobile-icons'
 import { api, friendlyApiError } from '@/api/client'
 import { useUI, useAuth } from '@/store'
 import { fmtRelative } from '@/utils/format'
+import { withCache, getCache } from '@/utils/apiCache'
 import RemoteStatusBanner from '@/components/RemoteStatusBanner'
 
 interface Cluster { id: number; name: string; display_name?: string; provider: string; status: string }
@@ -14,11 +15,12 @@ export default function HomePage() {
   const nav = useNavigate()
   const user = useAuth(s => s.user)
   const setActiveCluster = useUI(s => s.setActiveCluster)
-  const [clusters, setClusters] = useState<Cluster[]>([])
+  // 优先展示缓存数据，避免白屏
+  const [clusters, setClusters] = useState<Cluster[]>(() => getCache<Cluster[]>('clusters') || [])
   const [metrics, setMetrics] = useState<Record<number, Metrics>>({})
   const [nodePools, setNodePools] = useState<Record<number, any[]>>({})
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [ops, setOps] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<any[]>(() => getCache<any[]>('alerts_10') || [])
+  const [ops, setOps] = useState<any[]>(() => getCache<any[]>('operations_5') || [])
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -26,9 +28,9 @@ export default function HomePage() {
     setLoadErr(null)
     try {
       const [cs, al, op] = await Promise.all([
-        api.listClusters().catch(e => { setLoadErr(friendlyApiError(e)); return [] }),
-        api.listAlerts(10).catch(() => []),
-        api.listOperations(5).catch(() => [])
+        withCache('clusters', () => api.listClusters()).catch(e => { setLoadErr(friendlyApiError(e)); return [] }),
+        withCache('alerts_10', () => api.listAlerts(10)).catch(() => []),
+        withCache('operations_5', () => api.listOperations(5)).catch(() => [])
       ])
       setClusters(cs || [])
       setAlerts(al || [])

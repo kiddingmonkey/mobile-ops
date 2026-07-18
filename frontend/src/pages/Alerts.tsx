@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
 import StatCard from '@/components/StatCard'
 import { sendUrgentAlert, getTTSEnabled, setTTSEnabled, getFloatingAlertEnabled, setFloatingAlertEnabled, requestFloatingPermission, testTTS } from '@/utils/alertNotifier'
+import { analyzeAlert } from '@/utils/alertAnalyzer'
+import { shareAlertCard } from '@/utils/shareCard'
 import { Capacitor } from '@capacitor/core'
 
 export default function AlertsPage() {
@@ -384,8 +386,88 @@ export default function AlertsPage() {
                               📊 监控
                             </Button>
                           )}
+
+                          <Button
+                            size="mini"
+                            fill="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              shareAlertCard({
+                                alertname: a.alertname,
+                                severity: a.severity,
+                                cluster: a.labels?.cluster,
+                                namespace: a.labels?.namespace,
+                                pod: a.labels?.pod,
+                                summary: a.summary,
+                                starts_at: a.starts_at
+                              })
+                            }}
+                            style={{ fontSize: 10, padding: '2px 8px' }}
+                          >
+                            📤 分享
+                          </Button>
                         </div>
                       )}
+
+                      {/* 🤖 智能诊断卡片 */}
+                      {(() => {
+                        const analysis = analyzeAlert(a)
+                        if (!analysis) return null
+                        return (
+                          <details style={{ marginTop: 10 }}>
+                            <summary style={{
+                              fontSize: 11,
+                              color: 'var(--accent-blue)',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              background: 'var(--accent-blue-bg)',
+                              borderRadius: 4,
+                              display: 'inline-block'
+                            }}>
+                              🤖 智能诊断建议
+                            </summary>
+                            <div style={{
+                              marginTop: 6,
+                              padding: 8,
+                              background: 'var(--bg-secondary)',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              lineHeight: 1.6
+                            }}>
+                              <div style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 6 }}>
+                                根因: {analysis.rootCause}
+                              </div>
+
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>可能原因:</div>
+                                <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--text-secondary)' }}>
+                                  {analysis.possibleCauses.map((c, i) => <li key={i}>{c}</li>)}
+                                </ul>
+                              </div>
+
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>建议:</div>
+                                <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--text-secondary)' }}>
+                                  {analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                                </ul>
+                              </div>
+
+                              {analysis.docLink && (
+                                <div style={{ marginTop: 6 }}>
+                                  <a
+                                    href={analysis.docLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ fontSize: 10, color: 'var(--accent-blue)' }}
+                                  >
+                                    📖 相关文档
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        )
+                      })()}
 
                       {/* 展开详情 */}
                       {(a.labels || a.annotations || a.count > 1) && (

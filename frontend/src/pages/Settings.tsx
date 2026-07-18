@@ -155,12 +155,13 @@ export default function SettingsPage() {
           <List.Item description="选择主题模式">
             <div style={{ marginTop: 8 }}>
               <Selector
-                columns={3}
+                columns={2}
                 value={[themeMode]}
                 onChange={v => v[0] && setThemeMode(v[0] as any)}
                 options={[
                   { label: '深色', value: 'dark' },
                   { label: '浅色', value: 'light' },
+                  { label: '纯黑 (OLED 省电)', value: 'pure-black' },
                   { label: '跟随系统', value: 'auto' }
                 ]}
               />

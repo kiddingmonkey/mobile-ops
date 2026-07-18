@@ -39,7 +39,7 @@ export const useUI = create<UIState>(set => ({
 }))
 
 // 主题
-export type ThemeMode = 'dark' | 'light' | 'auto'
+export type ThemeMode = 'dark' | 'light' | 'auto' | 'pure-black'
 
 interface ThemeState {
   mode: ThemeMode
@@ -57,7 +57,7 @@ export const useTheme = create<ThemeState>()(
 )
 
 // 计算真实主题（auto 时看系统偏好）
-export function resolveTheme(mode: ThemeMode): 'dark' | 'light' {
+export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' {
   if (mode === 'auto') {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
@@ -68,20 +68,26 @@ export function resolveTheme(mode: ThemeMode): 'dark' | 'light' {
 export function applyTheme(mode: ThemeMode) {
   const actual = resolveTheme(mode)
   document.documentElement.setAttribute('data-theme', actual)
-  document.documentElement.setAttribute('data-prefers-color-scheme', actual)
+  document.documentElement.setAttribute('data-prefers-color-scheme', actual === 'pure-black' ? 'dark' : actual)
+
+  // 清理旧 class
+  document.documentElement.classList.remove('light-theme', 'pure-black-theme')
+  document.body.classList.remove('mo-dark', 'mo-light', 'mo-pure-black')
+
   // 用 html class 控制（优先级高于 body）
   if (actual === 'dark') {
-    document.documentElement.classList.remove('light-theme')
     document.body.classList.add('mo-dark')
-    document.body.classList.remove('mo-light')
+  } else if (actual === 'pure-black') {
+    document.documentElement.classList.add('pure-black-theme')
+    document.body.classList.add('mo-pure-black')
   } else {
     document.documentElement.classList.add('light-theme')
     document.body.classList.add('mo-light')
-    document.body.classList.remove('mo-dark')
   }
   // 更新 theme-color meta（PWA 状态栏颜色）
   const metaTheme = document.querySelector('meta[name="theme-color"]')
   if (metaTheme) {
-    metaTheme.setAttribute('content', actual === 'dark' ? '#1F2329' : '#F5F6F7')
+    const color = actual === 'pure-black' ? '#000000' : actual === 'dark' ? '#1F2329' : '#F5F6F7'
+    metaTheme.setAttribute('content', color)
   }
 }

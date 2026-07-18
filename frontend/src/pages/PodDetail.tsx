@@ -5,6 +5,7 @@ import { ClockCircleOutline, CheckCircleOutline, CloseCircleOutline } from 'antd
 import PageShell from '@/components/PageShell'
 import { api } from '@/api/client'
 import { shareLog, downloadLog, makeLogFilename } from '@/utils/logShare'
+import { sharePodCard } from '@/utils/shareCard'
 import { hapticMedium, hapticHeavy, hapticSuccess, hapticError } from '@/utils/haptics'
 import MetricsTab from './PodMetrics'
 import dayjs from 'dayjs'
@@ -184,6 +185,25 @@ export default function PodDetailPage() {
           style={{ flexShrink: 0, fontSize: 12 }}
         >
           📥 下载日志
+        </Button>
+        <Button
+          size="small"
+          fill="outline"
+          onClick={async () => {
+            hapticMedium()
+            await sharePodCard({
+              cluster: `集群 ${clusterId}`,
+              namespace: namespace || '',
+              name: name || '',
+              status: detail.phase || '',
+              restarts: detail.total_restarts,
+              node: detail.node,
+              age: detail.created_at ? dayjs(detail.created_at).fromNow() : ''
+            })
+          }}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          📤 分享
         </Button>
         <Button
           size="small"

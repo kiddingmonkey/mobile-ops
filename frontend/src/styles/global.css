@@ -100,6 +100,49 @@ html.light-theme, body.mo-light {
   --adm-color-background-body: #FFFFFF;
 }
 
+/* ============ 纯黑主题 (OLED 省电) ============ */
+html.pure-black-theme, body.mo-pure-black {
+  --bg-primary: #000000;
+  --bg-secondary: #050505;
+  --bg-elevated: #0A0A0A;
+  --bg-input: #0F0F0F;
+
+  --border-color: #1A1A1A;
+  --border-strong: #2A2A2A;
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0B0;
+  --text-tertiary: #707070;
+  --text-disabled: #404040;
+
+  --accent-blue: #4E85FF;
+  --accent-blue-hover: #3A72E8;
+  --accent-blue-bg: rgba(78, 133, 255, 0.15);
+
+  --success: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --warning: #FBBF24;
+  --warning-bg: rgba(251, 191, 36, 0.15);
+  --danger: #F87171;
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --info-bg: rgba(78, 133, 255, 0.15);
+
+  --adm-color-primary: #4E85FF;
+  --adm-color-success: #22C55E;
+  --adm-color-warning: #FBBF24;
+  --adm-color-danger: #F87171;
+  --adm-color-background: #000000;
+  --adm-color-text: #FFFFFF;
+  --adm-color-text-secondary: #B0B0B0;
+  --adm-color-weak: #707070;
+  --adm-color-light: #050505;
+  --adm-color-border: #1A1A1A;
+  --adm-color-fill-content: #0A0A0A;
+  --adm-color-white: #FFFFFF;
+  --adm-color-box: #0A0A0A;
+  --adm-color-background-body: #000000;
+}
+
 /* ============ Base ============ */
 * {
   box-sizing: border-box;
