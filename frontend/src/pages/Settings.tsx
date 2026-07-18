@@ -234,8 +234,16 @@ export default function SettingsPage() {
           >📖 使用手册</List.Item>
           <List.Item
             arrow={<RightOutline />}
-            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/issues', '_blank')}
+            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/blob/main/CHANGELOG.md', '_blank')}
+          >📝 更新日志</List.Item>
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/issues/new', '_blank')}
           >💬 问题反馈</List.Item>
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops', '_blank')}
+          >⭐ GitHub 项目</List.Item>
         </List>
 
         {/* 关于 */}

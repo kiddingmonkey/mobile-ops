@@ -4,11 +4,13 @@ import { TabBar, Badge } from 'antd-mobile'
 import { AppOutline, SearchOutline, SetOutline, BellOutline, UnorderedListOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
 import { startAlertPolling, stopAlertPolling } from '@/utils/alertPoller'
+import GlobalSearch from './GlobalSearch'
 
 export default function AppLayout() {
   const nav = useNavigate()
   const loc = useLocation()
   const [alertCount, setAlertCount] = useState(0)
+  const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
     api.listAlerts(100).then(a => {
@@ -44,10 +46,38 @@ export default function AppLayout() {
     || '/'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
       <div style={{ flex: 1, overflow: 'auto' }}>
         <Outlet />
       </div>
+
+      {/* 全局搜索浮动按钮 */}
+      <div
+        onClick={() => setShowSearch(true)}
+        style={{
+          position: 'fixed',
+          right: 16,
+          bottom: 'calc(env(safe-area-inset-bottom) + 76px)',
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          background: 'linear-gradient(135deg, var(--accent-blue) 0%, #6E9BFF 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 22,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+          zIndex: 100,
+          cursor: 'pointer'
+        }}
+      >
+        <SearchOutline />
+      </div>
+
+      {/* 全局搜索面板 */}
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
+
       <div style={{
         borderTop: '1px solid var(--border-color)',
         background: 'var(--bg-secondary)',

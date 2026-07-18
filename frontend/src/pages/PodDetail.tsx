@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Tabs, Card, Tag, List, Toast, PullToRefresh, Button } from 'antd-mobile'
+import { Tabs, Card, Tag, List, Toast, PullToRefresh, Button, Dialog } from 'antd-mobile'
 import { ClockCircleOutline, CheckCircleOutline, CloseCircleOutline } from 'antd-mobile-icons'
 import PageShell from '@/components/PageShell'
 import { api } from '@/api/client'
 import { shareLog, downloadLog, makeLogFilename } from '@/utils/logShare'
+import { hapticMedium, hapticHeavy, hapticSuccess, hapticError } from '@/utils/haptics'
 import MetricsTab from './PodMetrics'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -97,8 +98,104 @@ export default function PodDetailPage() {
     )
   }
 
+  // 快捷操作
+  const podRestart = async () => {
+    hapticHeavy()
+    const ok = await Dialog.confirm({
+      content: `确认删除并重建 Pod "${name}"？（等同于滚动重启）`,
+      confirmText: '重启',
+      cancelText: '取消'
+    })
+    if (!ok) return
+    try {
+      await (api as any).delete(`/clusters/${clusterId}/pods/${namespace}/${name}`)
+      hapticSuccess()
+      Toast.show({ content: '已触发重启，Deployment 会拉起新 Pod', icon: 'success' })
+      setTimeout(() => nav(-1), 1500)
+    } catch (e: any) {
+      hapticError()
+      Toast.show({ content: '重启失败: ' + (e?.response?.data?.error || e?.message || ''), icon: 'fail' })
+    }
+  }
+
+  const downloadPodLogs = async () => {
+    hapticMedium()
+    try {
+      Toast.show({ content: '下载日志...', icon: 'loading', duration: 0 })
+      const r = await api.getPodLogs(Number(clusterId), namespace!, name!, undefined, 5000)
+      Toast.clear()
+      const text = typeof r === 'string' ? r : (r?.logs || r?.data || '')
+      if (!text) {
+        Toast.show({ content: '暂无日志', icon: 'fail' })
+        return
+      }
+      await downloadLog(text, makeLogFilename(name || 'pod'))
+      hapticSuccess()
+      Toast.show({ content: '已下载', icon: 'success' })
+    } catch (e: any) {
+      Toast.clear()
+      hapticError()
+      Toast.show({ content: '下载失败: ' + (e?.message || ''), icon: 'fail' })
+    }
+  }
+
   return (
     <PageShell title={name || 'Pod'} onBack={() => nav(-1)}>
+      {/* 顶部固定操作栏 */}
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        padding: '8px 12px',
+        background: 'var(--bg-elevated)',
+        borderBottom: '1px solid var(--border-color)',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch'
+      }}>
+        <Button
+          size="small"
+          color="primary"
+          onClick={() => setTab('metrics')}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          📊 监控
+        </Button>
+        <Button
+          size="small"
+          color="primary"
+          fill="outline"
+          onClick={() => { setTab('logs'); setTimeout(() => loadLogs(), 100) }}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          📋 日志
+        </Button>
+        <Button
+          size="small"
+          color="primary"
+          fill="outline"
+          onClick={() => setTab('terminal')}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          💻 终端
+        </Button>
+        <Button
+          size="small"
+          fill="outline"
+          onClick={downloadPodLogs}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          📥 下载日志
+        </Button>
+        <Button
+          size="small"
+          color="danger"
+          fill="outline"
+          onClick={podRestart}
+          style={{ flexShrink: 0, fontSize: 12 }}
+        >
+          🔄 重启
+        </Button>
+      </div>
+
       <PullToRefresh onRefresh={refresh}>
         <div style={{ background: 'var(--background)', minHeight: '100vh' }}>
           <Tabs activeKey={tab} onChange={setTab} style={{ '--title-font-size': '14px' }}>
