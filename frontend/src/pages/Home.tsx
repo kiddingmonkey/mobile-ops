@@ -84,6 +84,51 @@ export default function HomePage() {
         <div className="text-h2">{user?.display_name || user?.username || 'Ops'}</div>
       </div>
 
+      {/* SRE 状态条 - 秒懂全局健康 */}
+      <div style={{
+        margin: '0 12px 12px',
+        padding: 10,
+        background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-secondary) 100%)',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        gap: 8
+      }}>
+        {/* 集群健康 */}
+        <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>集群健康</div>
+          <div style={{ fontSize: 16, fontWeight: 600, display: 'flex', justifyContent: 'center', gap: 4 }}>
+            <span style={{ color: 'var(--success)' }}>{clusters.filter(c => c.status === 'healthy').length}</span>
+            <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+            <span style={{ color: 'var(--text-secondary)' }}>{clusters.length}</span>
+          </div>
+        </div>
+
+        {/* 告警数 */}
+        <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid var(--border-color)' }}
+          onClick={() => nav('/alerts')}>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>待处理告警</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: criticalAlerts > 0 ? 'var(--danger)' : firingAlerts > 0 ? 'var(--warning)' : 'var(--text-secondary)' }}>
+            {firingAlerts > 0 ? `${firingAlerts}` : '0'}
+            {criticalAlerts > 0 && <span style={{ fontSize: 10, marginLeft: 2 }}>({criticalAlerts} 严重)</span>}
+          </div>
+        </div>
+
+        {/* 今日任务数 */}
+        <div style={{ flex: 1, textAlign: 'center' }} onClick={() => nav('/tasks')}>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>今日任务</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--primary)' }}>
+            {ops.filter((o: any) => {
+              if (!o.created_at) return false
+              const today = new Date().toDateString()
+              return new Date(o.created_at).toDateString() === today
+            }).length}
+          </div>
+        </div>
+      </div>
+
       <PullToRefresh onRefresh={load}>
         <div style={{ padding: '0 12px 60px' }}>
           {loadErr && (

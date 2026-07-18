@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TabBar, Badge } from 'antd-mobile'
-import { AppOutline, HistogramOutline, SetOutline, BellOutline, FileOutline } from 'antd-mobile-icons'
+import { AppOutline, SearchOutline, SetOutline, BellOutline, UnorderedListOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
 import { startAlertPolling, stopAlertPolling } from '@/utils/alertPoller'
 
@@ -26,16 +26,17 @@ export default function AppLayout() {
     }
   }, [])
 
+  // 状态+任务流导向的 Tab（SRE 工作流: 看状态→收告警→诊断→执行）
   const tabs = [
-    { key: '/', title: '首页', icon: <AppOutline /> },
-    { key: '/monitor', title: '监控', icon: <HistogramOutline /> },
-    { key: '/alerts', title: '告警', icon: (s: boolean) => (
+    { key: '/', title: '总览', icon: <AppOutline /> },
+    { key: '/alerts', title: '告警', icon: (
       <Badge content={alertCount > 0 ? alertCount : null} style={{ '--right': '-4px', '--top': '-2px' } as any}>
         <BellOutline />
       </Badge>
     )},
-    { key: '/logs', title: '日志', icon: <FileOutline /> },
-    { key: '/settings', title: '设置', icon: <SetOutline /> }
+    { key: '/diagnose', title: '诊断', icon: <SearchOutline /> },
+    { key: '/tasks', title: '任务', icon: <UnorderedListOutline /> },
+    { key: '/settings', title: '更多', icon: <SetOutline /> }
   ]
 
   const active = tabs.find(t => loc.pathname === t.key)?.key
@@ -56,7 +57,7 @@ export default function AppLayout() {
           {tabs.map(t => (
             <TabBar.Item
               key={t.key}
-              icon={typeof t.icon === 'function' ? t.icon(active === t.key) : t.icon}
+              icon={t.icon}
               title={t.title}
             />
           ))}

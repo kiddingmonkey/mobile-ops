@@ -15,6 +15,8 @@ import LoginPage from '@/pages/Login'
 import HomePage from '@/pages/Home'
 import MonitorPage from '@/pages/Monitor'
 import AlertsPage from '@/pages/Alerts'
+import DiagnosePage from '@/pages/Diagnose'
+import TasksPage from '@/pages/Tasks'
 import OperationsPage from '@/pages/Operations'
 import LogsPage from '@/pages/Logs'
 import ScalePage from '@/pages/Scale'
@@ -208,10 +210,13 @@ export default function App() {
           {/* 主界面（含底部 TabBar） */}
           <Route element={<Protected><AppLayout /></Protected>}>
             <Route path="/" element={<HomePage />} />
-            <Route path="/monitor" element={<MonitorPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/logs" element={<LogsPage />} />
+            <Route path="/diagnose" element={<DiagnosePage />} />
+            <Route path="/tasks" element={<TasksPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            {/* 保留旧路由兼容 */}
+            <Route path="/monitor" element={<MonitorPage />} />
+            <Route path="/logs" element={<LogsPage />} />
           </Route>
 
           {/* 独立页面（无底部 TabBar） */}
