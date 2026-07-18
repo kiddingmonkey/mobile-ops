@@ -13,12 +13,70 @@ export default function AlertsPage() {
   const [tab, setTab] = useState('all')
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
   const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
+  // 本地状态：已确认和已静默的告警 ID（后端未实现时用 localStorage）
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('acknowledged_alerts')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+  const [silenced, setSilenced] = useState<Map<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('silenced_alerts')
+      if (!saved) return new Map()
+      const obj = JSON.parse(saved)
+      // 过滤掉已过期的静默
+      const now = Date.now()
+      const filtered = Object.entries(obj).filter(([_, time]) => (time as number) > now)
+      return new Map(filtered as [string, number][])
+    } catch {
+      return new Map()
+    }
+  })
 
   const load = async () => {
     const a = await api.listAlerts(200).catch(() => [])
     setAlerts(a || [])
   }
   useEffect(() => { load() }, [])
+
+  // 保存状态到 localStorage
+  useEffect(() => {
+    localStorage.setItem('acknowledged_alerts', JSON.stringify([...acknowledged]))
+  }, [acknowledged])
+
+  useEffect(() => {
+    const obj = Object.fromEntries(silenced)
+    localStorage.setItem('silenced_alerts', JSON.stringify(obj))
+  }, [silenced])
+
+  // 确认告警
+  const acknowledgeAlert = (alertId: string) => {
+    setAcknowledged(prev => new Set(prev).add(alertId))
+    Toast.show({ content: '已确认告警', icon: 'success' })
+  }
+
+  // 静默告警 30 分钟
+  const silenceAlert = (alertId: string) => {
+    const until = Date.now() + 30 * 60 * 1000
+    setSilenced(prev => new Map(prev).set(alertId, until))
+    Toast.show({ content: '已静默 30 分钟', icon: 'success' })
+  }
+
+  // 取消静默
+  const unsilenceAlert = (alertId: string) => {
+    setSilenced(prev => {
+      const next = new Map(prev)
+      next.delete(alertId)
+      return next
+    })
+    Toast.show({ content: '已取消静默', icon: 'success' })
+  }
+
+  // 获取告警唯一 ID
+  const getAlertId = (a: any) => `${a.alertname}_${a.labels?.instance || ''}_${a.labels?.pod || ''}`
 
   // 测试告警通知
   const testAlert = async (severity: 'critical' | 'warning') => {
@@ -125,10 +183,36 @@ export default function AlertsPage() {
   const critical = firing.filter(a => a.severity === 'critical')
   const warning = firing.filter(a => a.severity === 'warning')
 
-  const filtered = tab === 'all' ? alerts
+  // 告警聚合：相同 alertname 的合并
+  const aggregateAlerts = (alertList: any[]) => {
+    const groups = new Map<string, any[]>()
+    alertList.forEach(a => {
+      const key = a.alertname
+      if (!groups.has(key)) {
+        groups.set(key, [])
+      }
+      groups.get(key)!.push(a)
+    })
+    return Array.from(groups.entries()).map(([name, items]) => ({
+      alertname: name,
+      count: items.length,
+      items,
+      severity: items.some(i => i.severity === 'critical') ? 'critical' : items[0].severity,
+      status: items[0].status,
+      summary: items[0].summary,
+      starts_at: items[0].starts_at,
+      labels: items[0].labels,
+      annotations: items[0].annotations
+    }))
+  }
+
+  const rawFiltered = tab === 'all' ? alerts
     : tab === 'critical' ? alerts.filter(a => a.severity === 'critical')
     : tab === 'warning' ? alerts.filter(a => a.severity === 'warning')
     : alerts.filter(a => a.status === 'resolved')
+
+  // 只对 firing 状态的告警聚合，resolved 不聚合
+  const filtered = rawFiltered[0]?.status === 'firing' ? aggregateAlerts(rawFiltered) : rawFiltered
 
   const severityColor = (s: string) =>
     s === 'critical' ? 'var(--danger)' : s === 'warning' ? 'var(--warning)' : 'var(--accent-blue)'
@@ -193,7 +277,21 @@ export default function AlertsPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* 标题行 */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600, fontSize: 14 }}>{a.alertname}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>{a.alertname}</span>
+                          {a.count > 1 && (
+                            <span style={{
+                              background: severityColor(a.severity),
+                              color: 'white',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 10
+                            }}>
+                              ×{a.count}
+                            </span>
+                          )}
+                        </div>
                         <span className={`status-badge ${a.status === 'firing' ? 'danger' : 'success'}`} style={{ fontSize: 10 }}>
                           {a.status}
                         </span>
@@ -211,20 +309,122 @@ export default function AlertsPage() {
                         </span>
                         <span className="text-xs">{fmtRelative(a.starts_at)}</span>
                       </div>
+
+                      {/* 快捷操作按钮 */}
+                      {a.status === 'firing' && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                          {!acknowledged.has(getAlertId(a)) ? (
+                            <Button
+                              size="mini"
+                              color="primary"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                acknowledgeAlert(getAlertId(a))
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px' }}
+                            >
+                              ✓ 确认
+                            </Button>
+                          ) : (
+                            <span style={{ fontSize: 10, color: 'var(--success)', padding: '2px 8px' }}>✓ 已确认</span>
+                          )}
+
+                          {!silenced.has(getAlertId(a)) ? (
+                            <Button
+                              size="mini"
+                              color="warning"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                silenceAlert(getAlertId(a))
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px' }}
+                            >
+                              🔇 静音30分
+                            </Button>
+                          ) : (
+                            <Button
+                              size="mini"
+                              fill="none"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                unsilenceAlert(getAlertId(a))
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-tertiary)' }}
+                            >
+                              🔊 已静音
+                            </Button>
+                          )}
+
+                          {a.labels?.pod && (
+                            <Button
+                              size="mini"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                nav(`/logs?pod=${a.labels.pod}`)
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px' }}
+                            >
+                              📋 日志
+                            </Button>
+                          )}
+
+                          {a.labels?.instance && (
+                            <Button
+                              size="mini"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                nav(`/monitor?instance=${a.labels.instance}`)
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px' }}
+                            >
+                              📊 监控
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
                       {/* 展开详情 */}
-                      {(a.labels || a.annotations) && (
+                      {(a.labels || a.annotations || a.count > 1) && (
                         <details style={{ marginTop: 8 }}>
                           <summary style={{ fontSize: 11, color: 'var(--accent-blue)', cursor: 'pointer' }}>
-                            查看详情
+                            查看详情 {a.count > 1 && `(${a.count} 个实例)`}
                           </summary>
                           <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
-                            {a.labels && Object.entries(a.labels).map(([k, v]) => (
-                              <div key={k}><b>{k}:</b> {String(v)}</div>
-                            ))}
-                            {a.annotations && Object.entries(a.annotations).map(([k, v]) => (
-                              <div key={k}><b>{k}:</b> {String(v)}</div>
-                            ))}
-                            <div style={{ marginTop: 4 }}>开始: {fmtTime(a.starts_at)}</div>
+                            {a.count > 1 ? (
+                              // 聚合告警：展示所有实例
+                              <div>
+                                <div style={{ fontWeight: 600, marginBottom: 4 }}>受影响的实例:</div>
+                                {a.items.map((item: any, idx: number) => (
+                                  <div key={idx} style={{
+                                    background: 'var(--bg-secondary)',
+                                    padding: 6,
+                                    borderRadius: 4,
+                                    marginBottom: 4,
+                                    borderLeft: `3px solid ${severityColor(item.severity)}`
+                                  }}>
+                                    {item.labels?.pod && <div><b>Pod:</b> {item.labels.pod}</div>}
+                                    {item.labels?.instance && <div><b>实例:</b> {item.labels.instance}</div>}
+                                    {item.labels?.namespace && <div><b>命名空间:</b> {item.labels.namespace}</div>}
+                                    <div style={{ fontSize: 10, marginTop: 2 }}>开始: {fmtTime(item.starts_at)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              // 单个告警：展示详细信息
+                              <>
+                                {a.labels && Object.entries(a.labels).map(([k, v]) => (
+                                  <div key={k}><b>{k}:</b> {String(v)}</div>
+                                ))}
+                                {a.annotations && Object.entries(a.annotations).map(([k, v]) => (
+                                  <div key={k}><b>{k}:</b> {String(v)}</div>
+                                ))}
+                                <div style={{ marginTop: 4 }}>开始: {fmtTime(a.starts_at)}</div>
+                              </>
+                            )}
                           </div>
                         </details>
                       )}
