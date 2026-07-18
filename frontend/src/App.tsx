@@ -20,6 +20,7 @@ import TasksPage from '@/pages/Tasks'
 import OperationsPage from '@/pages/Operations'
 import LogsPage from '@/pages/Logs'
 import ScalePage from '@/pages/Scale'
+import DeployScalePage from '@/pages/DeployScale'
 import SettingsPage from '@/pages/Settings'
 import ClusterResourcesPage from '@/pages/ClusterResources'
 import PodDetailPage from '@/pages/PodDetail'
@@ -168,7 +169,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
 
           {/* 独立表单页 & 向导（无底部 TabBar） */}
-          <Route path="/scale" element={<Protected><ScalePage /></Protected>} />
+          <Route path="/scale" element={<Protected><DeployScalePage /></Protected>} />
+          <Route path="/scale-nodes" element={<Protected><ScalePage /></Protected>} />
           <Route path="/clusters/:id/resources" element={<Protected><ClusterResourcesPage /></Protected>} />
           <Route path="/clusters/:clusterId/pods/:namespace/:name" element={<Protected><PodDetailPage /></Protected>} />
           <Route path="/clusters/:clusterId/resources/:resourceType/:namespace/:name" element={<Protected><ResourceDetailPage /></Protected>} />

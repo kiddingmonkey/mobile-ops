@@ -1,32 +1,32 @@
-import { useEffect, useState } from 'react'
-import { PullToRefresh, Tag, Button, Empty } from 'antd-mobile'
+import { useEffect, useState, useCallback } from 'react'
+import { PullToRefresh, Button, Empty, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
+import { hapticLight } from '@/utils/haptics'
 
 /**
- * 任务中心 - 异步操作进度看板
+ * 任务与运维中心 - 综合 SRE 场景入口
  *
- * 展示: 扩容/重启/发布等任务的执行状态
- * 分组: 进行中 / 最近完成 / 失败
+ * 上半区：常用运维场景快捷入口（容器/中间件/AI/云资源）
+ * 下半区：正在执行的任务 + 历史操作
  */
 export default function TasksPage() {
   const nav = useNavigate()
   const [ops, setOps] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       setOps(await api.listOperations(50) || [])
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     load()
-    // 每 15 秒轮询进行中任务
     const t = setInterval(() => {
       const hasRunning = ops.some(o => ['executing', 'polling', 'pending', 'prechecking'].includes(o.status))
       if (hasRunning) load()
@@ -35,7 +35,7 @@ export default function TasksPage() {
   }, [])
 
   const running = ops.filter(o => ['executing', 'polling', 'pending', 'prechecking'].includes(o.status))
-  const recentDone = ops.filter(o => ['success', 'failed'].includes(o.status)).slice(0, 20)
+  const recentDone = ops.filter(o => ['success', 'failed'].includes(o.status)).slice(0, 15)
 
   const actionIcon = (action: string) => {
     if (action === 'scale_up') return '⬆️'
@@ -43,114 +43,188 @@ export default function TasksPage() {
     if (action === 'restart') return '🔄'
     return '⚙️'
   }
-
   const actionLabel = (action: string) => {
     if (action === 'scale_up') return '扩容'
     if (action === 'scale_down') return '缩容'
     if (action === 'restart') return '重启'
     return action
   }
-
   const statusInfo = (s: string) => {
     switch (s) {
-      case 'success': return { color: 'var(--success)', text: '✅ 成功', bg: 'rgba(16, 185, 129, 0.1)' }
-      case 'failed': return { color: 'var(--danger)', text: '❌ 失败', bg: 'rgba(239, 68, 68, 0.1)' }
-      case 'executing': case 'polling': case 'pending': case 'prechecking':
-        return { color: 'var(--warning)', text: '⏳ 运行中', bg: 'rgba(245, 158, 11, 0.1)' }
-      default: return { color: 'var(--text-tertiary)', text: s, bg: 'transparent' }
+      case 'success': return { color: 'var(--success)', text: '✓ 成功', bg: 'var(--success-bg)' }
+      case 'failed': return { color: 'var(--danger)', text: '✗ 失败', bg: 'var(--danger-bg)' }
+      default: return { color: 'var(--warning)', text: '⏳ 运行中', bg: 'var(--warning-bg)' }
     }
   }
 
-  const renderTask = (o: any) => {
-    const info = statusInfo(o.status)
-    return (
-      <div
-        key={o.id}
-        onClick={() => nav(`/operations`)}
-        style={{
-          background: info.bg,
-          border: `1px solid ${info.color}30`,
-          borderLeft: `4px solid ${info.color}`,
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 8,
-          cursor: 'pointer'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
-            <span>{actionIcon(o.action)}</span>
-            <span>{actionLabel(o.action)}</span>
-            {o.delta && (
-              <span style={{ color: 'var(--text-tertiary)' }}>
-                Δ {o.delta > 0 ? '+' : ''}{o.delta}
-              </span>
-            )}
-          </div>
-          <span style={{ fontSize: 11, color: info.color, fontWeight: 600 }}>{info.text}</span>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
-          {o.cluster_name || `集群 #${o.cluster_id}`} · {o.node_pool_name || `节点池 #${o.node_pool_id}`}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-          {o.created_at ? fmtRelative(o.created_at) : ''} · {o.created_at ? fmtTime(o.created_at) : ''}
-        </div>
-        {o.error_msg && (
-          <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 6, background: 'var(--bg-secondary)', padding: 6, borderRadius: 4 }}>
-            {o.error_msg}
-          </div>
-        )}
-      </div>
-    )
-  }
+  // 综合运维场景卡片
+  const scenarios = [
+    {
+      title: '容器运维',
+      icon: '☸️',
+      color: 'var(--accent-blue)',
+      items: [
+        { icon: '⚡', label: '紧急扩容', onClick: () => nav('/scale') },
+        { icon: '📋', label: '查日志', onClick: () => nav('/diagnose') },
+        { icon: '📊', label: '看监控', onClick: () => nav('/diagnose') },
+        { icon: '🔒', label: '安全组', onClick: () => nav('/settings/security-groups') }
+      ]
+    },
+    {
+      title: '中间件运维',
+      icon: '⚙️',
+      color: 'var(--success)',
+      items: [
+        { icon: '🗄️', label: 'MySQL', onClick: () => Toast.show({ content: '开发中：MySQL 慢查/连接', duration: 1500 }) },
+        { icon: '📦', label: 'Redis', onClick: () => Toast.show({ content: '开发中：Redis 内存/慢命令', duration: 1500 }) },
+        { icon: '🐰', label: 'RabbitMQ', onClick: () => Toast.show({ content: '开发中：MQ 堆积/消费者', duration: 1500 }) },
+        { icon: '🔎', label: 'ES', onClick: () => Toast.show({ content: '开发中：ES 索引/分片', duration: 1500 }) }
+      ]
+    },
+    {
+      title: 'AI 运维',
+      icon: '🤖',
+      color: 'var(--warning)',
+      items: [
+        { icon: '🚀', label: '推理服务', onClick: () => Toast.show({ content: '开发中：LLM 服务健康', duration: 1500 }) },
+        { icon: '🎯', label: 'GPU 监控', onClick: () => Toast.show({ content: '开发中：GPU 使用率/温度', duration: 1500 }) },
+        { icon: '📈', label: 'Token 用量', onClick: () => Toast.show({ content: '开发中：模型调用量分析', duration: 1500 }) },
+        { icon: '🔧', label: '模型部署', onClick: () => Toast.show({ content: '开发中：模型版本管理', duration: 1500 }) }
+      ]
+    },
+    {
+      title: '云资源',
+      icon: '☁️',
+      color: 'var(--text-secondary)',
+      items: [
+        { icon: '💾', label: '云盘扩容', onClick: () => Toast.show({ content: '开发中：CBS 扩容/快照', duration: 1500 }) },
+        { icon: '🌐', label: 'CLB/DNS', onClick: () => Toast.show({ content: '开发中：负载均衡/DNS', duration: 1500 }) },
+        { icon: '💰', label: '成本分析', onClick: () => Toast.show({ content: '开发中：云资源成本', duration: 1500 }) },
+        { icon: '🔐', label: '证书管理', onClick: () => Toast.show({ content: '开发中：SSL 证书到期', duration: 1500 }) }
+      ]
+    }
+  ]
 
   return (
     <div className="page">
-      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
-        <span className="title">📋 任务</span>
+      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))', padding: '12px 16px' }}>
+        <span className="title" style={{ fontSize: 18 }}>📋 运维</span>
         <Button size="mini" fill="none" onClick={load} loading={loading}>刷新</Button>
       </div>
 
       <PullToRefresh onRefresh={load}>
-        <div className="page-content">
-          {/* 快捷操作区 */}
-          <div style={{ background: 'var(--bg-elevated)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>快捷操作</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <Button size="small" color="primary" fill="outline" onClick={() => nav('/scale')}>
-                ⬆️ 扩容
-              </Button>
-              <Button size="small" fill="outline" onClick={() => nav('/operations')}>
-                📜 全部历史
-              </Button>
-            </div>
-          </div>
+        <div style={{ padding: '0 12px 80px' }}>
 
-          {/* 进行中任务 */}
+          {/* === 综合运维场景入口 === */}
+          {scenarios.map((s, idx) => (
+            <div key={idx} style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 10,
+              padding: '10px 12px',
+              marginBottom: 10
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 16 }}>{s.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: s.color }}>{s.title}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {s.items.map((it, i) => (
+                  <div
+                    key={i}
+                    onClick={() => { hapticLight(); it.onClick() }}
+                    style={{
+                      padding: '10px 4px',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 8,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ fontSize: 18 }}>{it.icon}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{it.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* === 进行中任务 === */}
           {running.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--warning)', marginBottom: 8 }}>
                 ⏳ 进行中 ({running.length})
               </div>
-              {running.map(renderTask)}
+              {running.map((o: any) => {
+                const info = statusInfo(o.status)
+                return (
+                  <div
+                    key={o.id}
+                    onClick={() => nav('/operations')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 0', borderBottom: '1px solid var(--border-color)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{actionIcon(o.action)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>
+                        {actionLabel(o.action)}
+                        {o.delta ? ` ${o.delta > 0 ? '+' : ''}${o.delta}` : ''}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                        {o.cluster_name || `集群 #${o.cluster_id}`} · {o.node_pool_name || '-'}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: info.color, fontWeight: 600 }}>{info.text}</span>
+                  </div>
+                )
+              })}
             </div>
           )}
 
-          {/* 最近完成 */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-              🕒 最近完成
+          {/* === 最近操作 === */}
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>🕒 最近操作</span>
+              <span onClick={() => nav('/operations')} style={{ fontSize: 11, color: 'var(--accent-blue)', cursor: 'pointer' }}>
+                全部 ›
+              </span>
             </div>
             {recentDone.length === 0 ? (
-              <Empty
-                style={{ padding: '40px 0' }}
-                imageStyle={{ width: 60 }}
-                description={<span style={{ fontSize: 12 }}>还没有任务记录</span>}
-              />
+              <Empty description={<span style={{ fontSize: 11 }}>还没有操作记录</span>} imageStyle={{ width: 48 }} style={{ padding: '20px 0' }} />
             ) : (
-              recentDone.map(renderTask)
+              recentDone.slice(0, 8).map((o: any) => {
+                const info = statusInfo(o.status)
+                return (
+                  <div
+                    key={o.id}
+                    onClick={() => nav('/operations')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 0', borderBottom: '1px solid var(--border-color)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{actionIcon(o.action)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {actionLabel(o.action)}
+                        {o.delta ? ` ${o.delta > 0 ? '+' : ''}${o.delta}` : ''}
+                        {o.node_pool_name && <span style={{ color: 'var(--text-tertiary)' }}> · {o.node_pool_name}</span>}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{fmtRelative(o.created_at || o.started_at)}</span>
+                    <span style={{ fontSize: 10, color: info.color, fontWeight: 600, minWidth: 32, textAlign: 'right' }}>
+                      {o.status === 'success' ? '✓' : o.status === 'failed' ? '✗' : o.status}
+                    </span>
+                  </div>
+                )
+              })
             )}
           </div>
+
         </div>
       </PullToRefresh>
     </div>

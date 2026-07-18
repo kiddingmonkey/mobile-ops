@@ -656,3 +656,28 @@ option {
   --checked-color: var(--accent-blue);
 }
 
+/* 紧凑化 List (整体设置页/详情页更紧凑) */
+.adm-list-item {
+  --padding-left: 12px !important;
+  --padding-right: 12px !important;
+}
+.adm-list-item-content {
+  min-height: 40px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+.adm-list-header {
+  padding: 8px 12px 4px !important;
+  font-size: 11px !important;
+  color: var(--text-tertiary) !important;
+}
+
+/* 紧凑化 Card 之间的间距 */
+.page-content {
+  padding: 10px 12px !important;
+}
+.card + .card,
+.adm-list + .adm-list {
+  margin-top: 10px !important;
+}
+

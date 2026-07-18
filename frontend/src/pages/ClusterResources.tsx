@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { List, PullToRefresh, Toast, SearchBar, SpinLoading } from 'antd-mobile'
+import { PullToRefresh, Toast, SearchBar, SpinLoading } from 'antd-mobile'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, API_BASE } from '@/api/client'
 import { useEventStream } from '@/hooks/useEventStream'
 import PageShell from '@/components/PageShell'
 import { hapticLight } from '@/utils/haptics'
+import QuickActionsSheet from '@/components/QuickActionsSheet'
 
 type ResourceType = string
 
@@ -34,6 +35,7 @@ export default function ClusterResourcesPage() {
   const [crds, setCrds]         = useState<any[]>([])
   const [crdSearch, setCrdSearch] = useState('')
   const [showCrds, setShowCrds] = useState(false)
+  const [actionsResource, setActionsResource] = useState<any>(null)
 
   const isBuiltin = BUILTIN.some(t => t.key === tab)
 
@@ -136,7 +138,7 @@ export default function ClusterResourcesPage() {
   const currentLabel = currentBuiltin?.label ?? currentCrd?.kind ?? tab
 
   return (
-    <PageShell title={cluster?.display_name || '集群资源'} onBack={() => nav(-1)}>
+    <PageShell title={cluster?.display_name || '集群资源'} onBack={() => nav(-1)} flex>
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
         {/* === 左侧竖向 Tab === */}
@@ -299,47 +301,113 @@ export default function ClusterResourcesPage() {
                     {keyword ? '没有匹配的资源' : `没有 ${currentLabel}`}
                   </div>
                 ) : (
-                  <List mode="card" style={{ '--font-size': '12px', '--prefix-width': '0px' } as any}>
+                  <div>
                     {filtered.map((r, i) => {
-                      const { description, statusColor } = getRowInfo(tab, r)
+                      const { description, statusColor, meta } = getRowInfo(tab, r)
                       return (
-                        <List.Item
+                        <div
                           key={i}
-                          prefix={
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, marginRight: 4, flexShrink: 0 }} />
-                          }
-                          description={<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{description}</span>}
-                          onClick={() => openDetail(r)}
-                          style={{ padding: '7px 10px' }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '6px 8px 6px 10px',
+                            borderBottom: '1px solid var(--border-color)',
+                            background: 'var(--bg-elevated)',
+                            minHeight: 40
+                          }}
                         >
-                          {r.name}
-                        </List.Item>
+                          {/* 状态点 */}
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+
+                          {/* 主体 - 点击进详情 */}
+                          <div
+                            onClick={() => openDetail(r)}
+                            style={{ flex: 1, minWidth: 0, cursor: 'pointer', paddingRight: 4 }}
+                          >
+                            <div style={{
+                              fontSize: 12, fontWeight: 500, color: 'var(--text-primary)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              lineHeight: 1.3
+                            }}>
+                              {r.name}
+                            </div>
+                            <div style={{
+                              fontSize: 10, color: 'var(--text-tertiary)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              marginTop: 1, lineHeight: 1.2
+                            }}>
+                              {description}
+                            </div>
+                          </div>
+
+                          {/* 关键指标（如副本数） */}
+                          {meta && (
+                            <div style={{
+                              fontSize: 10, fontWeight: 600,
+                              color: 'var(--text-secondary)',
+                              padding: '2px 6px',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: 4,
+                              flexShrink: 0
+                            }}>
+                              {meta}
+                            </div>
+                          )}
+
+                          {/* 快捷操作三点按钮 */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              hapticLight()
+                              setActionsResource({
+                                tab, name: r.name, namespace: r.namespace,
+                                clusterId, replicas: r.replicas ?? parseInt(r.ready?.split('/')?.[1] || '0')
+                              })
+                            }}
+                            style={{
+                              width: 30, height: 30, flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer',
+                              color: 'var(--text-secondary)',
+                              fontSize: 18, fontWeight: 700
+                            }}
+                          >
+                            ⋯
+                          </div>
+                        </div>
                       )
                     })}
-                  </List>
+                  </div>
                 )}
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* 快捷操作底部弹窗 */}
+      <QuickActionsSheet
+        visible={!!actionsResource}
+        resource={actionsResource}
+        onClose={() => setActionsResource(null)}
+        onRefresh={() => loadResources(tab)}
+      />
     </PageShell>
   )
 }
 
 // ---- 工具函数 ----
 
-function getRowInfo(tab: string, r: any): { description: string; statusColor: string } {
+function getRowInfo(tab: string, r: any): { description: string; statusColor: string; meta?: string } {
   switch (tab) {
-    case 'pods':        return { description: `${r.namespace} · ${r.ready} · 重启 ${r.restarts || 0}`, statusColor: r.status === 'Running' ? 'var(--success)' : 'var(--warning)' }
-    case 'deployments': return { description: `${r.namespace} · ${r.ready} · Avail ${r.available}`, statusColor: r.available > 0 ? 'var(--success)' : 'var(--warning)' }
-    case 'statefulsets':return { description: `${r.namespace} · ${r.ready}/${r.replicas}`, statusColor: r.ready === r.replicas ? 'var(--success)' : 'var(--warning)' }
-    case 'daemonsets':  return { description: `${r.namespace} · ${r.ready}/${r.desired}`, statusColor: r.ready === r.desired ? 'var(--success)' : 'var(--warning)' }
-    case 'services':    return { description: `${r.namespace} · ${r.type} · ${r.cluster_ip}`, statusColor: 'var(--accent-blue)' }
+    case 'pods':        return { description: `${r.namespace} · 重启 ${r.restarts || 0}`, meta: r.ready, statusColor: r.status === 'Running' ? 'var(--success)' : 'var(--warning)' }
+    case 'deployments': return { description: `${r.namespace} · Avail ${r.available}`, meta: r.ready, statusColor: r.available > 0 ? 'var(--success)' : 'var(--warning)' }
+    case 'statefulsets':return { description: `${r.namespace}`, meta: `${r.ready}/${r.replicas}`, statusColor: r.ready === r.replicas ? 'var(--success)' : 'var(--warning)' }
+    case 'daemonsets':  return { description: `${r.namespace}`, meta: `${r.ready}/${r.desired}`, statusColor: r.ready === r.desired ? 'var(--success)' : 'var(--warning)' }
+    case 'services':    return { description: `${r.namespace} · ${r.cluster_ip}`, meta: r.type, statusColor: 'var(--accent-blue)' }
     case 'ingresses':   return { description: `${r.namespace} · ${(r.hosts||[]).slice(0,2).join(', ')||'-'}`, statusColor: 'var(--accent-blue)' }
-    case 'configmaps':  return { description: `${r.namespace} · ${r.data_count} keys`, statusColor: 'var(--accent-blue)' }
-    case 'secrets':     return { description: `${r.namespace} · ${r.type}`, statusColor: 'var(--warning)' }
-    case 'nodes':       return { description: r.ready === 'True' ? 'Ready' : 'NotReady', statusColor: r.ready === 'True' ? 'var(--success)' : 'var(--danger)' }
+    case 'configmaps':  return { description: `${r.namespace}`, meta: `${r.data_count} keys`, statusColor: 'var(--accent-blue)' }
+    case 'secrets':     return { description: `${r.namespace}`, meta: r.type, statusColor: 'var(--warning)' }
+    case 'nodes':       return { description: r.zone || '', meta: r.ready === 'True' ? 'Ready' : 'NotReady', statusColor: r.ready === 'True' ? 'var(--success)' : 'var(--danger)' }
     default:            return { description: r.namespace || '-', statusColor: 'var(--accent-blue)' }
   }
 }

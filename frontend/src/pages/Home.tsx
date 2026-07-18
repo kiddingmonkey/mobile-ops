@@ -195,38 +195,30 @@ export default function HomePage() {
                 const ready = k?.ready_nodes ?? p?.ready_nodes ?? 0
                 const cpu = p?.avg_cpu_usage_percent
                 const mem = p?.avg_mem_usage_percent
-                const pods = p?.pod_count ?? '-'
                 const healthy = nodes > 0 && ready === nodes
                 return (
                   <div
                     key={c.id}
                     onClick={() => { hapticLight(); setActiveCluster(c.id); nav(`/clusters/${c.id}/resources`) }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 0',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 0',
                       borderBottom: '1px solid var(--border-color)',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      minHeight: 36
                     }}
                   >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: healthy ? 'var(--success)' : nodes === 0 ? 'var(--text-tertiary)' : 'var(--warning)' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: healthy ? 'var(--success)' : nodes === 0 ? 'var(--text-tertiary)' : 'var(--warning)' }} />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                         {c.display_name || c.name}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'flex', gap: 6, marginTop: 2 }}>
-                        <span>{ready}/{nodes} 节点</span>
-                        {cpu !== undefined && <span>CPU {Math.round(cpu)}%</span>}
-                        {mem !== undefined && <span>Mem {Math.round(mem)}%</span>}
-                        <span>Pods {pods}</span>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <span>{ready}/{nodes}</span>
+                        {cpu !== undefined && <span>C {Math.round(cpu)}%</span>}
+                        {mem !== undefined && <span>M {Math.round(mem)}%</span>}
                       </div>
                     </div>
-                    <Button
-                      size="mini" fill="outline"
-                      onClick={e => { e.stopPropagation(); hapticLight(); setActiveCluster(c.id); nav('/scale') }}
-                      style={{ fontSize: 10, flexShrink: 0 }}
-                    >
-                      扩容
-                    </Button>
                   </div>
                 )
               })}

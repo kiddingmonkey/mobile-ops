@@ -382,133 +382,81 @@ export default function LogsPage() {
             >
               {/* 云日志 Tab */}
               <Tabs.Tab title="☁️ 云日志 (CLS)" key="cloud">
-                <div className="card" style={{ padding: '12px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>地域</div>
-                      <select
-                        value={selectedRegion}
-                        onChange={(e) => {
-                          setSelectedRegion(e.target.value)
-                          setSelectedLogset('')
-                          setClsLogs([])
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: 'var(--bg-secondary)',
-                          fontSize: 12
-                        }}
-                      >
-                        <option value="">选择地域</option>
-                        {regions.map(r => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>日志集</div>
-                      <select
-                        value={selectedLogset}
-                        onChange={(e) => {
-                          setSelectedLogset(e.target.value)
-                          setClsLogs([])
-                        }}
-                        disabled={!selectedRegion || logsets.length === 0}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: 'var(--bg-secondary)',
-                          fontSize: 12,
-                          opacity: !selectedRegion ? 0.5 : 1
-                        }}
-                      >
-                        <option value="">选择日志集</option>
-                        {logsets.map((ls: any) => (
-                          <option key={ls.id} value={ls.id}>{ls.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                {/* 紧凑控制条：四个下拉 + 搜索框在两行 */}
+                <div style={{
+                  padding: '6px 8px',
+                  background: 'var(--bg-elevated)',
+                  borderBottom: '1px solid var(--border-color)'
+                }}>
+                  {/* 第一行：地域 + 日志集 + 时间 + 级别 */}
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    <select
+                      value={selectedRegion}
+                      onChange={(e) => { setSelectedRegion(e.target.value); setSelectedLogset(''); setClsLogs([]) }}
+                      style={{ flex: 1, minWidth: 0, padding: '4px 4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)' }}
+                    >
+                      <option value="">地域</option>
+                      {regions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                    <select
+                      value={selectedLogset}
+                      onChange={(e) => { setSelectedLogset(e.target.value); setClsLogs([]) }}
+                      disabled={!selectedRegion || logsets.length === 0}
+                      style={{ flex: 1.4, minWidth: 0, padding: '4px 4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)', opacity: !selectedRegion ? 0.5 : 1 }}
+                    >
+                      <option value="">日志集</option>
+                      {logsets.map((ls: any) => <option key={ls.id} value={ls.id}>{ls.name}</option>)}
+                    </select>
+                    <select
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value)}
+                      style={{ flex: 1, minWidth: 0, padding: '4px 4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)' }}
+                    >
+                      {TIME_RANGES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <select
+                      value={logLevel}
+                      onChange={(e) => setLogLevel(e.target.value as any)}
+                      style={{
+                        width: 74, flexShrink: 0, padding: '4px 4px', borderRadius: 4,
+                        border: `1px solid ${logLevel === 'error' ? 'var(--danger)' : logLevel === 'warn' ? 'var(--warning)' : 'var(--border-color)'}`,
+                        background: logLevel === 'error' ? 'var(--danger-bg)' : logLevel === 'warn' ? 'var(--warning-bg)' : 'var(--bg-secondary)',
+                        color: logLevel === 'error' ? 'var(--danger)' : logLevel === 'warn' ? 'var(--warning)' : 'var(--text-primary)',
+                        fontSize: 11, fontWeight: logLevel !== 'all' ? 600 : 400
+                      }}
+                    >
+                      {LOG_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                    </select>
                   </div>
 
-                  {/* 时间范围 + 日志级别 - 两列布局 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>时间范围</div>
-                      <select
-                        value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: 'var(--bg-secondary)',
-                          fontSize: 12
-                        }}
-                      >
-                        {TIME_RANGES.map(t => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>日志级别</div>
-                      <select
-                        value={logLevel}
-                        onChange={(e) => setLogLevel(e.target.value as any)}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: logLevel === 'error' ? '#fee2e2' : logLevel === 'warn' ? '#fef3c7' : 'var(--bg-secondary)',
-                          color: logLevel === 'error' ? '#991b1b' : logLevel === 'warn' ? '#78350f' : 'var(--text-primary)',
-                          fontSize: 12,
-                          fontWeight: logLevel !== 'all' ? 600 : 400
-                        }}
-                      >
-                        {LOG_LEVELS.map(l => (
-                          <option key={l.value} value={l.value}>{l.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>搜索关键词</span>
-                      <InformationCircleOutline
-                        fontSize={14}
-                        onClick={showIndexHelp}
-                        style={{ color: 'var(--accent-blue)', cursor: 'pointer' }}
+                  {/* 第二行：搜索框 + 搜索按钮 */}
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Input
+                        placeholder="搜索关键词 (支持 CLS 语法)"
+                        value={clsKeywordInput}
+                        onChange={(val) => setClsKeywordInput(val)}
+                        onEnterPress={() => searchClsLogs(false)}
+                        clearable
+                        style={{ '--font-size': '11px' } as any}
                       />
                     </div>
-                    <Input
-                      placeholder="输入关键词或留空查看全部（支持 CLS 语法）"
-                      value={clsKeywordInput}
-                      onChange={(val) => setClsKeywordInput(val)}
-                      onEnterPress={() => searchClsLogs(false)}
-                      clearable
-                      style={{ '--font-size': '12px' } as any}
+                    <InformationCircleOutline
+                      fontSize={16}
+                      onClick={showIndexHelp}
+                      style={{ color: 'var(--accent-blue)', cursor: 'pointer', flexShrink: 0 }}
                     />
+                    <Button
+                      color="primary"
+                      size="mini"
+                      onClick={() => searchClsLogs(false)}
+                      loading={clsLoading}
+                      disabled={!selectedRegion || !selectedLogset}
+                      style={{ flexShrink: 0, fontSize: 11 }}
+                    >
+                      {clsKeywordInput.trim() ? '搜索' : '查询'}
+                    </Button>
                   </div>
-
-                  <Button
-                    block
-                    color="primary"
-                    size="small"
-                    onClick={() => searchClsLogs(false)}
-                    loading={clsLoading}
-                    disabled={!selectedRegion || !selectedLogset}
-                  >
-                    {clsKeywordInput.trim() ? '搜索日志' : '查看最新日志'}
-                  </Button>
                 </div>
 
                 {clsLogs.length === 0 ? (
@@ -585,152 +533,74 @@ export default function LogsPage() {
 
               {/* 容器日志 Tab */}
               <Tabs.Tab title="📦 容器日志 (Pod)" key="pod">
-                <div className="card" style={{ padding: '12px' }}>
-                  {/* 紧凑的选择器 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>Namespace</div>
+                {/* 紧凑控制条 */}
+                <div style={{
+                  padding: '6px 8px',
+                  background: 'var(--bg-elevated)',
+                  borderBottom: '1px solid var(--border-color)'
+                }}>
+                  {/* 第一行：namespace + pod + 容器 */}
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    <select
+                      value={selectedNamespace}
+                      onChange={(e) => { setSelectedNamespace(e.target.value); setSelectedPod(''); setSelectedContainer(''); setPodLogs('') }}
+                      style={{ flex: 1, minWidth: 0, padding: '4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)' }}
+                    >
+                      <option value="">namespace</option>
+                      {namespaces.map(ns => <option key={ns} value={ns}>{ns}</option>)}
+                    </select>
+                    <select
+                      value={selectedPod}
+                      onChange={(e) => { setSelectedPod(e.target.value); setSelectedContainer(''); setPodLogs('') }}
+                      disabled={!selectedNamespace || pods.length === 0}
+                      style={{ flex: 1.5, minWidth: 0, padding: '4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)', opacity: !selectedNamespace ? 0.5 : 1 }}
+                    >
+                      <option value="">Pod</option>
+                      {pods.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                    </select>
+                    {containers.length > 0 && (
                       <select
-                        value={selectedNamespace}
-                        onChange={(e) => {
-                          setSelectedNamespace(e.target.value)
-                          setSelectedPod('')
-                          setSelectedContainer('')
-                          setPodLogs('')
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: 'var(--bg-secondary)',
-                          fontSize: 12
-                        }}
+                        value={selectedContainer}
+                        onChange={(e) => { setSelectedContainer(e.target.value); setPodLogs('') }}
+                        style={{ flex: 1, minWidth: 0, padding: '4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)' }}
                       >
-                        <option value="">选择 namespace</option>
-                        {namespaces.map(ns => (
-                          <option key={ns} value={ns}>{ns}</option>
-                        ))}
+                        {containers.length > 1 && <option value="">容器</option>}
+                        {containers.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                    </div>
-
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>Pod</div>
-                      <select
-                        value={selectedPod}
-                        onChange={(e) => {
-                          setSelectedPod(e.target.value)
-                          setSelectedContainer('')
-                          setPodLogs('')
-                        }}
-                        disabled={!selectedNamespace || pods.length === 0}
-                        style={{
-                          width: '100%',
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border-color)',
-                          background: 'var(--bg-secondary)',
-                          fontSize: 12,
-                          opacity: !selectedNamespace ? 0.5 : 1
-                        }}
-                      >
-                        <option value="">选择 Pod</option>
-                        {pods.map(p => (
-                          <option key={p.name} value={p.name}>{p.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    )}
                   </div>
 
-                  {selectedPod && containers.length > 0 && (
-                    <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>容器</div>
-                      {containers.length === 1 ? (
-                        <div style={{
-                          padding: '5px 10px',
-                          borderRadius: 6,
-                          fontSize: 11,
-                          background: 'var(--accent-blue)',
-                          color: 'white',
-                          display: 'inline-block'
-                        }}>
-                          {containers[0]}
-                        </div>
-                      ) : (
-                        <select
-                          value={selectedContainer}
-                          onChange={(e) => {
-                            setSelectedContainer(e.target.value)
-                            setPodLogs('')
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '5px 8px',
-                            borderRadius: 6,
-                            border: '1px solid var(--border-color)',
-                            background: 'var(--bg-secondary)',
-                            fontSize: 12
-                          }}
-                        >
-                          <option value="">选择容器</option>
-                          {containers.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 行数 + 日志类型 */}
-                  {selectedPod && (
-                    <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>选项</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {[100, 200, 500, 1000, 2000].map(n => (
-                          <span
-                            key={n}
-                            onClick={() => setPodTail(n)}
-                            style={{
-                              padding: '3px 8px',
-                              borderRadius: 4,
-                              fontSize: 11,
-                              cursor: 'pointer',
-                              background: podTail === n ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                              color: podTail === n ? '#fff' : 'var(--text-primary)',
-                              border: '1px solid ' + (podTail === n ? 'var(--accent-blue)' : 'var(--border-color)')
-                            }}
-                          >
-                            {n}行
-                          </span>
-                        ))}
-                        <span
-                          onClick={() => setPodPrevious(!podPrevious)}
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            cursor: 'pointer',
-                            background: podPrevious ? 'var(--warning)' : 'var(--bg-secondary)',
-                            color: podPrevious ? '#fff' : 'var(--text-primary)',
-                            border: '1px solid ' + (podPrevious ? 'var(--warning)' : 'var(--border-color)')
-                          }}
-                        >
-                          {podPrevious ? '✓ 上次崩溃' : '上次崩溃(-p)'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <Button
-                    block
-                    color="primary"
-                    size="small"
-                    onClick={loadPodLogs}
-                    loading={podLoading}
-                    disabled={!selectedPod || !selectedContainer}
-                  >
-                    查看日志
-                  </Button>
+                  {/* 第二行：行数 + 上次崩溃 + 查看按钮 */}
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <select
+                      value={podTail}
+                      onChange={(e) => setPodTail(Number(e.target.value))}
+                      style={{ width: 60, flexShrink: 0, padding: '4px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-primary)' }}
+                    >
+                      {[100, 200, 500, 1000, 2000].map(n => <option key={n} value={n}>{n}行</option>)}
+                    </select>
+                    <span
+                      onClick={() => setPodPrevious(!podPrevious)}
+                      style={{
+                        padding: '4px 8px', borderRadius: 4, fontSize: 11, cursor: 'pointer', flexShrink: 0,
+                        background: podPrevious ? 'var(--warning)' : 'var(--bg-secondary)',
+                        color: podPrevious ? '#fff' : 'var(--text-primary)',
+                        border: '1px solid ' + (podPrevious ? 'var(--warning)' : 'var(--border-color)')
+                      }}
+                    >
+                      {podPrevious ? '✓ 崩溃' : '上次崩溃'}
+                    </span>
+                    <div style={{ flex: 1 }} />
+                    <Button
+                      color="primary" size="mini"
+                      onClick={loadPodLogs}
+                      loading={podLoading}
+                      disabled={!selectedPod || !selectedContainer}
+                      style={{ flexShrink: 0, fontSize: 11 }}
+                    >
+                      查看日志
+                    </Button>
+                  </div>
                 </div>
 
                 {podLogs && (
