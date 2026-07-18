@@ -141,6 +141,13 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/cls/regions/:region/logsets", h.ListCLSLogsets)
 		priv.GET("/cls/regions/:region/logsets/:logset_id/topics", h.ListCLSTopics)
 		priv.POST("/cls/search", h.SearchCLSLogs)
+
+		// 通知渠道（飞书 Webhook 等）
+		priv.GET("/notifications/webhooks", h.ListNotificationWebhooks)
+		priv.POST("/notifications/webhooks", h.CreateNotificationWebhook)
+		priv.PUT("/notifications/webhooks/:id", h.UpdateNotificationWebhook)
+		priv.DELETE("/notifications/webhooks/:id", h.DeleteNotificationWebhook)
+		priv.POST("/notifications/webhooks/:id/test", h.TestNotificationWebhook)
 	}
 }
 

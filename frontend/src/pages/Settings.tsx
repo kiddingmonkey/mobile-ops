@@ -209,6 +209,15 @@ export default function SettingsPage() {
           >K8s 集群</List.Item>
         </List>
 
+        {/* 通知 */}
+        <List header="通知推送" mode="card">
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => nav('/settings/notifications')}
+            description="配置飞书/企业微信告警推送"
+          >📢 通知渠道</List.Item>
+        </List>
+
         {/* 历史记录 */}
         <List header="历史" mode="card">
           <List.Item

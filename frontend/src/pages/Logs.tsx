@@ -24,6 +24,13 @@ export default function LogsPage() {
   const [selectedTopic, setSelectedTopic] = useState<any>(null) // 当前选中的topic完整信息
   const [timeRange, setTimeRange] = useState('15m')
   const [showTimeRangePicker, setShowTimeRangePicker] = useState(false)
+  const [logLevel, setLogLevel] = useState<'error' | 'warn' | 'info' | 'all'>('error') // 默认过滤 error
+  const LOG_LEVELS = [
+    { label: 'ERROR', value: 'error', color: '#ef4444' },
+    { label: 'WARN', value: 'warn', color: '#f59e0b' },
+    { label: 'INFO', value: 'info', color: '#3b82f6' },
+    { label: 'ALL', value: 'all', color: '#6b7280' }
+  ] as const
   const TIME_RANGES = [
     { label: '最近5分钟', value: '5m' },
     { label: '最近15分钟', value: '15m' },
@@ -184,8 +191,22 @@ export default function LogsPage() {
 
     setClsLoading(true)
     try {
-      // 无关键词时使用 * 查询全部（腾讯云CLS语法）
-      const query = finalKeyword || '*'
+      // 拼接日志级别过滤（用 CLS 全文搜索匹配 error/warn/info 关键词）
+      let levelFilter = ''
+      if (logLevel === 'error') levelFilter = 'error OR ERROR OR Error'
+      else if (logLevel === 'warn') levelFilter = 'warn OR WARN OR Warning'
+      else if (logLevel === 'info') levelFilter = 'info OR INFO'
+      // all 不加过滤
+
+      // 组合查询
+      let query = '*'
+      if (finalKeyword && levelFilter) {
+        query = `(${finalKeyword}) AND (${levelFilter})`
+      } else if (finalKeyword) {
+        query = finalKeyword
+      } else if (levelFilter) {
+        query = levelFilter
+      }
 
       // 计算时间范围
       const now = Date.now()
@@ -287,6 +308,13 @@ export default function LogsPage() {
       searchClsLogs(true)
     }
   }, [selectedLogset])
+
+  // 日志级别变化时自动重新查询
+  useEffect(() => {
+    if (selectedRegion && selectedLogset && activeTab === 'cloud') {
+      searchClsLogs(true)
+    }
+  }, [logLevel])
 
   return (
     <div className="page">
@@ -408,25 +436,48 @@ export default function LogsPage() {
                     </div>
                   </div>
 
-                  {/* 时间范围选择 - 改成下拉节省空间 */}
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>时间范围</div>
-                    <select
-                      value={timeRange}
-                      onChange={(e) => setTimeRange(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '5px 8px',
-                        borderRadius: 6,
-                        border: '1px solid var(--border-color)',
-                        background: 'var(--bg-secondary)',
-                        fontSize: 12
-                      }}
-                    >
-                      {TIME_RANGES.map(t => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
+                  {/* 时间范围 + 日志级别 - 两列布局 */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>时间范围</div>
+                      <select
+                        value={timeRange}
+                        onChange={(e) => setTimeRange(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-secondary)',
+                          fontSize: 12
+                        }}
+                      >
+                        {TIME_RANGES.map(t => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>日志级别</div>
+                      <select
+                        value={logLevel}
+                        onChange={(e) => setLogLevel(e.target.value as any)}
+                        style={{
+                          width: '100%',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--border-color)',
+                          background: logLevel === 'error' ? '#fee2e2' : logLevel === 'warn' ? '#fef3c7' : 'var(--bg-secondary)',
+                          color: logLevel === 'error' ? '#991b1b' : logLevel === 'warn' ? '#78350f' : 'var(--text-primary)',
+                          fontSize: 12,
+                          fontWeight: logLevel !== 'all' ? 600 : 400
+                        }}
+                      >
+                        {LOG_LEVELS.map(l => (
+                          <option key={l.value} value={l.value}>{l.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div style={{ marginBottom: 8 }}>
