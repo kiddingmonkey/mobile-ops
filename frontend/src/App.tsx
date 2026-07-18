@@ -96,6 +96,16 @@ export default function App() {
   })
 
   useEffect(() => {
+    // 检查是否是 OTA 更新后重启
+    const restartPending = localStorage.getItem('OTA_RESTART_PENDING')
+    if (restartPending) {
+      // 清除标记
+      localStorage.removeItem('OTA_RESTART_PENDING')
+      const savedVersion = localStorage.getItem(CURRENT_VERSION_KEY)
+      console.log(`[OTA] 检测到更新后重启，当前版本: ${savedVersion}`)
+      // Toast 提示用户更新成功（可选，避免打扰）
+    }
+
     restoreUpdatedVersion()
     setupBackButtonHandler()
 

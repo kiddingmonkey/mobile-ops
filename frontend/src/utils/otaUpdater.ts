@@ -318,75 +318,47 @@ export async function downloadAndApply(
       absPath = uri.uri.replace(/^file:\/\//, '')
       otaDebugLogger.log('success', 'getUri', `获取到绝对路径: ${absPath}`)
     } catch (e: any) {
-      otaDebugLogger.log('error', 'getUri', 'getUri 失败或超时，fallback 到直接 reload', {
+      otaDebugLogger.log('error', 'getUri', 'getUri 失败或超时，保存版本号后提示手动重启', {
         message: e.message,
         stack: e.stack
       })
-      // 如果getUri失败，直接reload让App重新检测
+      // 如果 getUri 失败，保存版本号后让用户手动重启
       localStorage.setItem(CURRENT_VERSION_KEY, info.version)
-      otaDebugLogger.log('info', 'reload', '保存版本号并准备 reload（500ms 后）')
-      onStatus?.('准备重启...')
-      setTimeout(() => {
-        otaDebugLogger.log('info', 'reload', '执行 window.location.href fallback')
-        try {
-          window.location.href = '/'
-        } catch {
-          window.location.reload()
-        }
-      }, 500)
+      localStorage.setItem('OTA_RESTART_PENDING', Date.now().toString())
+      otaDebugLogger.log('info', 'exitApp', '保存版本号成功，准备提示用户手动重启')
+      onStatus?.('更新完成！请手动重启 App 生效')
       return
     }
 
-    // 5. 切 WebView 到新目录（带超时保护）
-    otaDebugLogger.log('info', 'setServerBasePath', '尝试切换 WebView basePath')
-    try {
-      // 给整个 WebView 操作加 3 秒总超时（包括获取 plugin）
-      await Promise.race([
-        (async () => {
-          const webview = await tryGetWebViewPlugin()
-          if (webview) {
-            otaDebugLogger.log('info', 'setServerBasePath', '获取到 WebView plugin，开始切换')
-            await webview.setServerBasePath({ path: absPath })
-            otaDebugLogger.log('success', 'setServerBasePath', 'WebView basePath 切换成功')
-          } else {
-            otaDebugLogger.log('warn', 'setServerBasePath', 'WebView plugin 不可用，跳过')
-          }
-        })(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('WebView 操作超时 3s')), 3000))
-      ])
-    } catch (e: any) {
-      otaDebugLogger.log('warn', 'setServerBasePath', 'WebView 操作失败或超时，将继续 reload', {
-        message: e.message,
-        stack: e.stack
-      })
-    }
+    // 5. 跳过 setServerBasePath（可能导致 WebView 死锁，App 启动时会自动检测新路径）
+    otaDebugLogger.log('info', 'setServerBasePath', '跳过 setServerBasePath，依赖 App 启动时自动检测')
 
-    // 6. 保存版本号
+    // 6. 保存版本号（用同步的标记确保写入）
     otaDebugLogger.log('info', 'saveVersion', `保存版本号: ${info.version}`)
     localStorage.setItem(CURRENT_VERSION_KEY, info.version)
-    otaDebugLogger.log('success', 'saveVersion', '版本号保存成功')
+    // 设置一个重启标记，App 启动时检测到这个标记说明是更新后重启
+    localStorage.setItem('OTA_RESTART_PENDING', Date.now().toString())
+    otaDebugLogger.log('success', 'saveVersion', '版本号保存成功，已设置重启标记')
 
-    // 7. reload 生效（延迟 300ms 确保 localStorage 写入完成）
-    otaDebugLogger.log('info', 'reload', '准备 reload（300ms 后）')
-    onStatus?.('更新完成，即将重启...')
-    setTimeout(() => {
-      otaDebugLogger.log('info', 'reload', '尝试三种 reload 方式')
+    // 7. 温和退出 App 让用户手动重启（比强制 reload 更安全）
+    otaDebugLogger.log('info', 'exitApp', '准备温和退出 App')
+    onStatus?.('更新完成！请手动重启 App 生效')
+
+    // 延迟 2 秒让用户看到提示，然后尝试退出
+    setTimeout(async () => {
+      otaDebugLogger.log('info', 'exitApp', '尝试调用 App.exitApp()')
       try {
-        // 方式1: 强制跳转到根路径（绕过缓存）
-        otaDebugLogger.log('info', 'reload', '执行 window.location.href = "/"')
-        window.location.href = '/'
-      } catch (e1: any) {
-        otaDebugLogger.log('warn', 'reload', 'window.location.href 失败，fallback 到 replace', { message: e1.message })
-        try {
-          // 方式2: replace（不留历史记录）
-          window.location.replace('/')
-        } catch (e2: any) {
-          otaDebugLogger.log('warn', 'reload', 'replace 失败，fallback 到 reload()', { message: e2.message })
-          // 方式3: 传统 reload
-          window.location.reload()
-        }
+        const { App } = await import('@capacitor/app')
+        await App.exitApp()
+        otaDebugLogger.log('success', 'exitApp', 'App.exitApp() 调用成功')
+      } catch (e: any) {
+        otaDebugLogger.log('warn', 'exitApp', 'App.exitApp() 失败，提示用户手动重启', {
+          message: e.message
+        })
+        // exitApp 失败时不做任何操作，让用户看到"请手动重启"的提示
+        // 不执行任何 reload，避免死机
       }
-    }, 300)
+    }, 2000)
   } catch (e: any) {
     const errorMsg = e.message || '未知错误'
     otaDebugLogger.log('error', 'downloadAndApply', `更新失败: ${errorMsg}`, {
