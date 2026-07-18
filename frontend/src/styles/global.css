@@ -584,3 +584,75 @@ option {
   color: var(--text-secondary) !important;
 }
 
+/* Popover / PopoverMenu 修复 - 深色模式白底白字问题 */
+.adm-popover,
+.adm-popover-menu,
+.adm-popover-inner {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+.adm-popover-inner-content,
+.adm-popover-menu-item,
+.adm-popover-menu-item-text {
+  color: var(--text-primary) !important;
+  background: var(--bg-elevated) !important;
+}
+
+.adm-popover-menu-item {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.adm-popover-menu-item:last-child {
+  border-bottom: none !important;
+}
+
+.adm-popover-menu-item:active {
+  background: var(--bg-secondary) !important;
+}
+
+.adm-popover-arrow-icon {
+  color: var(--bg-elevated) !important;
+}
+
+/* Dialog / Modal / Picker / ActionSheet 通用背景修复 */
+.adm-dialog-body,
+.adm-modal-body,
+.adm-picker-view,
+.adm-action-sheet-body,
+.adm-center-popup-body,
+.adm-mask + .adm-center-popup .adm-center-popup-body {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+}
+
+/* SearchBar 深色模式 */
+.adm-search-bar-input-box {
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+}
+
+.adm-search-bar-input {
+  color: var(--text-primary) !important;
+}
+
+/* Selector 选中项深色适配 */
+.adm-selector-item {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.adm-selector-item-active {
+  background: var(--accent-blue-bg) !important;
+  color: var(--accent-blue) !important;
+  border-color: var(--accent-blue) !important;
+}
+
+/* Switch 深色适配 */
+.adm-switch {
+  --checked-color: var(--accent-blue);
+}
+

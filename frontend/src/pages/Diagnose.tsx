@@ -1,40 +1,71 @@
 import { useState } from 'react'
-import { Tabs } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import LogsPage from './Logs'
 import MonitorPage from './Monitor'
 
 /**
- * 诊断中心 - 合并 Logs + Monitor
- *
- * 定位: SRE 工作流"诊断"环节, 统一日志/监控/Pod 排查入口
- * 未来扩展: 日志-监控联动、快捷诊断按钮 (终端/重启/文件/事件)
+ * 诊断中心 - 紧凑分段选择器，节省纵向空间
  */
 export default function DiagnosePage() {
   const nav = useNavigate()
   const [tab, setTab] = useState<'logs' | 'monitor'>('logs')
 
   return (
-    <div className="page" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="page" style={{ height: '100%', display: 'flex', flexDirection: 'column', paddingBottom: 0 }}>
+      {/* 紧凑分段选择器 - 一行内的胶囊按钮 */}
       <div style={{
-        padding: 'max(12px, env(safe-area-inset-top)) 16px 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 'max(8px, env(safe-area-inset-top)) 12px 8px',
         background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border-color)'
+        borderBottom: '1px solid var(--border-color)',
+        gap: 8
       }}>
-        <div className="page-header" style={{ margin: 0, padding: 0, marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>
           🔍 诊断
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8 }}>
-          日志、监控、Pod 统一排查入口
+
+        <div style={{
+          display: 'flex',
+          background: 'var(--bg-secondary)',
+          borderRadius: 20,
+          padding: 2,
+          border: '1px solid var(--border-color)'
+        }}>
+          <button
+            onClick={() => setTab('logs')}
+            style={{
+              padding: '4px 14px',
+              fontSize: 12,
+              fontWeight: tab === 'logs' ? 600 : 400,
+              background: tab === 'logs' ? 'var(--accent-blue)' : 'transparent',
+              color: tab === 'logs' ? '#fff' : 'var(--text-secondary)',
+              border: 'none',
+              borderRadius: 18,
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            📋 日志
+          </button>
+          <button
+            onClick={() => setTab('monitor')}
+            style={{
+              padding: '4px 14px',
+              fontSize: 12,
+              fontWeight: tab === 'monitor' ? 600 : 400,
+              background: tab === 'monitor' ? 'var(--accent-blue)' : 'transparent',
+              color: tab === 'monitor' ? '#fff' : 'var(--text-secondary)',
+              border: 'none',
+              borderRadius: 18,
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            📊 监控
+          </button>
         </div>
-        <Tabs
-          activeKey={tab}
-          onChange={k => setTab(k as any)}
-          style={{ '--title-font-size': '13px' } as any}
-        >
-          <Tabs.Tab title="📋 日志" key="logs" />
-          <Tabs.Tab title="📊 监控" key="monitor" />
-        </Tabs>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto' }}>

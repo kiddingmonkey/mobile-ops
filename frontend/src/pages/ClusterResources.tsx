@@ -1,83 +1,60 @@
-import { useEffect, useMemo, useState } from 'react'
-import { List, Tabs, PullToRefresh, Toast, SearchBar, Popover } from 'antd-mobile'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { List, PullToRefresh, Toast, SearchBar, SpinLoading } from 'antd-mobile'
 import { useNavigate, useParams } from 'react-router-dom'
-import { RightOutline, UnorderedListOutline, FilterOutline } from 'antd-mobile-icons'
 import { api, API_BASE } from '@/api/client'
 import { useEventStream } from '@/hooks/useEventStream'
 import PageShell from '@/components/PageShell'
+import { hapticLight } from '@/utils/haptics'
 
-type ResourceType = string // 内置类型 + 动态 CRD 类型（格式：crd::group/version/resource）
+type ResourceType = string
 
-const BUILTIN_TABS: { key: string; label: string }[] = [
-  { key: 'pods', label: 'Pods' },
-  { key: 'deployments', label: 'Deployments' },
-  { key: 'statefulsets', label: 'StatefulSets' },
-  { key: 'daemonsets', label: 'DaemonSets' },
-  { key: 'services', label: 'Services' },
-  { key: 'ingresses', label: 'Ingresses' },
-  { key: 'configmaps', label: 'ConfigMaps' },
-  { key: 'secrets', label: 'Secrets' },
-  { key: 'nodes', label: 'Nodes' }
+const BUILTIN: { key: string; label: string; icon: string }[] = [
+  { key: 'pods',         label: 'Pods',         icon: '📦' },
+  { key: 'deployments',  label: 'Deploys',       icon: '🚀' },
+  { key: 'statefulsets', label: 'StatefulSets',  icon: '💾' },
+  { key: 'daemonsets',   label: 'DaemonSets',    icon: '👾' },
+  { key: 'services',     label: 'Services',      icon: '🌐' },
+  { key: 'ingresses',    label: 'Ingresses',     icon: '🔀' },
+  { key: 'configmaps',   label: 'ConfigMaps',    icon: '⚙️' },
+  { key: 'secrets',      label: 'Secrets',       icon: '🔐' },
+  { key: 'nodes',        label: 'Nodes',         icon: '🖥️' }
 ]
-
-type SortKey = 'name' | 'age' | 'status'
 
 export default function ClusterResourcesPage() {
   const nav = useNavigate()
   const { id } = useParams<{ id: string }>()
   const clusterId = parseInt(id || '0')
-  const [cluster, setCluster] = useState<any>(null)
-  const [tab, setTab] = useState<ResourceType>('pods')
+  const [cluster, setCluster]   = useState<any>(null)
+  const [tab, setTab]           = useState<ResourceType>('pods')
   const [resources, setResources] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-
-  // 搜索/排序/过滤 状态
-  const [keyword, setKeyword] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [keyword, setKeyword]   = useState('')
   const [namespace, setNamespace] = useState<string>('')
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDesc, setSortDesc] = useState(false)
-
-  // CRD 动态 Tab
-  const [crds, setCrds] = useState<{ key: string; label: string; namespaced: boolean }[]>([])
+  const [crds, setCrds]         = useState<any[]>([])
+  const [crdSearch, setCrdSearch] = useState('')
   const [showCrds, setShowCrds] = useState(false)
 
-  // SSE实时更新 (仅内置资源支持，CRD 走轮询)
-  const isBuiltin = BUILTIN_TABS.some(t => t.key === tab)
-  const sseUrl = clusterId && tab && isBuiltin
+  const isBuiltin = BUILTIN.some(t => t.key === tab)
+
+  // SSE 实时更新（只有内置资源支持）
+  const sseUrl = clusterId && isBuiltin
     ? `${API_BASE}/clusters/${clusterId}/resources/${tab}/watch${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`
     : ''
-
   const { connected } = useEventStream({
     url: sseUrl,
-    enabled: !!sseUrl && resources.length > 0, // 只有加载完初始数据后才启用SSE
+    enabled: !!sseUrl && resources.length > 0,
     onMessage: (events) => {
       events.forEach((evt: any) => {
         const { type, object } = evt
-        if (!object || !object.name) return
-
+        if (!object?.name) return
         setResources(prev => {
           const idx = prev.findIndex(r => r.name === object.name && r.namespace === object.namespace)
-
-          if (type === 'DELETED') {
-            // 删除
-            return idx >= 0 ? prev.filter((_, i) => i !== idx) : prev
-          }
-
-          if (type === 'ADDED') {
-            // 新增（避免重复）
-            if (idx >= 0) return prev
-            const newItem = transformResource(tab, object)
-            return [...prev, newItem]
-          }
-
+          if (type === 'DELETED') return idx >= 0 ? prev.filter((_, i) => i !== idx) : prev
+          if (type === 'ADDED')   return idx >= 0 ? prev : [...prev, transformResource(tab, object)]
           if (type === 'MODIFIED' && idx >= 0) {
-            // 更新
-            const updated = [...prev]
-            updated[idx] = transformResource(tab, object)
-            return updated
+            const u = [...prev]; u[idx] = transformResource(tab, object); return u
           }
-
           return prev
         })
       })
@@ -85,31 +62,22 @@ export default function ClusterResourcesPage() {
   })
 
   useEffect(() => {
-    if (clusterId) {
-      api.getCluster(clusterId).then(setCluster).catch(() => {})
-      api.listNamespaces(clusterId).then(ns => setNamespaces(ns || [])).catch(() => {})
-      api.get(`/clusters/${clusterId}/crds`).then((r: any) => {
-        setCrds((r || []).map((c: any) => ({
-          key: `crd::${c.group}/${c.version}/${c.plural}`,
-          label: c.kind,
-          namespaced: c.namespaced
-        })))
-      }).catch(() => {})
-    }
+    if (!clusterId) return
+    api.getCluster(clusterId).then(setCluster).catch(() => {})
+    api.listNamespaces(clusterId).then(ns => setNamespaces(ns || [])).catch(() => {})
+    api.get(`/clusters/${clusterId}/crds`).then((r: any) => {
+      setCrds(r || [])
+    }).catch(() => {})
   }, [clusterId])
 
-  useEffect(() => {
-    if (clusterId) loadResources(tab)
-  }, [clusterId, tab, namespace])
-
-  const loadResources = async (type: ResourceType) => {
+  const loadResources = useCallback(async (type: ResourceType) => {
     setLoading(true)
+    setKeyword('')
     try {
       let data: any
       if (type.startsWith('crd::')) {
-        const gvr = type.slice(5) // group/version/resource
-        const parts = gvr.split('/')
-        data = await api.get(`/clusters/${clusterId}/crds/${parts[0]}/${parts[1]}/${parts[2]}`, {
+        const [g, v, res] = type.slice(5).split('/')
+        data = await api.get(`/clusters/${clusterId}/crds/${g}/${v}/${res}`, {
           params: namespace ? { namespace } : {}
         })
       } else {
@@ -121,340 +89,271 @@ export default function ClusterResourcesPage() {
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '加载失败', icon: 'fail' })
       setResources([])
-    } finally {
-      setLoading(false)
-    }
-  }
+    } finally { setLoading(false) }
+  }, [clusterId, namespace])
 
-  const filteredSorted = useMemo(() => {
-    const kw = keyword.trim().toLowerCase()
-    const list = kw
-      ? resources.filter(r => (r.name || '').toLowerCase().includes(kw))
-      : resources
-    const sorted = [...list].sort((a, b) => {
-      let cmp = 0
-      if (sortKey === 'name') cmp = (a.name || '').localeCompare(b.name || '')
-      else if (sortKey === 'age') cmp = new Date(a.age || 0).getTime() - new Date(b.age || 0).getTime()
-      else if (sortKey === 'status') cmp = (a.status || a.ready || '').toString().localeCompare((b.status || b.ready || '').toString())
-      return sortDesc ? -cmp : cmp
+  useEffect(() => { loadResources(tab) }, [tab, namespace])
+
+  const filtered = useMemo(() => {
+    if (!keyword) return resources
+    const kw = keyword.toLowerCase()
+    return resources.filter(r =>
+      (r.name || '').toLowerCase().includes(kw) ||
+      (r.namespace || '').toLowerCase().includes(kw)
+    )
+  }, [resources, keyword])
+
+  // CRD 按 group 分组，支持搜索
+  const crdGroups = useMemo(() => {
+    const search = crdSearch.toLowerCase()
+    const filtered = search
+      ? crds.filter(c => c.kind.toLowerCase().includes(search) || c.group.toLowerCase().includes(search))
+      : crds
+    const groups: Record<string, any[]> = {}
+    filtered.forEach(c => {
+      const g = c.group || '其他'
+      if (!groups[g]) groups[g] = []
+      groups[g].push(c)
     })
-    return sorted
-  }, [resources, keyword, sortKey, sortDesc])
+    return groups
+  }, [crds, crdSearch])
 
   const openDetail = (r: any) => {
-    if (tab === 'pods') {
-      nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)
-      return
-    }
-    if (tab === 'nodes') {
-      nav(`/clusters/${clusterId}/resources/nodes/-/${r.name}`)
-      return
-    }
+    hapticLight()
+    if (tab === 'pods')  return nav(`/clusters/${clusterId}/pods/${r.namespace}/${r.name}`)
+    if (tab === 'nodes') return nav(`/clusters/${clusterId}/resources/nodes/-/${r.name}`)
     if (tab.startsWith('crd::')) {
       const gvr = tab.slice(5)
-      nav(`/clusters/${clusterId}/crds/${encodeURIComponent(gvr)}/${r.namespace || '-'}/${r.name}`)
-      return
+      return nav(`/clusters/${clusterId}/crds/${encodeURIComponent(gvr)}/${r.namespace || '-'}/${r.name}`)
     }
     nav(`/clusters/${clusterId}/resources/${tab}/${r.namespace}/${r.name}`)
   }
 
-  const allTabs = useMemo(() => {
-    return showCrds && crds.length > 0
-      ? [...BUILTIN_TABS, ...crds.map(c => ({ key: c.key, label: c.label }))]
-      : BUILTIN_TABS
-  }, [showCrds, crds])
-
-  const sortActions = [
-    { key: 'name-asc', text: '名称 ↑' },
-    { key: 'name-desc', text: '名称 ↓' },
-    { key: 'age-asc', text: '创建时间 ↑' },
-    { key: 'age-desc', text: '创建时间 ↓' },
-    { key: 'status-asc', text: '状态 ↑' },
-    { key: 'status-desc', text: '状态 ↓' }
-  ]
+  const currentBuiltin = BUILTIN.find(b => b.key === tab)
+  const currentCrd = !currentBuiltin && tab.startsWith('crd::')
+    ? crds.find(c => `crd::${c.group}/${c.version}/${c.plural}` === tab)
+    : null
+  const currentLabel = currentBuiltin?.label ?? currentCrd?.kind ?? tab
 
   return (
     <PageShell title={cluster?.display_name || '集群资源'} onBack={() => nav(-1)}>
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <Tabs activeKey={tab} onChange={k => setTab(k)} style={{
-            '--title-font-size': '12px',
-            '--active-title-color': 'var(--accent-blue)'
-          } as any}>
-            {allTabs.map(t => <Tabs.Tab title={t.label} key={t.key} />)}
-          </Tabs>
-        </div>
-        {crds.length > 0 && (
-          <div
-            onClick={() => setShowCrds(v => !v)}
-            style={{
-              padding: '4px 8px',
-              fontSize: 11,
-              color: showCrds ? 'var(--accent-blue)' : 'var(--text-tertiary)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {showCrds ? 'CRD ✓' : `+CRD(${crds.length})`}
-          </div>
-        )}
-      </div>
+      <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-      {/* 搜索 / 命名空间过滤 / 排序 */}
-      <div style={{
-        display: 'flex',
-        gap: 6,
-        padding: '8px 12px',
-        background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border-color)',
-        alignItems: 'center'
-      }}>
-        <div style={{ flex: 1 }}>
-          <SearchBar
-            placeholder="搜索名称"
-            value={keyword}
-            onChange={setKeyword}
-            style={{ '--height': '32px', '--font-size': '12px' } as any}
-          />
-        </div>
-        <Popover.Menu
-          actions={[
-            { key: '', text: '全部命名空间' },
-            ...namespaces.map(ns => ({ key: ns, text: ns }))
-          ]}
-          onAction={(node: any) => setNamespace(node.key)}
-          trigger="click"
-          placement="bottom-end"
-        >
-          <div style={{
-            padding: '6px 8px',
-            fontSize: 11,
-            borderRadius: 4,
-            background: namespace ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-            color: namespace ? '#fff' : 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
-            maxWidth: 100,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            cursor: 'pointer'
-          }}>
-            <FilterOutline fontSize={12} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{namespace || 'ns'}</span>
-          </div>
-        </Popover.Menu>
-        <Popover.Menu
-          actions={sortActions}
-          onAction={(node: any) => {
-            const [k, dir] = node.key.split('-')
-            setSortKey(k as SortKey)
-            setSortDesc(dir === 'desc')
-          }}
-          trigger="click"
-          placement="bottom-end"
-        >
-          <div style={{
-            padding: '6px 8px',
-            fontSize: 11,
-            borderRadius: 4,
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
-            cursor: 'pointer'
-          }}>
-            <UnorderedListOutline fontSize={12} />
-            <span>{sortKey}{sortDesc ? '↓' : '↑'}</span>
-          </div>
-        </Popover.Menu>
-      </div>
-
-      <PullToRefresh onRefresh={() => loadResources(tab)}>
-        <div className="page-content">
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>加载中...</div>
-          ) : filteredSorted.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📦</div>
-              <div className="empty-title">{keyword ? '没有匹配' : `没有 ${tab}`}</div>
+        {/* === 左侧竖向 Tab === */}
+        <div style={{
+          width: 68,
+          flexShrink: 0,
+          background: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border-color)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* 内置资源 Tab */}
+          {BUILTIN.map(b => (
+            <div
+              key={b.key}
+              onClick={() => { hapticLight(); setTab(b.key); setShowCrds(false) }}
+              style={{
+                padding: '9px 4px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: tab === b.key ? 'var(--accent-blue-bg)' : 'transparent',
+                borderLeft: tab === b.key ? '3px solid var(--accent-blue)' : '3px solid transparent',
+                transition: 'all 0.15s'
+              }}
+            >
+              <div style={{ fontSize: 16 }}>{b.icon}</div>
+              <div style={{ fontSize: 9, marginTop: 2, color: tab === b.key ? 'var(--accent-blue)' : 'var(--text-tertiary)', fontWeight: tab === b.key ? 600 : 400, lineHeight: 1.2 }}>
+                {b.label.length > 7 ? b.label.slice(0, 6) + '…' : b.label}
+              </div>
             </div>
-          ) : (
-            <List mode="card" style={{
-              '--font-size': '12px',
-              '--prefix-width': '0px'
-            } as any}>
-              {filteredSorted.map((r, i) => {
-                const { description, statusColor } = getRowInfo(tab, r)
+          ))}
 
-                return (
-                  <List.Item
-                    key={i}
-                    prefix={
-                      <div style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: statusColor,
-                        marginRight: 6
-                      }} />
-                    }
-                    description={
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                        {description}
-                      </div>
-                    }
-                    arrow={<RightOutline fontSize={14} />}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: 13
-                    }}
-                    onClick={() => openDetail(r)}
-                  >
-                    {r.name}
-                  </List.Item>
-                )
-              })}
-            </List>
+          {/* CRD 入口 */}
+          {crds.length > 0 && (
+            <div
+              onClick={() => setShowCrds(v => !v)}
+              style={{
+                padding: '9px 4px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: showCrds || tab.startsWith('crd::') ? 'var(--accent-blue-bg)' : 'transparent',
+                borderLeft: showCrds || tab.startsWith('crd::') ? '3px solid var(--accent-blue)' : '3px solid transparent',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: 4
+              }}
+            >
+              <div style={{ fontSize: 16 }}>🧩</div>
+              <div style={{ fontSize: 9, marginTop: 2, color: showCrds || tab.startsWith('crd::') ? 'var(--accent-blue)' : 'var(--text-tertiary)', fontWeight: 600 }}>
+                CRD<br/>{crds.length}
+              </div>
+            </div>
           )}
         </div>
-      </PullToRefresh>
+
+        {/* === 右侧内容区 === */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+          {showCrds ? (
+            /* CRD 选择面板 */
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '8px 8px 4px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)' }}>
+                <SearchBar
+                  placeholder={`搜索 CRD (共 ${crds.length} 个)`}
+                  value={crdSearch}
+                  onChange={setCrdSearch}
+                  style={{ '--height': '28px', '--font-size': '12px' } as any}
+                />
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {Object.entries(crdGroups).map(([group, items]) => (
+                  <div key={group}>
+                    <div style={{ padding: '6px 10px 3px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600, background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', letterSpacing: 0.3 }}>
+                      {group}
+                    </div>
+                    {items.map((c: any) => {
+                      const key = `crd::${c.group}/${c.version}/${c.plural}`
+                      const isActive = tab === key
+                      return (
+                        <div
+                          key={key}
+                          onClick={() => { hapticLight(); setTab(key); setShowCrds(false) }}
+                          style={{
+                            padding: '9px 10px',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            borderBottom: '1px solid var(--border-color)',
+                            background: isActive ? 'var(--accent-blue-bg)' : 'transparent',
+                            color: isActive ? 'var(--accent-blue)' : 'var(--text-primary)',
+                            fontWeight: isActive ? 600 : 400,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <span>🧩 {c.kind}</span>
+                          {!c.namespaced && <span style={{ fontSize: 9, color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '1px 4px', borderRadius: 4 }}>cluster</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                {Object.keys(crdGroups).length === 0 && (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>
+                    没有匹配的 CRD
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* 资源列表 */
+            <>
+              {/* 标题行 + 过滤 */}
+              <div style={{ padding: '6px 8px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>
+                  {currentLabel}
+                </div>
+                {isBuiltin && connected && (
+                  <div style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--success)', flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <SearchBar
+                    placeholder="搜索名称..."
+                    value={keyword}
+                    onChange={setKeyword}
+                    style={{ '--height': '26px', '--font-size': '12px' } as any}
+                  />
+                </div>
+                {/* 命名空间过滤 */}
+                {namespaces.length > 0 && (
+                  <select
+                    value={namespace}
+                    onChange={e => setNamespace(e.target.value)}
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: 11,
+                      background: namespace ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                      color: namespace ? '#fff' : 'var(--text-secondary)',
+                      border: `1px solid ${namespace ? 'var(--accent-blue)' : 'var(--border-color)'}`,
+                      borderRadius: 6,
+                      maxWidth: 90,
+                      flexShrink: 0
+                    }}
+                  >
+                    <option value="">全部 ns</option>
+                    {namespaces.map(ns => <option key={ns} value={ns}>{ns}</option>)}
+                  </select>
+                )}
+              </div>
+
+              {/* 列表 */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {loading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                    <SpinLoading style={{ '--size': '32px' }} />
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)', fontSize: 12 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+                    {keyword ? '没有匹配的资源' : `没有 ${currentLabel}`}
+                  </div>
+                ) : (
+                  <List mode="card" style={{ '--font-size': '12px', '--prefix-width': '0px' } as any}>
+                    {filtered.map((r, i) => {
+                      const { description, statusColor } = getRowInfo(tab, r)
+                      return (
+                        <List.Item
+                          key={i}
+                          prefix={
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, marginRight: 4, flexShrink: 0 }} />
+                          }
+                          description={<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{description}</span>}
+                          onClick={() => openDetail(r)}
+                          style={{ padding: '7px 10px' }}
+                        >
+                          {r.name}
+                        </List.Item>
+                      )
+                    })}
+                  </List>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </PageShell>
   )
 }
 
-function getRowInfo(tab: ResourceType, r: any): { description: string; statusColor: string } {
-  if (tab.startsWith('crd::')) {
-    return {
-      description: `${r.namespace || '-'} · ${r.age ? new Date(r.age).toLocaleDateString() : ''}`,
-      statusColor: 'var(--accent-blue)'
-    }
-  }
+// ---- 工具函数 ----
+
+function getRowInfo(tab: string, r: any): { description: string; statusColor: string } {
   switch (tab) {
-    case 'pods':
-      return {
-        description: `${r.namespace} · ${r.ready} · Restarts: ${r.restarts || 0}`,
-        statusColor: r.status === 'Running' ? 'var(--success)' : 'var(--warning)'
-      }
-    case 'deployments':
-      return {
-        description: `${r.namespace} · ${r.ready} · Available: ${r.available}`,
-        statusColor: r.available > 0 ? 'var(--success)' : 'var(--warning)'
-      }
-    case 'statefulsets':
-      return {
-        description: `${r.namespace} · ${r.ready}/${r.replicas}`,
-        statusColor: r.ready === r.replicas ? 'var(--success)' : 'var(--warning)'
-      }
-    case 'daemonsets':
-      return {
-        description: `${r.namespace} · Ready ${r.ready}/${r.desired}`,
-        statusColor: r.ready === r.desired ? 'var(--success)' : 'var(--warning)'
-      }
-    case 'services':
-      return {
-        description: `${r.namespace} · ${r.type} · ${r.cluster_ip}`,
-        statusColor: 'var(--accent-blue)'
-      }
-    case 'ingresses':
-      return {
-        description: `${r.namespace} · ${(r.hosts || []).slice(0, 2).join(', ') || '-'}`,
-        statusColor: 'var(--accent-blue)'
-      }
-    case 'configmaps':
-      return {
-        description: `${r.namespace} · Keys: ${r.data_count}`,
-        statusColor: 'var(--accent-blue)'
-      }
-    case 'secrets':
-      return {
-        description: `${r.namespace} · ${r.type} · Keys: ${r.data_count}`,
-        statusColor: 'var(--warning)'
-      }
-    case 'nodes':
-      return {
-        description: `${r.ready === 'True' ? 'Ready' : r.ready} · ${r.zone || '-'}`,
-        statusColor: r.ready === 'True' ? 'var(--success)' : 'var(--danger)'
-      }
-    default:
-      return {
-        description: `${r.namespace || '-'}`,
-        statusColor: 'var(--accent-blue)'
-      }
+    case 'pods':        return { description: `${r.namespace} · ${r.ready} · 重启 ${r.restarts || 0}`, statusColor: r.status === 'Running' ? 'var(--success)' : 'var(--warning)' }
+    case 'deployments': return { description: `${r.namespace} · ${r.ready} · Avail ${r.available}`, statusColor: r.available > 0 ? 'var(--success)' : 'var(--warning)' }
+    case 'statefulsets':return { description: `${r.namespace} · ${r.ready}/${r.replicas}`, statusColor: r.ready === r.replicas ? 'var(--success)' : 'var(--warning)' }
+    case 'daemonsets':  return { description: `${r.namespace} · ${r.ready}/${r.desired}`, statusColor: r.ready === r.desired ? 'var(--success)' : 'var(--warning)' }
+    case 'services':    return { description: `${r.namespace} · ${r.type} · ${r.cluster_ip}`, statusColor: 'var(--accent-blue)' }
+    case 'ingresses':   return { description: `${r.namespace} · ${(r.hosts||[]).slice(0,2).join(', ')||'-'}`, statusColor: 'var(--accent-blue)' }
+    case 'configmaps':  return { description: `${r.namespace} · ${r.data_count} keys`, statusColor: 'var(--accent-blue)' }
+    case 'secrets':     return { description: `${r.namespace} · ${r.type}`, statusColor: 'var(--warning)' }
+    case 'nodes':       return { description: r.ready === 'True' ? 'Ready' : 'NotReady', statusColor: r.ready === 'True' ? 'var(--success)' : 'var(--danger)' }
+    default:            return { description: r.namespace || '-', statusColor: 'var(--accent-blue)' }
   }
 }
 
-// 将K8s原始对象转换为列表项格式
-function transformResource(type: ResourceType, obj: any): any {
-  const metadata = obj.metadata || {}
-  const status = obj.status || {}
-  const spec = obj.spec || {}
-
-  if (type.startsWith('crd::')) {
-    return { name: metadata.name, namespace: metadata.namespace, age: metadata.creationTimestamp }
-  }
-
+function transformResource(type: string, obj: any): any {
+  const md = obj.metadata || {}; const st = obj.status || {}; const sp = obj.spec || {}
   switch (type) {
-    case 'pods':
-      const containerStatuses = status.containerStatuses || []
-      const ready = containerStatuses.filter((c: any) => c.ready).length
-      const total = containerStatuses.length
-      const restarts = containerStatuses.reduce((sum: number, c: any) => sum + (c.restartCount || 0), 0)
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        status: status.phase || 'Unknown',
-        ready: `${ready}/${total}`,
-        restarts,
-        age: metadata.creationTimestamp
-      }
-    case 'deployments':
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        ready: `${status.readyReplicas || 0}/${spec.replicas || 0}`,
-        available: status.availableReplicas || 0,
-        age: metadata.creationTimestamp
-      }
-    case 'statefulsets':
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        ready: status.readyReplicas || 0,
-        replicas: spec.replicas || 0,
-        age: metadata.creationTimestamp
-      }
-    case 'daemonsets':
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        ready: status.numberReady || 0,
-        desired: status.desiredNumberScheduled || 0,
-        age: metadata.creationTimestamp
-      }
-    case 'services':
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        type: spec.type || 'ClusterIP',
-        cluster_ip: spec.clusterIP || '',
-        age: metadata.creationTimestamp
-      }
-    case 'nodes':
-      const conditions = status.conditions || []
-      const readyCond = conditions.find((c: any) => c.type === 'Ready')
-      return {
-        name: metadata.name,
-        ready: readyCond?.status === 'True' ? 'Ready' : 'NotReady',
-        age: metadata.creationTimestamp
-      }
-    default:
-      return {
-        name: metadata.name,
-        namespace: metadata.namespace,
-        age: metadata.creationTimestamp
-      }
+    case 'pods': {
+      const cs = st.containerStatuses || []
+      return { name: md.name, namespace: md.namespace, status: st.phase || 'Unknown', ready: `${cs.filter((c: any) => c.ready).length}/${cs.length}`, restarts: cs.reduce((s: number, c: any) => s + (c.restartCount || 0), 0), age: md.creationTimestamp }
+    }
+    case 'deployments':  return { name: md.name, namespace: md.namespace, ready: `${st.readyReplicas||0}/${sp.replicas||0}`, available: st.availableReplicas||0, age: md.creationTimestamp }
+    case 'statefulsets': return { name: md.name, namespace: md.namespace, ready: st.readyReplicas||0, replicas: sp.replicas||0, age: md.creationTimestamp }
+    case 'daemonsets':   return { name: md.name, namespace: md.namespace, ready: st.numberReady||0, desired: st.desiredNumberScheduled||0, age: md.creationTimestamp }
+    default:             return { name: md.name, namespace: md.namespace, age: md.creationTimestamp }
   }
 }
