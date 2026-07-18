@@ -155,8 +155,9 @@ func (c *TencentCLSClient) SearchLogs(ctx context.Context, topicID string, query
 	request := cls.NewSearchLogRequest()
 	request.TopicId = common.StringPtr(topicID)
 	request.Query = common.StringPtr(query)
-	request.From = common.Int64Ptr(startTime.Unix())
-	request.To = common.Int64Ptr(endTime.Unix())
+	// CLS API 要求毫秒级时间戳
+	request.From = common.Int64Ptr(startTime.UnixMilli())
+	request.To = common.Int64Ptr(endTime.UnixMilli())
 	if limit > 0 {
 		request.Limit = common.Int64Ptr(int64(limit))
 	} else {
