@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Toast } from 'antd-mobile'
 import { pingRemote } from '@/api/client'
 
 /**
- * 后端不可达时的醒目警告卡片
- * 用于登录页/首页，让 APK 在后端 500 / 安全组未放开时也能友好展示
+ * 后端不可达时的顶部小横幅（优化版：占用空间小，只在真正无法访问时显示）
  */
 export default function RemoteStatusBanner() {
   const nav = useNavigate()
   const [msg, setMsg] = useState<string | null>(null)
   const [reason, setReason] = useState<'timeout' | 'network' | 'other' | null>(null)
   const [checking, setChecking] = useState(false)
+  const [failCount, setFailCount] = useState(0) // 连续失败次数
 
   const check = async () => {
     setChecking(true)
@@ -18,23 +19,30 @@ export default function RemoteStatusBanner() {
     if (r.ok) {
       setMsg(null)
       setReason(null)
-    } else if (r.error === '请求超时') {
-      setMsg('后端无响应')
-      setReason('timeout')
-    } else if (r.error?.includes('网络不通')) {
-      setMsg('网络不通')
-      setReason('network')
+      setFailCount(0)
     } else {
-      setMsg(r.error || '后端不可达')
-      setReason('other')
+      setFailCount(prev => prev + 1)
+      // 连续失败 2 次以上才显示警告（避免瞬时网络抖动误报）
+      if (failCount >= 1) {
+        if (r.error === '请求超时') {
+          setMsg('后端无响应')
+          setReason('timeout')
+        } else if (r.error?.includes('网络不通')) {
+          setMsg('网络不通')
+          setReason('network')
+        } else {
+          setMsg(r.error || '后端不可达')
+          setReason('other')
+        }
+      }
     }
     setChecking(false)
   }
 
   useEffect(() => {
     check()
-    // 每 30s 复检一次，让用户放开安全组后能自动恢复
-    const t = setInterval(check, 30000)
+    // 每 60s 复检一次（降低频率）
+    const t = setInterval(check, 60000)
     return () => clearInterval(t)
   }, [])
 
@@ -44,130 +52,54 @@ export default function RemoteStatusBanner() {
 
   return (
     <div style={{
-      marginBottom: 16,
-      borderRadius: 16,
-      background: isSecurityGroupIssue
-        ? 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)'
-        : 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
-      color: 'white',
-      padding: 18,
-      boxShadow: isSecurityGroupIssue
-        ? '0 8px 24px rgba(234, 88, 12, 0.35)'
-        : '0 8px 24px rgba(220, 38, 38, 0.35)',
-      position: 'relative',
-      overflow: 'hidden'
+      background: isSecurityGroupIssue ? '#fef3c7' : '#fee2e2',
+      color: isSecurityGroupIssue ? '#78350f' : '#991b1b',
+      padding: '8px 12px',
+      fontSize: 12,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      borderBottom: `1px solid ${isSecurityGroupIssue ? '#fcd34d' : '#fca5a5'}`
     }}>
-      {/* 装饰性背景圆 */}
-      <div style={{
-        position: 'absolute',
-        top: -40,
-        right: -40,
-        width: 120,
-        height: 120,
-        borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.1)'
-      }}/>
-      <div style={{
-        position: 'absolute',
-        bottom: -30,
-        left: -30,
-        width: 80,
-        height: 80,
-        borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.08)'
-      }}/>
-
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* 标题行 */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          marginBottom: 10
-        }}>
-          <div style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: 'rgba(255, 255, 255, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 20
-          }}>
-            {isSecurityGroupIssue ? '🔒' : '⚠️'}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{msg}</div>
-            {isSecurityGroupIssue && (
-              <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-                你的IP可能不在安全组白名单中
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 说明文字 */}
-        {isSecurityGroupIssue && (
-          <div style={{
-            fontSize: 12,
-            lineHeight: 1.6,
-            opacity: 0.95,
-            marginBottom: 12,
-            paddingLeft: 48
-          }}>
-            云服务器需要把你的公网IP加入安全组白名单才能访问。点击下方按钮一键更新。
-          </div>
-        )}
-
-        {/* 行动按钮 */}
-        <div style={{
-          display: 'flex',
-          gap: 8,
-          paddingLeft: 48
-        }}>
-          {isSecurityGroupIssue && (
-            <button
-              onClick={() => nav('/settings/security-groups')}
-              style={{
-                flex: 1,
-                background: 'white',
-                color: '#ea580c',
-                border: 'none',
-                borderRadius: 10,
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6
-              }}
-            >
-              🔓 更新安全组白名单
-            </button>
-          )}
-          <button
-            onClick={check}
-            disabled={checking}
-            style={{
-              background: 'rgba(255, 255, 255, 0.2)',
-              color: 'white',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: 10,
-              padding: '10px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: checking ? 'default' : 'pointer',
-              opacity: checking ? 0.6 : 1,
-              minWidth: 72
-            }}
-          >
-            {checking ? '检测中...' : '🔄 重试'}
-          </button>
-        </div>
-      </div>
+      <span>{isSecurityGroupIssue ? '⚠️' : '🔴'}</span>
+      <span style={{ flex: 1, lineHeight: 1.4 }}>
+        {msg}
+        {isSecurityGroupIssue && <span style={{ opacity: 0.8 }}> - IP 可能不在白名单</span>}
+      </span>
+      {isSecurityGroupIssue && (
+        <button
+          onClick={() => nav('/settings/security-groups')}
+          style={{
+            background: '#f59e0b',
+            color: 'white',
+            border: 'none',
+            borderRadius: 4,
+            padding: '4px 8px',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          更新白名单
+        </button>
+      )}
+      <button
+        onClick={check}
+        disabled={checking}
+        style={{
+          background: 'transparent',
+          color: isSecurityGroupIssue ? '#78350f' : '#991b1b',
+          border: `1px solid ${isSecurityGroupIssue ? '#f59e0b' : '#ef4444'}`,
+          borderRadius: 4,
+          padding: '4px 8px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: checking ? 'default' : 'pointer',
+          opacity: checking ? 0.6 : 1
+        }}
+      >
+        {checking ? '...' : '重试'}
+      </button>
     </div>
   )
 }

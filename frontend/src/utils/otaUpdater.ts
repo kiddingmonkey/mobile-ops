@@ -199,7 +199,7 @@ export async function downloadAndApply(
         path: versionDir,
         directory: Directory.Data
       }),
-      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout')), 5000))
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout after 8s')), 8000))
     ])
     absPath = uri.uri.replace(/^file:\/\//, '')
     console.log('[OTA] URI obtained:', absPath)
@@ -207,8 +207,12 @@ export async function downloadAndApply(
     console.warn('[OTA] getUri failed or timeout, fallback to direct reload', e)
     // 如果getUri失败，直接reload让App重新检测
     localStorage.setItem(CURRENT_VERSION_KEY, info.version)
-    console.log('[OTA] Saved version and reloading...')
-    window.location.reload()
+    console.log('[OTA] Saved version and reloading in 500ms...')
+    onStatus?.('准备重启...')
+    setTimeout(() => {
+      console.log('[OTA] Executing reload now')
+      window.location.reload()
+    }, 500)
     return
   }
 
@@ -219,11 +223,11 @@ export async function downloadAndApply(
     try {
       await Promise.race([
         webview.setServerBasePath({ path: absPath }),
-        new Promise((resolve) => setTimeout(resolve, 3000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('setServerBasePath timeout')), 5000))
       ])
-      console.log('[OTA] setServerBasePath done (or timeout)')
+      console.log('[OTA] setServerBasePath done')
     } catch (e) {
-      console.warn('[OTA] setServerBasePath failed, will reload anyway', e)
+      console.warn('[OTA] setServerBasePath failed/timeout, will reload anyway', e)
     }
   }
 
@@ -231,10 +235,13 @@ export async function downloadAndApply(
   console.log('[OTA] Step 6: Saving version', info.version)
   localStorage.setItem(CURRENT_VERSION_KEY, info.version)
 
-  // 7. reload 生效（立即执行，不延迟）
-  console.log('[OTA] Step 7: Reloading now!')
-  onStatus?.('更新完成')
-  window.location.reload()
+  // 7. reload 生效（延迟 300ms 确保 localStorage 写入完成）
+  console.log('[OTA] Step 7: Scheduling reload in 300ms')
+  onStatus?.('更新完成，即将重启...')
+  setTimeout(() => {
+    console.log('[OTA] Executing reload now')
+    window.location.reload()
+  }, 300)
 }
 
 export function getCurrentVersion(): string {
