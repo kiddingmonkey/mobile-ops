@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Tabs, PullToRefresh, List, Input, Button, Toast, Empty, Selector, Picker } from 'antd-mobile'
-import { SearchOutline } from 'antd-mobile-icons'
+import { Tabs, PullToRefresh, List, Input, Button, Toast, Empty, Selector, Picker, Dialog } from 'antd-mobile'
+import { SearchOutline, InformationCircleOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useUI } from '@/store'
@@ -18,9 +18,12 @@ export default function LogsPage() {
   const [clsLogs, setClsLogs] = useState<any[]>([])
   const [clsLoading, setClsLoading] = useState(false)
   const [clsKeyword, setClsKeyword] = useState('')
+  const [clsKeywordInput, setClsKeywordInput] = useState('') // 临时输入值，防止吞字
   const [selectedRegion, setSelectedRegion] = useState('')
   const [selectedLogset, setSelectedLogset] = useState('')
+  const [selectedTopic, setSelectedTopic] = useState<any>(null) // 当前选中的topic完整信息
   const [timeRange, setTimeRange] = useState('15m')
+  const [showTimeRangePicker, setShowTimeRangePicker] = useState(false)
   const TIME_RANGES = [
     { label: '最近5分钟', value: '5m' },
     { label: '最近15分钟', value: '15m' },
@@ -175,10 +178,14 @@ export default function LogsPage() {
       if (!silent) Toast.show({ content: '请先选择日志集', icon: 'fail' })
       return
     }
+    // 从输入框同步到查询关键词
+    const finalKeyword = clsKeywordInput.trim()
+    setClsKeyword(finalKeyword)
+
     setClsLoading(true)
     try {
       // 无关键词时使用 * 查询全部（腾讯云CLS语法）
-      const query = clsKeyword.trim() || '*'
+      const query = finalKeyword || '*'
 
       // 计算时间范围
       const now = Date.now()
@@ -205,6 +212,10 @@ export default function LogsPage() {
         end_time: endTime
       })
       setClsLogs(result.logs || [])
+      // 保存 topic 信息用于索引配置展示
+      if (result.topic_id && !selectedTopic) {
+        loadTopicDetail(result.topic_id)
+      }
       if (!silent) {
         if (result.logs && result.logs.length > 0) {
           Toast.show({ content: `找到 ${result.logs.length} 条日志`, icon: 'success' })
@@ -223,6 +234,51 @@ export default function LogsPage() {
     } finally {
       setClsLoading(false)
     }
+  }
+
+  const loadTopicDetail = async (topicId: string) => {
+    // 简化版：暂不调后端API，用静态提示
+    setSelectedTopic({ id: topicId, name: '当前日志主题' })
+  }
+
+  const showIndexHelp = () => {
+    Dialog.alert({
+      title: '📘 CLS 索引 & 查询说明',
+      content: (
+        <div style={{ textAlign: 'left', fontSize: 12, lineHeight: 1.8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--accent-blue)' }}>查询语法示例：</div>
+          <div style={{ background: 'var(--bg-secondary)', padding: 8, borderRadius: 4, fontFamily: 'monospace', fontSize: 11, marginBottom: 12 }}>
+            <div>• * 或留空 — 查询所有日志</div>
+            <div>• error — 包含 error 的日志</div>
+            <div>• level:error — 字段精确匹配</div>
+            <div>• status:500 AND method:POST</div>
+            <div>• "exact phrase" — 精确短语</div>
+          </div>
+
+          <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--accent-blue)' }}>索引配置：</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            <div>✓ 全文索引：已启用（需在 CLS 控制台确认）</div>
+            <div>• 字段索引：根据日志结构自动解析</div>
+            <div>• 若查不到数据，检查：</div>
+            <div style={{ marginLeft: 12 }}>1. 日志主题是否开启索引</div>
+            <div style={{ marginLeft: 12 }}>2. 时间范围是否正确</div>
+            <div style={{ marginLeft: 12 }}>3. 关键词是否存在</div>
+          </div>
+
+          <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--accent-blue)' }}>快捷操作：</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+            <div>• 点击时间范围快速切换</div>
+            <div>• 留空关键词查看最新日志</div>
+            <div>• 下拉刷新重新查询</div>
+          </div>
+
+          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-tertiary)', borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
+            💡 更多查询语法请参考腾讯云 CLS 文档
+          </div>
+        </div>
+      ),
+      confirmText: '知道了'
+    })
   }
 
   // 选择日志集后自动加载最近日志
@@ -352,36 +408,40 @@ export default function LogsPage() {
                     </div>
                   </div>
 
-                  {/* 时间范围选择 */}
+                  {/* 时间范围选择 - 改成下拉节省空间 */}
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>时间范围</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <select
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '5px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-secondary)',
+                        fontSize: 12
+                      }}
+                    >
                       {TIME_RANGES.map(t => (
-                        <span
-                          key={t.value}
-                          onClick={() => setTimeRange(t.value)}
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            cursor: 'pointer',
-                            background: timeRange === t.value ? 'var(--accent-blue)' : 'var(--bg-elevated)',
-                            color: timeRange === t.value ? '#fff' : 'var(--text-secondary)',
-                            border: `1px solid ${timeRange === t.value ? 'var(--accent-blue)' : 'var(--border-color)'}`
-                          }}
-                        >
-                          {t.label}
-                        </span>
+                        <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
 
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>搜索关键词</div>
+                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>搜索关键词</span>
+                      <InformationCircleOutline
+                        fontSize={14}
+                        onClick={showIndexHelp}
+                        style={{ color: 'var(--accent-blue)', cursor: 'pointer' }}
+                      />
+                    </div>
                     <Input
-                      placeholder="输入关键词搜索日志"
-                      value={clsKeyword}
-                      onChange={setClsKeyword}
+                      placeholder="输入关键词或留空查看全部（支持 CLS 语法）"
+                      value={clsKeywordInput}
+                      onChange={(val) => setClsKeywordInput(val)}
                       onEnterPress={() => searchClsLogs(false)}
                       clearable
                       style={{ '--font-size': '12px' } as any}
@@ -396,7 +456,7 @@ export default function LogsPage() {
                     loading={clsLoading}
                     disabled={!selectedRegion || !selectedLogset}
                   >
-                    {clsKeyword.trim() ? '搜索日志' : '查看最新日志'}
+                    {clsKeywordInput.trim() ? '搜索日志' : '查看最新日志'}
                   </Button>
                 </div>
 
