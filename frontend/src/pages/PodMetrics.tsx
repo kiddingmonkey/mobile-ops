@@ -16,33 +16,16 @@ export default function MetricsTab({ clusterId, namespace, podName, detail }: {
   const cpuChartRef = useRef<HTMLDivElement>(null)
   const memChartRef = useRef<HTMLDivElement>(null)
   const netChartRef = useRef<HTMLDivElement>(null)
+  const diskChartRef = useRef<HTMLDivElement>(null)
 
   const cpuInstance = useRef<echarts.ECharts | null>(null)
   const memInstance = useRef<echarts.ECharts | null>(null)
   const netInstance = useRef<echarts.ECharts | null>(null)
+  const diskInstance = useRef<echarts.ECharts | null>(null)
 
   useEffect(() => {
     loadMetrics()
   }, [clusterId, namespace, podName, timeRange])
-
-  useEffect(() => {
-    // 初始化图表
-    if (cpuChartRef.current && !cpuInstance.current) {
-      cpuInstance.current = echarts.init(cpuChartRef.current)
-    }
-    if (memChartRef.current && !memInstance.current) {
-      memInstance.current = echarts.init(memChartRef.current)
-    }
-    if (netChartRef.current && !netInstance.current) {
-      netInstance.current = echarts.init(netChartRef.current)
-    }
-
-    return () => {
-      cpuInstance.current?.dispose()
-      memInstance.current?.dispose()
-      netInstance.current?.dispose()
-    }
-  }, [])
 
   const loadMetrics = async () => {
     setLoading(true)
@@ -51,61 +34,113 @@ export default function MetricsTab({ clusterId, namespace, podName, detail }: {
         params: { range: timeRange }
       })
 
-      if (!r || (!r.cpu && !r.memory && !r.network_rx && !r.network_tx)) {
+      if (!r || (!r.cpu && !r.memory && !r.network_rx && !r.network_tx && !r.disk_read && !r.disk_write)) {
         setHasData(false)
         Toast.show({ content: '未配置Prometheus或无数据', icon: 'fail' })
+        setLoading(false)
         return
       }
 
       setHasData(true)
 
-      // CPU图表
-      if (r.cpu && r.cpu.length > 0 && cpuInstance.current) {
-        const cpuData = r.cpu.map((p: any) => [p[0] * 1000, parseFloat(p[1])])
-        cpuInstance.current.setOption(getChartOption('CPU 使用率', cpuData, 'cores'))
-      }
+      // 确保DOM已渲染再初始化ECharts
+      setTimeout(() => {
+        // CPU图表
+        if (r.cpu && r.cpu.length > 0 && cpuChartRef.current) {
+          if (!cpuInstance.current) {
+            cpuInstance.current = echarts.init(cpuChartRef.current)
+          }
+          const cpuData = r.cpu.map((p: any) => [p[0] * 1000, parseFloat(p[1])])
+          cpuInstance.current.setOption(getChartOption('CPU 使用率', cpuData, 'cores'))
+        }
 
-      // 内存图表
-      if (r.memory && r.memory.length > 0 && memInstance.current) {
-        const memData = r.memory.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024 / 1024])
-        memInstance.current.setOption(getChartOption('内存使用', memData, 'Mi'))
-      }
+        // 内存图表
+        if (r.memory && r.memory.length > 0 && memChartRef.current) {
+          if (!memInstance.current) {
+            memInstance.current = echarts.init(memChartRef.current)
+          }
+          const memData = r.memory.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024 / 1024])
+          memInstance.current.setOption(getChartOption('内存使用', memData, 'Mi'))
+        }
 
-      // 网络图表（RX + TX）
-      if ((r.network_rx || r.network_tx) && netInstance.current) {
-        const series: any[] = []
-        if (r.network_rx && r.network_rx.length > 0) {
-          series.push({
-            name: '接收',
-            type: 'line',
-            smooth: true,
-            symbol: 'none',
-            lineStyle: { width: 2 },
-            data: r.network_rx.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
-            itemStyle: { color: '#3B82F6' }
+        // 网络图表（RX + TX）
+        if ((r.network_rx || r.network_tx) && netChartRef.current) {
+          if (!netInstance.current) {
+            netInstance.current = echarts.init(netChartRef.current)
+          }
+          const series: any[] = []
+          if (r.network_rx && r.network_rx.length > 0) {
+            series.push({
+              name: '接收',
+              type: 'line',
+              smooth: true,
+              symbol: 'none',
+              lineStyle: { width: 2 },
+              data: r.network_rx.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
+              itemStyle: { color: '#3B82F6' }
+            })
+          }
+          if (r.network_tx && r.network_tx.length > 0) {
+            series.push({
+              name: '发送',
+              type: 'line',
+              smooth: true,
+              symbol: 'none',
+              lineStyle: { width: 2 },
+              data: r.network_tx.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
+              itemStyle: { color: '#10B981' }
+            })
+          }
+          netInstance.current.setOption({
+            title: { text: '网络流量 (KB/s)', left: 'center', textStyle: { fontSize: 13, color: '#888' } },
+            tooltip: { trigger: 'axis' },
+            legend: { bottom: 0, textStyle: { fontSize: 11 } },
+            grid: { left: 50, right: 20, top: 40, bottom: 35 },
+            xAxis: { type: 'time', axisLabel: { fontSize: 10 } },
+            yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
+            series
           })
         }
-        if (r.network_tx && r.network_tx.length > 0) {
-          series.push({
-            name: '发送',
-            type: 'line',
-            smooth: true,
-            symbol: 'none',
-            lineStyle: { width: 2 },
-            data: r.network_tx.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
-            itemStyle: { color: '#10B981' }
+
+        // 磁盘图表（读 + 写）
+        if ((r.disk_read || r.disk_write) && diskChartRef.current) {
+          if (!diskInstance.current) {
+            diskInstance.current = echarts.init(diskChartRef.current)
+          }
+          const diskSeries: any[] = []
+          if (r.disk_read && r.disk_read.length > 0) {
+            diskSeries.push({
+              name: '读取',
+              type: 'line',
+              smooth: true,
+              symbol: 'none',
+              lineStyle: { width: 2 },
+              data: r.disk_read.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
+              itemStyle: { color: '#8B5CF6' }
+            })
+          }
+          if (r.disk_write && r.disk_write.length > 0) {
+            diskSeries.push({
+              name: '写入',
+              type: 'line',
+              smooth: true,
+              symbol: 'none',
+              lineStyle: { width: 2 },
+              data: r.disk_write.map((p: any) => [p[0] * 1000, parseFloat(p[1]) / 1024]),
+              itemStyle: { color: '#F59E0B' }
+            })
+          }
+          diskInstance.current.setOption({
+            title: { text: '磁盘 I/O (KB/s)', left: 'center', textStyle: { fontSize: 13, color: '#888' } },
+            tooltip: { trigger: 'axis' },
+            legend: { bottom: 0, textStyle: { fontSize: 11 } },
+            grid: { left: 50, right: 20, top: 40, bottom: 35 },
+            xAxis: { type: 'time', axisLabel: { fontSize: 10 } },
+            yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
+            series: diskSeries
           })
         }
-        netInstance.current.setOption({
-          title: { text: '网络流量 (KB/s)', left: 'center', textStyle: { fontSize: 13, color: '#888' } },
-          tooltip: { trigger: 'axis' },
-          legend: { bottom: 0, textStyle: { fontSize: 11 } },
-          grid: { left: 50, right: 20, top: 40, bottom: 35 },
-          xAxis: { type: 'time', axisLabel: { fontSize: 10 } },
-          yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
-          series
-        })
-      }
+      }, 100)
     } catch (e: any) {
       Toast.show({ content: e?.response?.data?.error || '加载失败', icon: 'fail' })
       setHasData(false)
@@ -218,6 +253,11 @@ export default function MetricsTab({ clusterId, namespace, podName, detail }: {
           {/* 网络图表 */}
           <div style={{ marginBottom: 12 }}>
             <div ref={netChartRef} style={{ width: '100%', height: 200 }} />
+          </div>
+
+          {/* 磁盘图表 */}
+          <div style={{ marginBottom: 12 }}>
+            <div ref={diskChartRef} style={{ width: '100%', height: 200 }} />
           </div>
         </>
       ) : (

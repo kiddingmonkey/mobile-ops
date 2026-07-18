@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
+export const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 const REMOTE_HEALTH = import.meta.env.VITE_REMOTE_HEALTH || '/api/v1/health'
 
 // 后端不可用时给统一的可展示错误对象
@@ -76,6 +76,16 @@ class ApiClient {
 
   async post(path: string, data?: any, config?: any) {
     const r = await this.http.post(path, data, config)
+    return r.data
+  }
+
+  async put(path: string, data?: any, config?: any) {
+    const r = await this.http.put(path, data, config)
+    return r.data
+  }
+
+  async delete(path: string, config?: any) {
+    const r = await this.http.delete(path, config)
     return r.data
   }
 

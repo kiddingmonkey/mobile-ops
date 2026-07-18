@@ -209,11 +209,16 @@ export default function LogsPage() {
         if (result.logs && result.logs.length > 0) {
           Toast.show({ content: `找到 ${result.logs.length} 条日志`, icon: 'success' })
         } else {
-          Toast.show({ content: '未找到匹配的日志', icon: 'fail' })
+          Toast.show({
+            content: `${timeRange}内未找到日志\n尝试: 1) 扩大时间范围 2) 检查日志集是否有数据`,
+            icon: 'fail',
+            duration: 3000
+          })
         }
       }
     } catch (e: any) {
-      if (!silent) Toast.show({ content: e?.response?.data?.error || '查询失败', icon: 'fail' })
+      const errMsg = e?.response?.data?.error || e?.message || '查询失败'
+      if (!silent) Toast.show({ content: '查询失败: ' + errMsg, icon: 'fail', duration: 3000 })
       setClsLogs([])
     } finally {
       setClsLoading(false)

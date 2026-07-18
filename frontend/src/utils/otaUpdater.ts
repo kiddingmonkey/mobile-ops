@@ -177,6 +177,7 @@ export async function downloadAndApply(
 
   // 4. 拿绝对路径（加超时保护）
   onStatus?.('正在应用更新...')
+  console.log('[OTA] Step 4: Getting URI for', versionDir)
   let absPath = ''
   try {
     const uri = await Promise.race([
@@ -187,15 +188,18 @@ export async function downloadAndApply(
       new Promise<any>((_, reject) => setTimeout(() => reject(new Error('getUri timeout')), 5000))
     ])
     absPath = uri.uri.replace(/^file:\/\//, '')
+    console.log('[OTA] URI obtained:', absPath)
   } catch (e) {
-    console.warn('getUri failed or timeout, fallback to direct reload', e)
+    console.warn('[OTA] getUri failed or timeout, fallback to direct reload', e)
     // 如果getUri失败，直接reload让App重新检测
     localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+    console.log('[OTA] Saved version and reloading...')
     window.location.reload()
     return
   }
 
   // 5. 切 WebView 到新目录（带超时保护）
+  console.log('[OTA] Step 5: Switching WebView basePath')
   const webview = await tryGetWebViewPlugin()
   if (webview) {
     try {
@@ -203,19 +207,20 @@ export async function downloadAndApply(
         webview.setServerBasePath({ path: absPath }),
         new Promise((resolve) => setTimeout(resolve, 3000))
       ])
+      console.log('[OTA] setServerBasePath done (or timeout)')
     } catch (e) {
-      console.warn('setServerBasePath failed, will reload anyway', e)
+      console.warn('[OTA] setServerBasePath failed, will reload anyway', e)
     }
   }
 
   // 6. 保存版本号
+  console.log('[OTA] Step 6: Saving version', info.version)
   localStorage.setItem(CURRENT_VERSION_KEY, info.version)
 
-  // 7. reload 生效
-  onStatus?.('更新完成，正在重启...')
-  setTimeout(() => {
-    window.location.reload()
-  }, 500)
+  // 7. reload 生效（立即执行，不延迟）
+  console.log('[OTA] Step 7: Reloading now!')
+  onStatus?.('更新完成')
+  window.location.reload()
 }
 
 export function getCurrentVersion(): string {

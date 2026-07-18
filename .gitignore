@@ -44,3 +44,4 @@ DEPLOYMENT.local.md
 *.local.md
 backend/server
 frontend/dist.zip
+backend/mobile-ops

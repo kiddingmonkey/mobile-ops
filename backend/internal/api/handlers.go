@@ -602,8 +602,18 @@ func (h *Handler) GetK8sResourceYAML(c *gin.Context) {
 	namespace := c.Query("namespace")
 	name := c.Query("name")
 
-	if namespace == "" || name == "" {
-		c.JSON(400, gin.H{"error": "namespace and name required"})
+	// Node等cluster-scoped资源不需要namespace
+	clusterScopedResources := map[string]bool{
+		"nodes": true,
+	}
+	isClusterScoped := clusterScopedResources[resourceType]
+
+	if name == "" {
+		c.JSON(400, gin.H{"error": "name is required"})
+		return
+	}
+	if !isClusterScoped && namespace == "" {
+		c.JSON(400, gin.H{"error": "namespace is required for this resource type"})
 		return
 	}
 
@@ -1085,7 +1095,7 @@ func (h *Handler) GetPodMetrics(c *gin.Context) {
 		Err  error
 	}
 
-	resultChan := make(chan metricResult, 4)
+	resultChan := make(chan metricResult, 6)
 
 	// CPU: container_cpu_usage_seconds_total rate
 	go func() {
@@ -1168,9 +1178,49 @@ func (h *Handler) GetPodMetrics(c *gin.Context) {
 		resultChan <- metricResult{Name: "network_tx", Data: data, Err: err}
 	}()
 
+	// 磁盘 I/O 读: container_fs_reads_bytes_total rate
+	go func() {
+		query := fmt.Sprintf(
+			`sum by (pod) (rate(container_fs_reads_bytes_total{namespace="%s",pod="%s"}[5m]))`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "disk_read", Data: data, Err: err}
+	}()
+
+	// 磁盘 I/O 写: container_fs_writes_bytes_total rate
+	go func() {
+		query := fmt.Sprintf(
+			`sum by (pod) (rate(container_fs_writes_bytes_total{namespace="%s",pod="%s"}[5m]))`,
+			namespace, name,
+		)
+		result, err := promClient.QueryRange(ctx, query, start, now, step)
+		data := [][]interface{}{}
+		if err == nil && result != nil && len(result.Data.Result) > 0 {
+			for _, series := range result.Data.Result {
+				for _, v := range series.Values {
+					if len(v) >= 2 {
+						data = append(data, v)
+					}
+				}
+			}
+		}
+		resultChan <- metricResult{Name: "disk_write", Data: data, Err: err}
+	}()
+
 	// 收集结果
 	metrics := make(map[string][][]interface{})
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		r := <-resultChan
 		if r.Err == nil {
 			metrics[r.Name] = r.Data
@@ -1182,6 +1232,8 @@ func (h *Handler) GetPodMetrics(c *gin.Context) {
 		"memory":     metrics["memory"],
 		"network_rx": metrics["network_rx"],
 		"network_tx": metrics["network_tx"],
+		"disk_read":  metrics["disk_read"],
+		"disk_write": metrics["disk_write"],
 	})
 }
 
@@ -1192,4 +1244,193 @@ func parseDuration(s string) time.Duration {
 		return time.Hour
 	}
 	return d
+}
+
+// StreamResourceEvents SSE推送指定资源的事件流
+// GET /clusters/:id/resources/:type/events/stream?namespace=xxx&name=yyy
+func (h *Handler) StreamResourceEvents(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	resourceType := c.Param("type")
+	namespace := c.Query("namespace")
+	name := c.Query("name")
+
+	ctx := c.Request.Context()
+
+	// 通过config获取K8s client
+	cluster, err := h.config.GetCluster(ctx, clusterID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not found"})
+		return
+	}
+	client, err := h.config.GetK8sClient(ctx, cluster.ID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not available"})
+		return
+	}
+
+	// 设置SSE头
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+	// K8s Watch Events
+	watcher, err := client.WatchEvents(ctx, namespace, name, resourceType)
+	if err != nil {
+		fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
+		c.Writer.Flush()
+		return
+	}
+	defer watcher.Stop()
+
+	// 先发一次初始事件列表
+	initialEvents, _ := client.ListEvents(ctx, namespace, name, resourceType)
+	if len(initialEvents) > 0 {
+		data, _ := json.Marshal(initialEvents)
+		fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+		c.Writer.Flush()
+	}
+
+	// 持续推送新事件
+	ticker := time.NewTicker(30 * time.Second) // 心跳
+	defer ticker.Stop()
+
+	for {
+		select {
+		case event, ok := <-watcher.ResultChan():
+			if !ok {
+				return
+			}
+			data, _ := json.Marshal([]interface{}{event.Object})
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			c.Writer.Flush()
+		case <-ticker.C:
+			// 心跳
+			fmt.Fprintf(c.Writer, ": ping\n\n")
+			c.Writer.Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// StreamNamespaceEvents SSE推送整个namespace的事件流
+// GET /clusters/:id/namespaces/:namespace/events/stream
+func (h *Handler) StreamNamespaceEvents(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	namespace := c.Param("namespace")
+
+	ctx := c.Request.Context()
+
+	cluster, err := h.config.GetCluster(ctx, clusterID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not found"})
+		return
+	}
+	client, err := h.config.GetK8sClient(ctx, cluster.ID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not available"})
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+	watcher, err := client.WatchEvents(ctx, namespace, "", "")
+	if err != nil {
+		fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
+		c.Writer.Flush()
+		return
+	}
+	defer watcher.Stop()
+
+	initialEvents, _ := client.ListEvents(ctx, namespace, "", "")
+	if len(initialEvents) > 0 {
+		data, _ := json.Marshal(initialEvents)
+		fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+		c.Writer.Flush()
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case event, ok := <-watcher.ResultChan():
+			if !ok {
+				return
+			}
+			data, _ := json.Marshal([]interface{}{event.Object})
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			c.Writer.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(c.Writer, ": ping\n\n")
+			c.Writer.Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// WatchResourceList SSE推送资源列表状态变化
+// GET /clusters/:id/resources/:type/watch?namespace=xxx
+func (h *Handler) WatchResourceList(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	resourceType := c.Param("type")
+	namespace := c.Query("namespace") // 可选，为空时watch所有namespace
+
+	ctx := c.Request.Context()
+
+	cluster, err := h.config.GetCluster(ctx, clusterID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not found"})
+		return
+	}
+	client, err := h.config.GetK8sClient(ctx, cluster.ID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cluster not available"})
+		return
+	}
+
+	// 设置SSE头
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+	// 根据资源类型创建Watcher
+	watcher, err := client.WatchResourceList(ctx, resourceType, namespace)
+	if err != nil {
+		fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
+		c.Writer.Flush()
+		return
+	}
+	defer watcher.Stop()
+
+	// 心跳
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case event, ok := <-watcher.ResultChan():
+			if !ok {
+				return
+			}
+			// 将K8s watch事件转换为前端需要的格式
+			data, _ := json.Marshal(map[string]interface{}{
+				"type":   event.Type,   // ADDED/MODIFIED/DELETED
+				"object": event.Object, // Pod/Deployment对象
+			})
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			c.Writer.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(c.Writer, ": ping\n\n")
+			c.Writer.Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
 }

@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -21,6 +25,8 @@ import (
 type K8sClient struct {
 	Clientset *kubernetes.Clientset
 	Metrics   *metricsclient.Clientset
+	Dynamic   dynamic.Interface
+	Discovery discovery.DiscoveryInterface
 	RestCfg   *rest.Config
 	Name      string
 }
@@ -41,7 +47,18 @@ func NewK8sClient(name, kubeconfigYAML string) (*K8sClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("metrics: %w", err)
 	}
-	return &K8sClient{Clientset: cs, Metrics: ms, RestCfg: restCfg, Name: name}, nil
+	dyn, err := dynamic.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("dynamic: %w", err)
+	}
+	return &K8sClient{
+		Clientset: cs,
+		Metrics:   ms,
+		Dynamic:   dyn,
+		Discovery: cs.Discovery(),
+		RestCfg:   restCfg,
+		Name:      name,
+	}, nil
 }
 
 func (k *K8sClient) Ping(ctx context.Context) error {
@@ -1365,4 +1382,61 @@ func (k *K8sClient) ListResourceEvents(ctx context.Context, namespace, name, kin
 		})
 	}
 	return out, nil
+}
+
+// WatchEvents 监听K8s事件流
+func (k *K8sClient) WatchEvents(ctx context.Context, namespace, name, kind string) (watch.Interface, error) {
+	opts := metav1.ListOptions{}
+	
+	// 构造FieldSelector
+	var fieldSelectors []string
+	if name != "" {
+		fieldSelectors = append(fieldSelectors, "involvedObject.name="+name)
+	}
+	if kind != "" {
+		fieldSelectors = append(fieldSelectors, "involvedObject.kind="+kind)
+	}
+	if len(fieldSelectors) > 0 {
+		opts.FieldSelector = strings.Join(fieldSelectors, ",")
+	}
+
+	return k.Clientset.CoreV1().Events(namespace).Watch(ctx, opts)
+}
+
+// ListEvents 列举事件（给SSE初始推送用）
+func (k *K8sClient) ListEvents(ctx context.Context, namespace, name, kind string) ([]ResourceEvent, error) {
+	// 复用已有的ListResourceEvents
+	return k.ListResourceEvents(ctx, namespace, name, kind)
+}
+
+// WatchResourceList 监听资源列表变化（Pods/Deployments等）
+func (k *K8sClient) WatchResourceList(ctx context.Context, resourceType, namespace string) (watch.Interface, error) {
+	if namespace == "" {
+		namespace = metav1.NamespaceAll
+	}
+
+	opts := metav1.ListOptions{}
+
+	switch resourceType {
+	case "pods":
+		return k.Clientset.CoreV1().Pods(namespace).Watch(ctx, opts)
+	case "deployments":
+		return k.Clientset.AppsV1().Deployments(namespace).Watch(ctx, opts)
+	case "services":
+		return k.Clientset.CoreV1().Services(namespace).Watch(ctx, opts)
+	case "configmaps":
+		return k.Clientset.CoreV1().ConfigMaps(namespace).Watch(ctx, opts)
+	case "secrets":
+		return k.Clientset.CoreV1().Secrets(namespace).Watch(ctx, opts)
+	case "statefulsets":
+		return k.Clientset.AppsV1().StatefulSets(namespace).Watch(ctx, opts)
+	case "daemonsets":
+		return k.Clientset.AppsV1().DaemonSets(namespace).Watch(ctx, opts)
+	case "ingresses":
+		return k.Clientset.NetworkingV1().Ingresses(namespace).Watch(ctx, opts)
+	case "nodes":
+		return k.Clientset.CoreV1().Nodes().Watch(ctx, opts)
+	default:
+		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
+	}
 }

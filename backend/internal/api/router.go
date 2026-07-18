@@ -73,6 +73,30 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/resources/:type/yaml", h.GetK8sResourceYAML)
 		priv.GET("/clusters/:id/resources/:type/events", h.GetResourceEvents)
 
+		// CRD & 通用资源（dynamic client）
+		priv.GET("/clusters/:id/crds", h.ListCRDs)
+		priv.GET("/clusters/:id/crds/:group/:version/:resource", h.ListCRDResources)
+		priv.GET("/clusters/:id/crds/:group/:version/:resource/yaml", h.GetCRDResourceYAML)
+
+		// YAML 编辑 + 回滚
+		priv.PUT("/clusters/:id/resources/yaml", h.UpdateResourceYAML)
+		priv.GET("/clusters/:id/resources/revisions", h.ListResourceRevisions)
+		priv.GET("/clusters/:id/resources/revisions/:rev_id", h.GetResourceRevision)
+		priv.POST("/clusters/:id/resources/revisions/:rev_id/rollback", h.RollbackToRevision)
+		priv.DELETE("/clusters/:id/resources/delete", h.DeleteResource)
+
+		// 工作负载快捷操作
+		priv.POST("/clusters/:id/workloads/:kind/:namespace/:name/restart", h.RestartWorkload)
+		priv.POST("/clusters/:id/workloads/:kind/:namespace/:name/scale", h.ScaleWorkload)
+		priv.POST("/clusters/:id/deployments/:namespace/:name/pause", h.PauseDeployment)
+
+		// SSE 实时事件流
+		priv.GET("/clusters/:id/resources/:type/events/stream", h.StreamResourceEvents)
+		priv.GET("/clusters/:id/namespaces/:namespace/events/stream", h.StreamNamespaceEvents)
+
+		// SSE 资源列表状态实时推送
+		priv.GET("/clusters/:id/resources/:type/watch", h.WatchResourceList)
+
 		// Pod 相关
 		priv.GET("/clusters/:id/namespaces", h.ListNamespaces)
 		priv.GET("/clusters/:id/namespaces/:namespace/pods", h.ListPods)

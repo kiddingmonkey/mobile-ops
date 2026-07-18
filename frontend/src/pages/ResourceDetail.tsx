@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Tabs, Tag, Toast, PullToRefresh, Button } from 'antd-mobile'
+import { Tabs, Tag, Toast, PullToRefresh, Button, Dialog, Input } from 'antd-mobile'
 import PageShell from '@/components/PageShell'
-import { api } from '@/api/client'
+import { api, API_BASE } from '@/api/client'
 import { shareLog, downloadLog, makeLogFilename } from '@/utils/logShare'
+import { useEventStream } from '@/hooks/useEventStream'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
+import * as jsYaml from 'js-yaml'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -38,7 +40,39 @@ export default function ResourceDetailPage() {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
+  // YAML 编辑
+  const [yamlText, setYamlText] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // 历史 revisions
+  const [revisions, setRevisions] = useState<any[]>([])
+
   const meta = RESOURCE_META[resourceType || ''] || { label: resourceType, namespaced: true, kind: '' }
+
+  // 构造SSE URL
+  const sseUrl = tab === 'events' && cid && resourceType && name
+    ? `${API_BASE}/clusters/${cid}/resources/${resourceType}/events/stream?name=${name}${meta.namespaced && namespace ? `&namespace=${namespace}` : ''}`
+    : ''
+
+  // SSE实时事件流
+  const { connected } = useEventStream({
+    url: sseUrl,
+    enabled: tab === 'events',
+    onMessage: (newEvents) => {
+      setEvents(prev => {
+        // 合并新事件，去重（按uid）
+        const existing = new Map(prev.map(e => [e.uid, e]))
+        newEvents.forEach(e => {
+          if (e.uid) existing.set(e.uid, e)
+        })
+        return Array.from(existing.values()).sort((a, b) =>
+          new Date(b.lastTimestamp || b.firstTimestamp).getTime() -
+          new Date(a.lastTimestamp || a.firstTimestamp).getTime()
+        )
+      })
+    }
+  })
 
   const loadYaml = async () => {
     setLoading(true)
@@ -47,10 +81,121 @@ export default function ResourceDetailPage() {
       if (meta.namespaced) params.namespace = namespace
       const r = await api.get(`/clusters/${cid}/resources/${resourceType}/yaml`, { params })
       setYaml(r)
+      try {
+        setYamlText(jsYaml.dump(r, { lineWidth: 120, noRefs: true }))
+      } catch {
+        setYamlText(JSON.stringify(r, null, 2))
+      }
     } catch (e: any) {
       Toast.show({ content: '加载失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadRevisions = async () => {
+    const params: any = { apiVersion: yaml?.apiVersion || '', kind: yaml?.kind || meta.kind, namespace: namespace || '', name }
+    try {
+      const r = await api.get(`/clusters/${cid}/resources/revisions`, { params })
+      setRevisions(r || [])
+    } catch (e: any) {
+      Toast.show({ content: '加载历史失败', icon: 'fail' })
+    }
+  }
+
+  const saveYaml = async () => {
+    setSaving(true)
+    try {
+      // 先解析验证 yaml
+      try { jsYaml.load(yamlText) } catch (e: any) {
+        Toast.show({ content: 'YAML 格式错误: ' + e.message, icon: 'fail', duration: 3000 })
+        setSaving(false)
+        return
+      }
+      const note = prompt('修改说明 (可选):', '') || ''
+      await api.put(`/clusters/${cid}/resources/yaml`, { yaml: yamlText, note })
+      Toast.show({ content: '已应用', icon: 'success' })
+      setEditing(false)
+      loadYaml()
+    } catch (e: any) {
+      Toast.show({ content: '保存失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail', duration: 3000 })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const doRollback = async (revId: number) => {
+    const ok = await Dialog.confirm({ content: '确认回滚到该版本？会先记录当前版本再 apply 历史版本' })
+    if (!ok) return
+    try {
+      await api.post(`/clusters/${cid}/resources/revisions/${revId}/rollback`, {})
+      Toast.show({ content: '回滚成功', icon: 'success' })
+      loadYaml()
+      loadRevisions()
+    } catch (e: any) {
+      Toast.show({ content: '回滚失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail', duration: 3000 })
+    }
+  }
+
+  // ============ 快捷操作 ============
+  const opRestart = async () => {
+    const ok = await Dialog.confirm({ content: `确认重启 ${meta.kind} ${name}？` })
+    if (!ok) return
+    try {
+      await api.post(`/clusters/${cid}/workloads/${resourceType}/${namespace}/${name}/restart`, {})
+      Toast.show({ content: '已触发重启', icon: 'success' })
+    } catch (e: any) {
+      Toast.show({ content: '重启失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
+    }
+  }
+
+  const opScale = async () => {
+    const cur = yaml?.spec?.replicas ?? 1
+    const val = prompt(`副本数 (当前 ${cur}):`, String(cur))
+    if (val == null) return
+    const replicas = parseInt(val)
+    if (Number.isNaN(replicas) || replicas < 0) {
+      Toast.show({ content: '请输入非负整数', icon: 'fail' })
+      return
+    }
+    try {
+      await api.post(`/clusters/${cid}/workloads/${resourceType}/${namespace}/${name}/scale`, { replicas })
+      Toast.show({ content: `已设置为 ${replicas}`, icon: 'success' })
+      loadYaml()
+    } catch (e: any) {
+      Toast.show({ content: '扩缩容失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
+    }
+  }
+
+  const opPause = async () => {
+    const paused = !yaml?.spec?.paused
+    const ok = await Dialog.confirm({ content: paused ? `暂停 Deployment ${name}？` : `恢复 Deployment ${name}？` })
+    if (!ok) return
+    try {
+      await api.post(`/clusters/${cid}/deployments/${namespace}/${name}/pause`, { paused })
+      Toast.show({ content: paused ? '已暂停' : '已恢复', icon: 'success' })
+      loadYaml()
+    } catch (e: any) {
+      Toast.show({ content: '操作失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
+    }
+  }
+
+  const opDelete = async () => {
+    const ok = await Dialog.confirm({
+      content: `确认删除 ${meta.kind} ${name}？此操作不可恢复`,
+      confirmText: '删除',
+      cancelText: '取消'
+    })
+    if (!ok) return
+    try {
+      const apiVersion = yaml?.apiVersion || guessApiVersion(meta.kind)
+      await api.delete(`/clusters/${cid}/resources/delete`, {
+        params: { apiVersion, kind: yaml?.kind || meta.kind, namespace, name }
+      })
+      Toast.show({ content: '已删除', icon: 'success' })
+      nav(-1)
+    } catch (e: any) {
+      Toast.show({ content: '删除失败: ' + (e?.response?.data?.error || e?.message), icon: 'fail' })
     }
   }
 
@@ -71,6 +216,7 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     if (tab === 'events') loadEvents()
+    if (tab === 'revisions') loadRevisions()
   }, [tab])
 
   const downloadYaml = async () => {
@@ -254,6 +400,26 @@ export default function ResourceDetailPage() {
 
           <Tabs.Tab title="事件" key="events">
             <div style={{ padding: 12, paddingBottom: 60 }}>
+              {/* SSE连接状态 */}
+              {tab === 'events' && (
+                <div style={{
+                  fontSize: 11,
+                  color: connected ? 'var(--success)' : 'var(--text-tertiary)',
+                  marginBottom: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <span style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: connected ? 'var(--success)' : 'var(--text-tertiary)'
+                  }} />
+                  {connected ? '实时监听中' : '连接中...'}
+                </div>
+              )}
+
               {events.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>暂无事件</div>
               ) : (
@@ -286,29 +452,128 @@ export default function ResourceDetailPage() {
 
           <Tabs.Tab title="YAML" key="yaml">
             <div style={{ padding: 12, paddingBottom: 60 }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <Button size="mini" onClick={downloadYaml} disabled={!yaml}>📥 下载</Button>
-                <Button size="mini" color="primary" fill="outline" onClick={shareYaml} disabled={!yaml}>📤 分享</Button>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                {!editing ? (
+                  <>
+                    <Button size="mini" color="primary" onClick={() => setEditing(true)} disabled={!yaml}>✏️ 编辑</Button>
+                    <Button size="mini" onClick={downloadYaml} disabled={!yaml}>📥 下载</Button>
+                    <Button size="mini" color="primary" fill="outline" onClick={shareYaml} disabled={!yaml}>📤 分享</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="mini" color="success" onClick={saveYaml} loading={saving}>💾 保存并应用</Button>
+                    <Button size="mini" onClick={() => { setEditing(false); loadYaml() }}>取消</Button>
+                  </>
+                )}
               </div>
-              <pre style={{
-                fontSize: 10,
-                fontFamily: 'ui-monospace, monospace',
-                background: '#1E293B',
-                color: '#E2E8F0',
-                padding: 10,
-                borderRadius: 6,
-                overflow: 'auto',
-                maxHeight: '70vh',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-                margin: 0
-              }}>{yaml ? JSON.stringify(yaml, null, 2) : '加载中...'}</pre>
+              {editing ? (
+                <textarea
+                  value={yamlText}
+                  onChange={e => setYamlText(e.target.value)}
+                  spellCheck={false}
+                  style={{
+                    width: '100%',
+                    minHeight: '70vh',
+                    fontSize: 11,
+                    fontFamily: 'ui-monospace, monospace',
+                    background: '#1E293B',
+                    color: '#E2E8F0',
+                    padding: 10,
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    resize: 'vertical',
+                    whiteSpace: 'pre',
+                    overflow: 'auto'
+                  }}
+                />
+              ) : (
+                <pre style={{
+                  fontSize: 10,
+                  fontFamily: 'ui-monospace, monospace',
+                  background: '#1E293B',
+                  color: '#E2E8F0',
+                  padding: 10,
+                  borderRadius: 6,
+                  overflow: 'auto',
+                  maxHeight: '70vh',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  margin: 0
+                }}>{yamlText || '加载中...'}</pre>
+              )}
+            </div>
+          </Tabs.Tab>
+
+          {/* 快捷操作 */}
+          <Tabs.Tab title="操作" key="ops">
+            <div style={{ padding: 12, paddingBottom: 60 }}>
+              <Section title="工作负载操作">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {['deployments', 'statefulsets', 'daemonsets'].includes(resourceType || '') && (
+                    <Button size="small" color="primary" onClick={opRestart}>🔄 滚动重启</Button>
+                  )}
+                  {['deployments', 'statefulsets'].includes(resourceType || '') && (
+                    <Button size="small" onClick={opScale}>🔢 扩缩容 (当前 {yaml?.spec?.replicas ?? '-'})</Button>
+                  )}
+                  {resourceType === 'deployments' && (
+                    <Button size="small" onClick={opPause}>
+                      {yaml?.spec?.paused ? '▶️ 恢复' : '⏸️ 暂停'}
+                    </Button>
+                  )}
+                  <Button size="small" color="danger" onClick={opDelete}>🗑️ 删除</Button>
+                </div>
+              </Section>
+              {!['deployments', 'statefulsets', 'daemonsets', 'pods', 'services', 'configmaps', 'secrets', 'ingresses'].includes(resourceType || '') && (
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', padding: 20 }}>
+                  仅支持删除操作
+                </div>
+              )}
+            </div>
+          </Tabs.Tab>
+
+          {/* 历史与回滚 */}
+          <Tabs.Tab title="历史" key="revisions">
+            <div style={{ padding: 12, paddingBottom: 60 }}>
+              {revisions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
+                  暂无修改历史
+                </div>
+              ) : (
+                revisions.map((r: any) => (
+                  <div key={r.id} style={{
+                    background: 'var(--bg-elevated)',
+                    padding: 10,
+                    marginBottom: 8,
+                    borderRadius: 6,
+                    borderLeft: '3px solid var(--accent-blue)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>
+                        {dayjs(r.created_at).format('MM-DD HH:mm:ss')}
+                      </div>
+                      <Button size="mini" color="warning" onClick={() => doRollback(r.id)}>回滚</Button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                      {r.operator || '匿名'} · {r.note || '(无备注)'}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Tabs.Tab>
         </Tabs>
       </PullToRefresh>
     </PageShell>
   )
+}
+
+function guessApiVersion(kind: string): string {
+  const map: Record<string, string> = {
+    Pod: 'v1', Service: 'v1', ConfigMap: 'v1', Secret: 'v1', Node: 'v1',
+    Deployment: 'apps/v1', StatefulSet: 'apps/v1', DaemonSet: 'apps/v1',
+    Ingress: 'networking.k8s.io/v1'
+  }
+  return map[kind] || 'v1'
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
