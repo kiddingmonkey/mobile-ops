@@ -86,29 +86,10 @@ function startupHealthCheck() {
   }, 5000)
 }
 
-// 在 App 启动时恢复热更新版本
+// 版本恢复已移到 main.tsx 的 bootstrap() 里做（React 挂载前）
+// 这里保留一个空函数占位，避免删除引用
 async function restoreUpdatedVersion() {
-  if (!Capacitor.isNativePlatform()) return
-
-  const savedVersion = localStorage.getItem(CURRENT_VERSION_KEY)
-  if (!savedVersion || savedVersion === 'builtin') return
-
-  // 不再调用 setServerBasePath，Capacitor 会自动检测
-  // setServerBasePath 可能导致 WebView 死锁或路径错误
-  console.log(`[OTA] 跳过 setServerBasePath，Capacitor 会自动检测版本: ${savedVersion}`)
-
-  // 仅验证文件是否存在，如果不存在则清除版本记录
-  try {
-    const versionDir = `${WEBROOT_DIR}/${savedVersion}`
-    await Filesystem.stat({
-      path: versionDir,
-      directory: Directory.Data
-    })
-    console.log(`[OTA] 版本目录存在: ${versionDir}`)
-  } catch (err) {
-    console.error('[OTA] 版本目录不存在，清除版本记录:', err)
-    localStorage.removeItem(CURRENT_VERSION_KEY)
-  }
+  // no-op: 由 main.tsx tryLoadOtaVersion 处理
 }
 
 // 处理Android返回按钮
