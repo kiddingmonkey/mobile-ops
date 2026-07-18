@@ -327,30 +327,38 @@ export async function downloadAndApply(
       otaDebugLogger.log('info', 'reload', '保存版本号并准备 reload（500ms 后）')
       onStatus?.('准备重启...')
       setTimeout(() => {
-        otaDebugLogger.log('info', 'reload', '执行 window.location.reload()')
-        window.location.reload()
+        otaDebugLogger.log('info', 'reload', '执行 window.location.href fallback')
+        try {
+          window.location.href = '/'
+        } catch {
+          window.location.reload()
+        }
       }, 500)
       return
     }
 
     // 5. 切 WebView 到新目录（带超时保护）
     otaDebugLogger.log('info', 'setServerBasePath', '尝试切换 WebView basePath')
-    const webview = await tryGetWebViewPlugin()
-    if (webview) {
-      try {
-        await Promise.race([
-          webview.setServerBasePath({ path: absPath }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('setServerBasePath timeout')), 5000))
-        ])
-        otaDebugLogger.log('success', 'setServerBasePath', 'WebView basePath 切换成功')
-      } catch (e: any) {
-        otaDebugLogger.log('warn', 'setServerBasePath', 'setServerBasePath 失败或超时，将继续 reload', {
-          message: e.message,
-          stack: e.stack
-        })
-      }
-    } else {
-      otaDebugLogger.log('warn', 'setServerBasePath', 'WebView plugin 不可用，跳过')
+    try {
+      // 给整个 WebView 操作加 3 秒总超时（包括获取 plugin）
+      await Promise.race([
+        (async () => {
+          const webview = await tryGetWebViewPlugin()
+          if (webview) {
+            otaDebugLogger.log('info', 'setServerBasePath', '获取到 WebView plugin，开始切换')
+            await webview.setServerBasePath({ path: absPath })
+            otaDebugLogger.log('success', 'setServerBasePath', 'WebView basePath 切换成功')
+          } else {
+            otaDebugLogger.log('warn', 'setServerBasePath', 'WebView plugin 不可用，跳过')
+          }
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('WebView 操作超时 3s')), 3000))
+      ])
+    } catch (e: any) {
+      otaDebugLogger.log('warn', 'setServerBasePath', 'WebView 操作失败或超时，将继续 reload', {
+        message: e.message,
+        stack: e.stack
+      })
     }
 
     // 6. 保存版本号
@@ -362,8 +370,22 @@ export async function downloadAndApply(
     otaDebugLogger.log('info', 'reload', '准备 reload（300ms 后）')
     onStatus?.('更新完成，即将重启...')
     setTimeout(() => {
-      otaDebugLogger.log('info', 'reload', '执行 window.location.reload()')
-      window.location.reload()
+      otaDebugLogger.log('info', 'reload', '尝试三种 reload 方式')
+      try {
+        // 方式1: 强制跳转到根路径（绕过缓存）
+        otaDebugLogger.log('info', 'reload', '执行 window.location.href = "/"')
+        window.location.href = '/'
+      } catch (e1: any) {
+        otaDebugLogger.log('warn', 'reload', 'window.location.href 失败，fallback 到 replace', { message: e1.message })
+        try {
+          // 方式2: replace（不留历史记录）
+          window.location.replace('/')
+        } catch (e2: any) {
+          otaDebugLogger.log('warn', 'reload', 'replace 失败，fallback 到 reload()', { message: e2.message })
+          // 方式3: 传统 reload
+          window.location.reload()
+        }
+      }
     }, 300)
   } catch (e: any) {
     const errorMsg = e.message || '未知错误'
