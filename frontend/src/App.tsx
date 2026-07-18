@@ -40,6 +40,49 @@ import UpdateChecker from '@/components/UpdateChecker'
 
 const CURRENT_VERSION_KEY = 'mobile_ops_dist_version'
 const WEBROOT_DIR = 'webroot'
+const HEALTH_CHECK_KEY = 'mobile_ops_health_check'
+const HEALTH_CHECK_TIMEOUT = 10000 // 10秒
+
+// 启动健康检查：检测到异常启动则自动回退
+function startupHealthCheck() {
+  if (!Capacitor.isNativePlatform()) return
+
+  const lastCheck = localStorage.getItem(HEALTH_CHECK_KEY)
+  const now = Date.now()
+
+  // 如果上次检查时间在 10 秒内，说明 App 刚启动就崩溃/重启了
+  if (lastCheck && now - parseInt(lastCheck) < HEALTH_CHECK_TIMEOUT) {
+    console.error('[OTA] 检测到异常启动循环，清除 OTA 数据回退到 builtin 版本')
+
+    // 清除所有 OTA 相关数据
+    localStorage.removeItem(CURRENT_VERSION_KEY)
+    localStorage.removeItem('OTA_RESTART_PENDING')
+    localStorage.removeItem(HEALTH_CHECK_KEY)
+
+    // 尝试删除 webroot 目录（异步，不阻塞启动）
+    Filesystem.rmdir({
+      path: WEBROOT_DIR,
+      directory: Directory.Data,
+      recursive: true
+    }).catch(err => {
+      console.warn('[OTA] 清理 webroot 目录失败（可能不存在）:', err)
+    })
+
+    // 显示 Toast 提示用户
+    alert('检测到更新异常，已自动回退到内置版本')
+
+    return
+  }
+
+  // 记录本次启动时间
+  localStorage.setItem(HEALTH_CHECK_KEY, now.toString())
+
+  // 5 秒后清除检查标记（说明启动成功）
+  setTimeout(() => {
+    localStorage.removeItem(HEALTH_CHECK_KEY)
+    console.log('[OTA] 启动健康检查通过')
+  }, 5000)
+}
 
 // 在 App 启动时恢复热更新版本
 async function restoreUpdatedVersion() {
@@ -48,24 +91,20 @@ async function restoreUpdatedVersion() {
   const savedVersion = localStorage.getItem(CURRENT_VERSION_KEY)
   if (!savedVersion || savedVersion === 'builtin') return
 
+  // 不再调用 setServerBasePath，Capacitor 会自动检测
+  // setServerBasePath 可能导致 WebView 死锁或路径错误
+  console.log(`[OTA] 跳过 setServerBasePath，Capacitor 会自动检测版本: ${savedVersion}`)
+
+  // 仅验证文件是否存在，如果不存在则清除版本记录
   try {
-    // 获取更新后的资源目录
     const versionDir = `${WEBROOT_DIR}/${savedVersion}`
-    const uri = await Filesystem.getUri({
+    await Filesystem.stat({
       path: versionDir,
       directory: Directory.Data
     })
-    const absPath = uri.uri.replace(/^file:\/\//, '')
-
-    // 重新设置 WebView 基础路径
-    const { WebView } = await import('@capacitor/core')
-    if (WebView && typeof (WebView as any).setServerBasePath === 'function') {
-      await (WebView as any).setServerBasePath({ path: absPath })
-      console.log(`[OTA] Restored version ${savedVersion} from ${absPath}`)
-    }
+    console.log(`[OTA] 版本目录存在: ${versionDir}`)
   } catch (err) {
-    console.error('[OTA] Failed to restore updated version:', err)
-    // 如果恢复失败，清除版本记录，避免无限循环
+    console.error('[OTA] 版本目录不存在，清除版本记录:', err)
     localStorage.removeItem(CURRENT_VERSION_KEY)
   }
 }
@@ -96,6 +135,9 @@ export default function App() {
   })
 
   useEffect(() => {
+    // 最先进行健康检查，检测异常启动循环
+    startupHealthCheck()
+
     // 检查是否是 OTA 更新后重启
     const restartPending = localStorage.getItem('OTA_RESTART_PENDING')
     if (restartPending) {
