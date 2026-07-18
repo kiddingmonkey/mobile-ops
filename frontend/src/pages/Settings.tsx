@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const [prom, setProm] = useState<any[]>([])
   const [cloud, setCloud] = useState<any[]>([])
   const [clusters, setClusters] = useState<any[]>([])
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 
   const load = async () => {
     setGrafana(await api.listGrafana().catch(() => []))
@@ -27,6 +28,26 @@ export default function SettingsPage() {
   }
   useEffect(() => { load() }, [])
 
+  // PWA 安装提示
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const installPWA = async () => {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') {
+      Toast.show({ content: '已添加到桌面', icon: 'success' })
+      setDeferredPrompt(null)
+    }
+  }
+
   const doLogout = async () => {
     const ok = await Dialog.confirm({ content: '确认退出登录？' })
     if (ok) { logout(); nav('/login', { replace: true }) }
@@ -34,8 +55,16 @@ export default function SettingsPage() {
 
   const handleCheckUpdate = async () => {
     const th = Toast.show({ content: '检查更新中...', icon: 'loading', duration: 0 })
-    const r = await checkForUpdate()
-    th.close()
+    let r: Awaited<ReturnType<typeof checkForUpdate>> | null = null
+    try {
+      r = await checkForUpdate()
+    } catch (e: any) {
+      th.close()
+      Toast.show({ content: '检查失败: ' + (e?.message || '未知错误'), icon: 'fail', duration: 3000 })
+      return
+    } finally {
+      th.close()
+    }
 
     if (r.error) {
       Toast.show({ content: r.error, icon: 'fail', duration: 3000 })
@@ -188,6 +217,18 @@ export default function SettingsPage() {
           >操作记录</List.Item>
         </List>
 
+        {/* 帮助 */}
+        <List header="帮助" mode="card">
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/blob/main/docs/TRAINING.md', '_blank')}
+          >📖 使用手册</List.Item>
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/issues', '_blank')}
+          >💬 问题反馈</List.Item>
+        </List>
+
         {/* 关于 */}
         <List header="关于" mode="card">
           <List.Item
@@ -200,6 +241,9 @@ export default function SettingsPage() {
           >当前版本</List.Item>
           <List.Item extra="Capacitor 8">运行环境</List.Item>
           <List.Item onClick={handleCheckUpdate}>检查更新</List.Item>
+          {deferredPrompt && (
+            <List.Item onClick={installPWA}>📲 安装到桌面 (PWA)</List.Item>
+          )}
         </List>
 
         {/* 退出 */}

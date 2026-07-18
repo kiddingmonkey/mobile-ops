@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd-mobile'
 import zhCN from 'antd-mobile/es/locales/zh-CN'
 import { useAuth } from '@/store'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { App as CapApp } from '@capacitor/app'
@@ -10,6 +10,7 @@ import { initNotifications, setupNotificationChannels } from '@/utils/alertNotif
 
 import ErrorBoundary from '@/components/ErrorBoundary'
 import AppLayout from '@/components/AppLayout'
+import Onboarding from '@/components/Onboarding'
 import LoginPage from '@/pages/Login'
 import HomePage from '@/pages/Home'
 import MonitorPage from '@/pages/Monitor'
@@ -88,6 +89,10 @@ function Protected({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('mobile_ops_onboarding_done')
+  })
+
   useEffect(() => {
     restoreUpdatedVersion()
     setupBackButtonHandler()
@@ -101,6 +106,21 @@ export default function App() {
       })
     }
   }, [])
+
+  const finishOnboarding = () => {
+    localStorage.setItem('mobile_ops_onboarding_done', '1')
+    setShowOnboarding(false)
+  }
+
+  if (showOnboarding) {
+    return (
+      <ErrorBoundary>
+        <ConfigProvider locale={zhCN}>
+          <Onboarding onFinish={finishOnboarding} />
+        </ConfigProvider>
+      </ErrorBoundary>
+    )
+  }
 
   return (
     <ErrorBoundary>

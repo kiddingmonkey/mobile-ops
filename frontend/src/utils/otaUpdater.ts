@@ -48,7 +48,7 @@ export async function checkForUpdate(): Promise<{
   const currentVersion = localStorage.getItem(CURRENT_VERSION_KEY) || 'builtin'
   try {
     const r = await axios.get(`${API_BASE}/updates/latest`, {
-      timeout: 8000,
+      timeout: 12000, // 12s (慢网络容错)
       headers: {
         Authorization: `Bearer ${localStorage.getItem('mobile_ops_token') || ''}`
       }
@@ -60,11 +60,25 @@ export async function checkForUpdate(): Promise<{
       hasUpdate: info.version !== currentVersion
     }
   } catch (e: any) {
+    let error = '检查失败'
+    if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
+      error = '连接超时 — 请检查网络或稍后重试'
+    } else if (e.code === 'ERR_NETWORK' || e.message === 'Network Error') {
+      error = '网络不通 — 请检查后端地址或安全组白名单'
+    } else if (e.response?.status === 404) {
+      error = '服务器上无更新包 (dist.zip 未部署)'
+    } else if (e.response?.status === 401) {
+      error = '登录过期 — 请重新登录后再试'
+    } else if (e.response?.data?.error) {
+      error = e.response.data.error
+    } else if (e.message) {
+      error = e.message
+    }
     return {
       info: null,
       currentVersion,
       hasUpdate: false,
-      error: e?.response?.data?.error || e?.message || '检查失败'
+      error
     }
   }
 }
