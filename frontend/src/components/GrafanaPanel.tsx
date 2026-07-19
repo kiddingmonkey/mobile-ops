@@ -61,16 +61,30 @@ export default function GrafanaPanel({ url, title, height = 240, enableFullscree
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
-            <div style={{ marginBottom: 8, fontWeight: 600 }}>Network Error</div>
-            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-              可能原因：<br />
-              1. Grafana 禁止 iframe 嵌入<br />
-              2. 需要添加认证信息<br />
-              3. URL 格式不正确<br />
-              4. 网络连接问题
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>无法嵌入显示</div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
+              Grafana 禁止在 iframe 中嵌入<br />
+              请点击下方按钮在浏览器中打开
             </div>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-block',
+                padding: '8px 16px',
+                background: 'var(--accent-blue)',
+                color: 'white',
+                borderRadius: 6,
+                textDecoration: 'none',
+                fontSize: 14,
+                fontWeight: 600
+              }}
+            >
+              在浏览器中打开 →
+            </a>
             <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-tertiary)', wordBreak: 'break-all' }}>
-              URL: {url}
+              {url}
             </div>
           </div>
         ) : (

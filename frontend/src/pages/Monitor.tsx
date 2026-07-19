@@ -159,6 +159,34 @@ const AddPanelPopup = memo(function AddPanelPopup({
             />
           </Form.Item>
 
+          <Form.Item
+            name="apiToken"
+            label="Grafana API Token（可选）"
+          >
+            <input
+              type="text"
+              inputMode="text"
+              placeholder="eyJrIjoiLi4uIn0="
+              onChange={(e) => {
+                const val = e.target.value
+                form.setFieldValue('apiToken', val)
+              }}
+              onBlur={(e) => {
+                const actualValue = e.currentTarget.value
+                form.setFieldValue('apiToken', actualValue)
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 14,
+                border: '1px solid var(--border-color)',
+                borderRadius: 4,
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)'
+              }}
+            />
+          </Form.Item>
+
           {/* 简化的模式切换 - 紧凑单选按钮 */}
           <Form.Item label="显示模式">
             <div style={{ display: 'flex', gap: 8 }}>
@@ -481,7 +509,7 @@ export default function MonitorPage() {
                       ) : (
                         <div style={{ paddingTop: 0 }}>
                           <GrafanaPanel
-                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now&kiosk`}
+                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now&kiosk${activePanel.apiToken ? `&auth_token=${activePanel.apiToken}` : ''}`}
                             title={activePanel.title}
                             height={activePanel.height || 400}
                             enableFullscreen
