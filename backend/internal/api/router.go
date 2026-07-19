@@ -88,6 +88,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		// 工作负载快捷操作
 		priv.POST("/clusters/:id/workloads/:kind/:namespace/:name/restart", h.RestartWorkload)
 		priv.POST("/clusters/:id/workloads/:kind/:namespace/:name/scale", h.ScaleWorkload)
+		priv.POST("/clusters/:id/workloads/:kind/:namespace/:name/scale-precheck", h.WorkloadScalePrecheck)
 		priv.POST("/clusters/:id/deployments/:namespace/:name/pause", h.PauseDeployment)
 
 		// SSE 实时事件流

@@ -65,12 +65,67 @@ export default function DeployScalePage() {
     const curReplicas = getReplicas(w)
     if (newReplicas === curReplicas) return
 
-    const ok = await Dialog.confirm({
-      content: `${w.name}: ${curReplicas} → ${newReplicas} 副本？`,
-      confirmText: '确认',
-      cancelText: '取消'
-    })
-    if (!ok) return
+    // 只对扩容（增加副本）做预检
+    if (newReplicas > curReplicas) {
+      try {
+        const precheck = await api.post(`/clusters/${clusterId}/workloads/${type}/${w.namespace}/${w.name}/scale-precheck`, {
+          replicas: newReplicas
+        })
+
+        // 显示预检结果
+        const result = precheck.data
+        const sufficient = result.sufficient
+        const delta = result.delta
+        const podCPU = result.podResources?.cpu || 0
+        const podMem = result.podResources?.memory || 0
+        const schedulable = result.schedulableNodes || []
+
+        let content = `${w.name}: ${curReplicas} → ${newReplicas} (+${delta})\n\n`
+        content += `📊 单 Pod 资源:\n• CPU: ${(podCPU / 1000).toFixed(2)} 核\n• 内存: ${(podMem / 1024 / 1024 / 1024).toFixed(2)} Gi\n\n`
+
+        if (result.nodeSelector && Object.keys(result.nodeSelector).length > 0) {
+          content += `🎯 节点选择器:\n${JSON.stringify(result.nodeSelector, null, 2)}\n\n`
+        }
+
+        if (sufficient) {
+          content += `✅ 资源充足\n可调度节点: ${schedulable.length} 个\n\n`
+          if (schedulable.length > 0) {
+            content += `节点余量（扩容后）:\n`
+            schedulable.slice(0, 3).forEach((n: any) => {
+              content += `• ${n.name}: CPU ${(n.afterScale.cpu / 1000).toFixed(1)}核 / 内存 ${(n.afterScale.memory / 1024 / 1024 / 1024).toFixed(1)}Gi\n`
+            })
+          }
+        } else {
+          content += `⚠️ 资源不足！\n可调度节点: ${schedulable.length} 个 < 需要 ${delta} 个\n\n`
+          content += `建议: 前往集群管理 → 节点池扩容`
+        }
+
+        const ok = await Dialog.confirm({
+          title: sufficient ? '确认扩容' : '资源不足',
+          content,
+          confirmText: sufficient ? '确认扩容' : '仍要扩容',
+          cancelText: '取消'
+        })
+        if (!ok) return
+      } catch (e: any) {
+        console.error('预检失败:', e)
+        // 预检失败不阻止扩容，但提示用户
+        const ok = await Dialog.confirm({
+          content: `${w.name}: ${curReplicas} → ${newReplicas} 副本？\n（预检失败，可能资源不足）`,
+          confirmText: '继续',
+          cancelText: '取消'
+        })
+        if (!ok) return
+      }
+    } else {
+      // 缩容直接确认
+      const ok = await Dialog.confirm({
+        content: `${w.name}: ${curReplicas} → ${newReplicas} 副本？`,
+        confirmText: '确认',
+        cancelText: '取消'
+      })
+      if (!ok) return
+    }
 
     try {
       await api.post(`/clusters/${clusterId}/workloads/${type}/${w.namespace}/${w.name}/scale`, {

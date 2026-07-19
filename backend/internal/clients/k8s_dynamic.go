@@ -293,6 +293,86 @@ func (k *K8sClient) ScaleWorkload(ctx context.Context, kind, namespace, name str
 	}
 }
 
+// GetWorkloadDetail 获取 workload 详情（包含 Pod spec）
+func (k *K8sClient) GetWorkloadDetail(ctx context.Context, kind, namespace, name string) (map[string]interface{}, error) {
+	switch strings.ToLower(kind) {
+	case "deployment", "deployments":
+		deploy, err := k.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		data, _ := json.Marshal(deploy)
+		var result map[string]interface{}
+		json.Unmarshal(data, &result)
+		return result, nil
+	case "statefulset", "statefulsets":
+		sts, err := k.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		data, _ := json.Marshal(sts)
+		var result map[string]interface{}
+		json.Unmarshal(data, &result)
+		return result, nil
+	default:
+		return nil, fmt.Errorf("unsupported kind: %s", kind)
+	}
+}
+
+// GetNodeResources 获取节点资源信息
+func (k *K8sClient) GetNodeResources(ctx context.Context) ([]map[string]interface{}, error) {
+	nodes, err := k.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, node := range nodes.Items {
+		// 获取节点上的所有 Pods 来计算已分配资源
+		pods, _ := k.Clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name),
+		})
+
+		allocatedCPU := int64(0)
+		allocatedMemory := int64(0)
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != "Running" && pod.Status.Phase != "Pending" {
+				continue
+			}
+			for _, container := range pod.Spec.Containers {
+				if cpu := container.Resources.Requests.Cpu(); cpu != nil {
+					allocatedCPU += cpu.MilliValue()
+				}
+				if mem := container.Resources.Requests.Memory(); mem != nil {
+					allocatedMemory += mem.Value()
+				}
+			}
+		}
+
+		nodeInfo := map[string]interface{}{
+			"name":   node.Name,
+			"labels": node.Labels,
+			"capacity": map[string]interface{}{
+				"cpu":    node.Status.Capacity.Cpu().MilliValue(),
+				"memory": node.Status.Capacity.Memory().Value(),
+			},
+			"allocatable": map[string]interface{}{
+				"cpu":    node.Status.Allocatable.Cpu().MilliValue(),
+				"memory": node.Status.Allocatable.Memory().Value(),
+			},
+			"allocated": map[string]interface{}{
+				"cpu":    allocatedCPU,
+				"memory": allocatedMemory,
+			},
+			"taints":       node.Spec.Taints,
+			"unschedulable": node.Spec.Unschedulable,
+		}
+		result = append(result, nodeInfo)
+	}
+
+	return result, nil
+}
+
 // TogglePause 暂停/恢复 Deployment（只对 Deployment 有效）
 func (k *K8sClient) TogglePause(ctx context.Context, namespace, name string, paused bool) error {
 	patch := []byte(fmt.Sprintf(`{"spec":{"paused":%v}}`, paused))

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -292,6 +293,190 @@ func (h *Handler) ScaleWorkload(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
+}
+
+// WorkloadScalePrecheck POST /clusters/:id/workloads/:kind/:namespace/:name/scale-precheck  body: {replicas: n}
+func (h *Handler) WorkloadScalePrecheck(c *gin.Context) {
+	clusterID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	kind := c.Param("kind")
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	var body struct {
+		Replicas int32 `json:"replicas"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	client, err := h.config.GetK8sClient(ctx, clusterID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "cluster not found"})
+		return
+	}
+
+	// 1. 获取 workload 详情
+	workload, err := client.GetWorkloadDetail(ctx, kind, namespace, name)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get workload: " + err.Error()})
+		return
+	}
+
+	// 2. 获取节点资源信息
+	nodes, err := client.GetNodeResources(ctx)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get node resources: " + err.Error()})
+		return
+	}
+
+	// 3. 提取 Pod spec
+	spec, _ := workload["spec"].(map[string]interface{})
+	template, _ := spec["template"].(map[string]interface{})
+	podSpec, _ := template["spec"].(map[string]interface{})
+
+	// 当前副本数
+	currentReplicas := int32(0)
+	if r, ok := spec["replicas"].(float64); ok {
+		currentReplicas = int32(r)
+	}
+	delta := body.Replicas - currentReplicas
+
+	// 4. 计算单个 Pod 的资源需求
+	containers, _ := podSpec["containers"].([]interface{})
+	totalCPU := int64(0)
+	totalMemory := int64(0)
+	for _, c := range containers {
+		container, _ := c.(map[string]interface{})
+		resources, _ := container["resources"].(map[string]interface{})
+		requests, _ := resources["requests"].(map[string]interface{})
+
+		if cpu, ok := requests["cpu"].(string); ok {
+			// 简单解析，实际应使用 resource.ParseQuantity
+			// 这里先返回原始值
+			totalCPU += parseCPU(cpu)
+		}
+		if mem, ok := requests["memory"].(string); ok {
+			totalMemory += parseMemory(mem)
+		}
+	}
+
+	// 5. 提取调度策略
+	nodeSelector, _ := podSpec["nodeSelector"].(map[string]interface{})
+	affinity, _ := podSpec["affinity"].(map[string]interface{})
+	tolerations, _ := podSpec["tolerations"].([]interface{})
+
+	// 6. 模拟调度：找到可调度的节点
+	schedulableNodes := []map[string]interface{}{}
+	requiredCPU := totalCPU * int64(delta)
+	requiredMemory := totalMemory * int64(delta)
+
+	for _, node := range nodes {
+		// 检查节点是否可调度
+		if unschedulable, ok := node["unschedulable"].(bool); ok && unschedulable {
+			continue
+		}
+
+		// 检查 nodeSelector
+		if nodeSelector != nil {
+			labels, _ := node["labels"].(map[string]interface{})
+			match := true
+			for k, v := range nodeSelector {
+				if labels[k] != v {
+					match = false
+					break
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+
+		// 计算剩余资源
+		allocatable, _ := node["allocatable"].(map[string]interface{})
+		allocated, _ := node["allocated"].(map[string]interface{})
+
+		availableCPU := int64(allocatable["cpu"].(float64)) - int64(allocated["cpu"].(float64))
+		availableMemory := int64(allocatable["memory"].(float64)) - int64(allocated["memory"].(float64))
+
+		if availableCPU >= totalCPU && availableMemory >= totalMemory {
+			schedulableNodes = append(schedulableNodes, map[string]interface{}{
+				"name": node["name"],
+				"available": map[string]interface{}{
+					"cpu":    availableCPU,
+					"memory": availableMemory,
+				},
+				"afterScale": map[string]interface{}{
+					"cpu":    availableCPU - totalCPU*int64(delta),
+					"memory": availableMemory - totalMemory*int64(delta),
+				},
+			})
+		}
+	}
+
+	sufficient := int64(len(schedulableNodes)) >= int64(delta)
+
+	c.JSON(200, gin.H{
+		"sufficient": sufficient,
+		"currentReplicas": currentReplicas,
+		"targetReplicas": body.Replicas,
+		"delta": delta,
+		"podResources": map[string]interface{}{
+			"cpu":    totalCPU,
+			"memory": totalMemory,
+		},
+		"requiredTotal": map[string]interface{}{
+			"cpu":    requiredCPU,
+			"memory": requiredMemory,
+		},
+		"nodeSelector": nodeSelector,
+		"affinity": affinity,
+		"tolerations": tolerations,
+		"schedulableNodes": schedulableNodes,
+		"totalNodes": len(nodes),
+	})
+}
+
+// 简单的 CPU 解析（milliCPU）
+func parseCPU(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	// 简化：只处理 "100m" 或 "1" 格式
+	if len(s) > 1 && s[len(s)-1] == 'm' {
+		var val int64
+		fmt.Sscanf(s[:len(s)-1], "%d", &val)
+		return val
+	}
+	var val float64
+	fmt.Sscanf(s, "%f", &val)
+	return int64(val * 1000)
+}
+
+// 简单的 Memory 解析（字节）
+func parseMemory(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	units := map[string]int64{
+		"Ki": 1024,
+		"Mi": 1024 * 1024,
+		"Gi": 1024 * 1024 * 1024,
+		"K":  1000,
+		"M":  1000 * 1000,
+		"G":  1000 * 1000 * 1000,
+	}
+	for suffix, multiplier := range units {
+		if len(s) > len(suffix) && s[len(s)-len(suffix):] == suffix {
+			var val int64
+			fmt.Sscanf(s[:len(s)-len(suffix)], "%d", &val)
+			return val * multiplier
+		}
+	}
+	var val int64
+	fmt.Sscanf(s, "%d", &val)
+	return val
 }
 
 // PauseDeployment POST /clusters/:id/deployments/:namespace/:name/pause  body: {paused: bool}
