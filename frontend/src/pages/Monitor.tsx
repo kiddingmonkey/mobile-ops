@@ -95,14 +95,14 @@ const AddPanelPopup = memo(function AddPanelPopup({
         >
           <Form.Item
             name="url"
-            label="Grafana URL"
+            label="Grafana URL（请使用内网地址）"
             rules={[{ required: true, message: '请输入 URL' }]}
           >
             <input
               ref={urlInputRef}
               type="text"
               inputMode="text"
-              placeholder="https://grafana.example.com/d/..."
+              placeholder="http://10.x.x.x:3000/d/xxx（内网地址）"
               onChange={(e) => {
                 const val = e.target.value
                 form.setFieldValue('url', val)
@@ -260,6 +260,7 @@ export default function MonitorPage() {
   const [showGrafanaList, setShowGrafanaList] = useState(false)
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [grafanaList, setGrafanaList] = useState<any[]>([])
+  const [grafanaSource, setGrafanaSource] = useState<any>(null)  // 当前集群的 Grafana 数据源
 
   useEffect(() => {
     api.listClusters().then(cs => {
@@ -480,7 +481,7 @@ export default function MonitorPage() {
                       ) : (
                         <div style={{ paddingTop: 0 }}>
                           <GrafanaPanel
-                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now`}
+                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now&kiosk`}
                             title={activePanel.title}
                             height={activePanel.height || 400}
                             enableFullscreen

@@ -11,6 +11,7 @@ interface Props {
 
 export default function GrafanaPanel({ url, title, height = 240, enableFullscreen = true }: Props) {
   const [fullscreen, setFullscreen] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   const enterFullscreen = async () => {
     setFullscreen(true)
@@ -47,11 +48,39 @@ export default function GrafanaPanel({ url, title, height = 240, enableFullscree
             )}
           </div>
         )}
-        <iframe
-          src={url}
-          style={{ width: '100%', height, border: 0, display: 'block' }}
-          allow="fullscreen"
-        />
+        {loadError ? (
+          <div style={{
+            height,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: 13,
+            padding: 20,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Network Error</div>
+            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+              可能原因：<br />
+              1. Grafana 禁止 iframe 嵌入<br />
+              2. 需要添加认证信息<br />
+              3. URL 格式不正确<br />
+              4. 网络连接问题
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-tertiary)', wordBreak: 'break-all' }}>
+              URL: {url}
+            </div>
+          </div>
+        ) : (
+          <iframe
+            src={url}
+            style={{ width: '100%', height, border: 0, display: 'block' }}
+            allow="fullscreen"
+            onError={() => setLoadError(true)}
+          />
+        )}
       </div>
 
       <Popup
