@@ -38,8 +38,10 @@ const AddPanelPopup = memo(function AddPanelPopup({
   // 只在弹窗打开时重置（从关闭变为打开），避免每次 visible 变化都重置
   const prevVisibleRef = useRef(visible)
   useEffect(() => {
+    console.log('useEffect 触发 - visible:', visible, 'prevVisible:', prevVisibleRef.current)
     if (visible && !prevVisibleRef.current) {
       // 从关闭到打开，才重置
+      console.log('执行表单重置', new Error().stack)
       form.resetFields()
       setUseSmartViewer(false)
     }
@@ -86,7 +88,6 @@ const AddPanelPopup = memo(function AddPanelPopup({
           >
             <Input
               placeholder="https://grafana.example.com/d/..."
-              clearable
               onChange={(val) => {
                 console.log('URL 输入值变化:', val)
               }}
@@ -100,7 +101,6 @@ const AddPanelPopup = memo(function AddPanelPopup({
           >
             <Input
               placeholder="例如：集群 CPU 使用率"
-              clearable
               onChange={(val) => {
                 console.log('面板名称输入值变化:', val)
               }}
