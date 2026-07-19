@@ -19,8 +19,11 @@ echo "📦 [2/6] 编译前端..."
 npm run build
 
 echo "📦 [3/6] 打包 dist.zip..."
+# 先清掉 macOS 生成的 ._xxx AppleDouble 文件（踩过坑：会污染服务器）
+find dist -name '._*' -delete
+find dist -name '.DS_Store' -delete
 cd dist
-zip -r ../dist.zip . -x "*.DS_Store"
+zip -r ../dist.zip . -x "*.DS_Store" -x "._*"
 cd ..
 
 echo "📤 [4/6] 上传 dist 目录到服务器..."
