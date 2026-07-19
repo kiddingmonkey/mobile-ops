@@ -16,6 +16,7 @@ export default function InputDebugPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const inputRef = useRef<any>(null)
   const nativeInputRef = useRef<HTMLInputElement>(null)
+  const isComposingRef = useRef(false)  // 标记是否在组合输入中
 
   const addLog = (event: string, value: string, detail: string = '') => {
     const entry: LogEntry = {
@@ -48,13 +49,30 @@ export default function InputDebugPage() {
   const handleCompositionEnd = (e: any) => {
     const val = e.target.value || e.data || ''
     addLog('onCompositionEnd', val, `组合输入结束，最终值: ${val}`)
+    isComposingRef.current = false
     setTestValue(val)
   }
 
+  const handleNativeCompositionStart = () => {
+    isComposingRef.current = true
+    addLog('[原生]onCompositionStart', '', '组合输入开始')
+  }
+
   const handleNativeCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposingRef.current = false
     const val = e.currentTarget.value
     addLog('[原生]onCompositionEnd', val, `组合输入结束，最终值: ${val}`)
     setNativeValue(val)
+  }
+
+  const handleNativeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    addLog('[原生]onChange', val, `length: ${val.length}, isComposing: ${isComposingRef.current}`)
+    // 如果不在组合输入中，立即更新
+    if (!isComposingRef.current) {
+      setNativeValue(val)
+    }
+    // 如果在组合输入中，不更新 state，等待 compositionend
   }
 
   const copyLogs = () => {
@@ -149,17 +167,14 @@ export default function InputDebugPage() {
               inputMode="text"
               placeholder="原生输入框..."
               value={nativeValue}
-              onChange={(e) => {
-                const val = e.target.value
-                setNativeValue(val)
-                addLog('[原生]onChange', val, `length: ${val.length}`)
-              }}
+              onChange={handleNativeChange}
               onFocus={(e) => {
                 addLog('[原生]onFocus', nativeValue, `type: ${e.target.type}`)
               }}
               onBlur={(e) => {
                 addLog('[原生]onBlur', nativeValue, `type: ${e.target.type}`)
               }}
+              onCompositionStart={handleNativeCompositionStart}
               onCompositionEnd={handleNativeCompositionEnd}
               style={{
                 width: '100%',
