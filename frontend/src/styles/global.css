@@ -233,7 +233,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; color: var(--text-primary); le
 .card {
   background: var(--bg-secondary);
   border-radius: 14px;
-  padding: 18px 16px;
+  padding: 12px 12px;
   color: var(--text-primary);
   transition: background-color 0.15s ease;
 }
@@ -249,7 +249,7 @@ body.mo-light .card {
   margin-bottom: 14px;
 }
 .card-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.01em;
@@ -281,11 +281,11 @@ body.mo-light .card {
 .metric-card {
   background: var(--bg-secondary);
   border-radius: 14px;
-  padding: 16px 14px;
+  padding: 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 100px;
+  gap: 4px;
+  min-height: 85px;
   justify-content: space-between;
 }
 body.mo-light .metric-card {
@@ -293,21 +293,21 @@ body.mo-light .metric-card {
 }
 
 .metric-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 .metric-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
-.metric-value.small { font-size: 22px; }
-.metric-value.large { font-size: 32px; }
+.metric-value.small { font-size: 18px; }
+.metric-value.large { font-size: 26px; }
 
 .metric-trend { font-size: 12px; font-weight: 500; }
 .metric-trend.up { color: var(--danger); }

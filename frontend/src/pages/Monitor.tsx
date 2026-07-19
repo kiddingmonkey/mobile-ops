@@ -360,7 +360,7 @@ export default function MonitorPage() {
                       )}
                     </div>
 
-                    <Grid columns={2} gap={12}>
+                    <Grid columns={2} gap={8}>
                       <Grid.Item>
                         <div className="metric-card">
                           <div className="metric-label">节点总数</div>
