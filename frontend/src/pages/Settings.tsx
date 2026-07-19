@@ -66,7 +66,7 @@ export default function SettingsPage() {
       title: '📊 数据源',
       keywords: ['数据源', 'Grafana', 'Prometheus'],
       render: () => (
-        <>
+        <List mode="card" style={{ '--border-radius': '8px' } as any}>
           <List.Item
             prefix={<StatusDot connected={grafana.length > 0} />}
             extra={`${grafana.length} 个`}
@@ -79,7 +79,7 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => { hapticLight(); nav('/settings/prom') }}
           >Prometheus</List.Item>
-        </>
+        </List>
       )
     },
     {
@@ -87,7 +87,7 @@ export default function SettingsPage() {
       title: '☁️ 云服务',
       keywords: ['云', '腾讯云', 'AK', 'SK', '安全组', '白名单'],
       render: () => (
-        <>
+        <List mode="card" style={{ '--border-radius': '8px' } as any}>
           <List.Item
             prefix={<StatusDot connected={cloud.length > 0} />}
             extra={`${cloud.length} 个账号`}
@@ -99,7 +99,7 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => { hapticLight(); nav('/settings/security-groups') }}
           >安全组白名单</List.Item>
-        </>
+        </List>
       )
     },
     {
@@ -143,7 +143,7 @@ export default function SettingsPage() {
       title: '❓ 帮助',
       keywords: ['帮助', '手册', '更新日志', '反馈', 'GitHub'],
       render: () => (
-        <>
+        <List mode="card" style={{ '--border-radius': '8px' } as any}>
           <List.Item
             arrow={<RightOutline />}
             onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops/blob/main/docs/TRAINING.md', '_blank')}
@@ -160,7 +160,7 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => window.open('https://github.com/kiddingmonkey/mobile-ops', '_blank')}
           >⭐ GitHub</List.Item>
-        </>
+        </List>
       )
     },
     {
@@ -168,7 +168,7 @@ export default function SettingsPage() {
       title: 'ℹ️ 关于',
       keywords: ['关于', '版本'],
       render: () => (
-        <>
+        <List mode="card" style={{ '--border-radius': '8px' } as any}>
           <List.Item
             extra={versionShort(getActiveVersion())}
             description={
@@ -184,7 +184,7 @@ export default function SettingsPage() {
               description="OTA 调试面板"
             >🔧 OTA 调试</List.Item>
           )}
-        </>
+        </List>
       )
     }
   ]
@@ -255,9 +255,7 @@ export default function SettingsPage() {
         >
           {filtered.map(s => (
             <Collapse.Panel key={s.key} title={s.title} style={{ marginBottom: 6 }}>
-              <List mode="card" style={{ '--border-radius': '8px' } as any}>
-                {s.render()}
-              </List>
+              {s.render()}
             </Collapse.Panel>
           ))}
         </Collapse>
