@@ -49,9 +49,15 @@ const AddPanelPopup = memo(function AddPanelPopup({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+      console.log('表单验证成功，值为:', values)
       onSubmit({ ...values, useSmartViewer })
     } catch (err) {
       console.error('表单验证失败:', err)
+      // 显示具体哪个字段验证失败
+      if (err && typeof err === 'object' && 'errorFields' in err) {
+        const errorFields = (err as any).errorFields
+        console.error('验证失败的字段:', errorFields)
+      }
     }
   }
 
@@ -78,7 +84,13 @@ const AddPanelPopup = memo(function AddPanelPopup({
             label="Grafana URL"
             rules={[{ required: true, message: '请输入 URL' }]}
           >
-            <Input placeholder="https://grafana.example.com/d/..." clearable />
+            <Input
+              placeholder="https://grafana.example.com/d/..."
+              clearable
+              onChange={(val) => {
+                console.log('URL 输入值变化:', val)
+              }}
+            />
           </Form.Item>
 
           <Form.Item
@@ -86,7 +98,13 @@ const AddPanelPopup = memo(function AddPanelPopup({
             label="面板名称"
             rules={[{ required: true, message: '请输入名称' }]}
           >
-            <Input placeholder="例如：集群 CPU 使用率" clearable />
+            <Input
+              placeholder="例如：集群 CPU 使用率"
+              clearable
+              onChange={(val) => {
+                console.log('面板名称输入值变化:', val)
+              }}
+            />
           </Form.Item>
 
           {/* 简化的模式切换 - 紧凑单选按钮 */}
@@ -94,11 +112,9 @@ const AddPanelPopup = memo(function AddPanelPopup({
             <div style={{ display: 'flex', gap: 8 }}>
               <div
                 onClick={(e) => {
-                  e.preventDefault()
                   e.stopPropagation()
                   setUseSmartViewer(false)
                 }}
-                onMouseDown={(e) => e.preventDefault()}
                 style={{
                   flex: 1,
                   padding: '10px 12px',
@@ -117,11 +133,9 @@ const AddPanelPopup = memo(function AddPanelPopup({
               </div>
               <div
                 onClick={(e) => {
-                  e.preventDefault()
                   e.stopPropagation()
                   setUseSmartViewer(true)
                 }}
-                onMouseDown={(e) => e.preventDefault()}
                 style={{
                   flex: 1,
                   padding: '10px 12px',
