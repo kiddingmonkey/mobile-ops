@@ -17,6 +17,16 @@ type GrafanaClient struct {
 	http    *http.Client
 }
 
+// GetBaseURL 返回 Grafana 基础 URL
+func (c *GrafanaClient) GetBaseURL() string {
+	return c.baseURL
+}
+
+// GetToken 返回 Grafana API Token
+func (c *GrafanaClient) GetToken() string {
+	return c.token
+}
+
 func NewGrafanaClient(baseURL, token string) *GrafanaClient {
 	return &GrafanaClient{
 		baseURL: baseURL,

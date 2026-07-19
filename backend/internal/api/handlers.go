@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -369,7 +370,85 @@ func (h *Handler) GrafanaPanel(c *gin.Context) {
 	c.Data(200, ct, png)
 }
 
-// GrafanaDashboards 列出该集群关联 Grafana 的常用 dashboard
+// GrafanaProxy 代理 Grafana 请求（解决 Mixed Content 问题）
+func (h *Handler) GrafanaProxy(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	path := c.Param("path")
+
+	// 获取集群的 Grafana 配置
+	cluster, err := h.config.GetCluster(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "获取集群失败"})
+		return
+	}
+
+	if cluster.GrafanaSourceID == nil {
+		c.JSON(400, gin.H{"error": "集群未配置 Grafana 数据源"})
+		return
+	}
+
+	// 获取 Grafana 客户端
+	grafanaClient, err := h.config.GetGrafanaClient(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "获取 Grafana 配置失败: " + err.Error()})
+		return
+	}
+
+	// 构建目标 URL
+	targetURL := grafanaClient.GetBaseURL() + path
+	if c.Request.URL.RawQuery != "" {
+		targetURL += "?" + c.Request.URL.RawQuery
+	}
+
+	// 创建代理请求
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, targetURL, c.Request.Body)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "创建请求失败"})
+		return
+	}
+
+	// 复制请求头（除了 Host）
+	for key, values := range c.Request.Header {
+		if key == "Host" {
+			continue
+		}
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+
+	// 添加 Grafana 认证（从客户端获取 token）
+	if token := grafanaClient.GetToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(502, gin.H{"error": "代理请求失败: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 复制响应头
+	for key, values := range resp.Header {
+		// 移除可能导致问题的头
+		if key == "X-Frame-Options" || key == "Content-Security-Policy" {
+			continue
+		}
+		for _, value := range values {
+			c.Header(key, value)
+		}
+	}
+
+	// 返回响应
+	c.Status(resp.StatusCode)
+	c.Stream(func(w io.Writer) bool {
+		_, err := io.Copy(w, resp.Body)
+		return err == nil
+	})
+}
 // 前端可以用来给用户选择显示哪个面板
 func (h *Handler) GrafanaDashboards(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)

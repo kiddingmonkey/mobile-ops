@@ -7,6 +7,8 @@ import { useUI } from '@/store'
 import { fmtRelative, fmtPercent, fmtNumber } from '@/utils/format'
 import GrafanaPanel from '@/components/GrafanaPanel'
 import GrafanaDashboardViewer from '@/components/GrafanaDashboardViewer'
+import GrafanaPanelImage from '@/components/GrafanaPanelImage'
+import { parseGrafanaUrl, convertToProxyUrl } from '@/utils/grafana'
 import { CompactHeader, Toolbar } from '@/components/MonitorComponents'
 
 interface PanelConfig {
@@ -508,12 +510,18 @@ export default function MonitorPage() {
                         />
                       ) : (
                         <div style={{ paddingTop: 0 }}>
-                          <GrafanaPanel
-                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now&kiosk${activePanel.apiToken ? `&auth_token=${activePanel.apiToken}` : ''}`}
-                            title={activePanel.title}
-                            height={activePanel.height || 400}
-                            enableFullscreen
-                          />
+                          {activeClusterId ? (
+                            <GrafanaPanel
+                              url={convertToProxyUrl(activePanel.originalUrl, activeClusterId, timeRange)}
+                              title={activePanel.title}
+                              height={activePanel.height || 400}
+                              enableFullscreen
+                            />
+                          ) : (
+                            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                              请先选择集群
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

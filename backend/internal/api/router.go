@@ -67,6 +67,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/clusters/:id/metrics", h.ClusterMetrics)
 		priv.GET("/clusters/:id/grafana/panel", h.GrafanaPanel)
 		priv.GET("/clusters/:id/grafana/dashboards", h.GrafanaDashboards)
+		priv.GET("/clusters/:id/grafana/proxy/*path", h.GrafanaProxy)  // 通用 Grafana 代理
 
 		// K8s 资源管理
 		priv.GET("/clusters/:id/resources/:type", h.ListK8sResources)
