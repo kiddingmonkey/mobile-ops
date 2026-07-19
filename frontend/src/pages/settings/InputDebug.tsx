@@ -12,8 +12,10 @@ interface LogEntry {
 export default function InputDebugPage() {
   const nav = useNavigate()
   const [testValue, setTestValue] = useState('')
+  const [nativeValue, setNativeValue] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const inputRef = useRef<any>(null)
+  const nativeInputRef = useRef<HTMLInputElement>(null)
 
   const addLog = (event: string, value: string, detail: string = '') => {
     const entry: LogEntry = {
@@ -93,8 +95,8 @@ export default function InputDebugPage() {
       <NavBar onBack={() => nav(-1)}>输入调试</NavBar>
 
       <div style={{ padding: 12 }}>
-        {/* 测试输入框 */}
-        <Card title="测试输入框" style={{ marginBottom: 12 }}>
+        {/* 测试输入框 - antd-mobile */}
+        <Card title="antd-mobile Input（当前使用）" style={{ marginBottom: 12 }}>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
               输入任何内容（中文、英文、数字），观察下方日志
@@ -119,6 +121,60 @@ export default function InputDebugPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <Button size="small" onClick={getInputInfo}>获取输入框信息</Button>
             <Button size="small" onClick={() => setTestValue('')}>清空输入</Button>
+          </div>
+        </Card>
+
+        {/* 原生 HTML input 对比测试 */}
+        <Card title="原生 HTML Input（对比测试）" style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              尝试在此输入中文/英文，看是否能保留内容
+            </div>
+            <input
+              ref={nativeInputRef}
+              type="text"
+              inputMode="text"
+              placeholder="原生输入框..."
+              value={nativeValue}
+              onChange={(e) => {
+                const val = e.target.value
+                setNativeValue(val)
+                addLog('[原生]onChange', val, `length: ${val.length}`)
+              }}
+              onFocus={(e) => {
+                addLog('[原生]onFocus', nativeValue, `type: ${e.target.type}`)
+              }}
+              onBlur={(e) => {
+                addLog('[原生]onBlur', nativeValue, `type: ${e.target.type}`)
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 14,
+                border: '1px solid var(--border-color)',
+                borderRadius: 4,
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)'
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>
+            当前值: <code style={{ background: '#f0f0f0', padding: '2px 6px', borderRadius: 3 }}>
+              {nativeValue || '(空)'}
+            </code>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button size="small" onClick={() => {
+              const input = nativeInputRef.current
+              if (input) {
+                addLog('[原生]getInfo', JSON.stringify({
+                  type: input.type,
+                  inputMode: input.inputMode,
+                  value: input.value
+                }), '')
+              }
+            }}>获取信息</Button>
+            <Button size="small" onClick={() => setNativeValue('')}>清空</Button>
           </div>
         </Card>
 
@@ -172,15 +228,16 @@ export default function InputDebugPage() {
         </Card>
 
         {/* 说明 */}
-        <Card title="使用说明">
+        <Card title="对比测试说明">
           <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-            <p>1. 在测试输入框中输入内容（尝试中文、英文、数字）</p>
-            <p>2. 观察日志中记录的事件和值</p>
-            <p>3. 点击"复制日志"按钮，将日志发送给开发者</p>
-            <p>4. 重点关注：
-              <br />- onChange 事件的 value 是否正确
-              <br />- 输入框 type 和 inputMode 属性
-            </p>
+            <p><strong>测试步骤：</strong></p>
+            <p>1. 先在"antd-mobile Input"输入中文（例如：测试）</p>
+            <p>2. 点击"获取输入框信息"按钮</p>
+            <p>3. 观察内容是否被清空</p>
+            <p>4. 再在"原生 HTML Input"输入中文</p>
+            <p>5. 点击"获取信息"按钮</p>
+            <p>6. 观察内容是否保留</p>
+            <p>7. 如果原生输入框能保留，说明是 antd-mobile 的问题</p>
           </div>
         </Card>
       </div>
