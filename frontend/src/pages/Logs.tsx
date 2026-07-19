@@ -317,18 +317,8 @@ export default function LogsPage() {
   }, [logLevel])
 
   return (
-    <div className="page">
-      {/* 顶部工具栏 */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 'max(12px, env(safe-area-inset-top)) 16px 12px',
-        background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border-color)'
-      }}>
-        <div className="page-header" style={{ margin: 0, padding: 0 }}>日志</div>
-      </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 去掉顶部大标题，直接进入内容 */}
 
       {clusters.length === 0 && activeTab === 'pod' ? (
         <div className="empty-state">
@@ -340,25 +330,26 @@ export default function LogsPage() {
           {/* 集群切换（仅容器日志 Tab 显示） */}
           {activeTab === 'pod' && (
             <div style={{
-              padding: '12px 0',
+              flexShrink: 0,
+              padding: '6px 0',
               background: 'var(--bg-elevated)',
               borderBottom: '1px solid var(--border-color)',
               overflowX: 'auto',
               whiteSpace: 'nowrap',
               WebkitOverflowScrolling: 'touch'
             }}>
-              <div style={{ display: 'inline-flex', gap: 8, padding: '0 16px', minWidth: '100%' }}>
+              <div style={{ display: 'inline-flex', gap: 6, padding: '0 12px', minWidth: '100%' }}>
                 {clusters.map(c => (
                   <div
                     key={c.id}
                     onClick={() => setActive(c.id)}
                     style={{
                       display: 'inline-block',
-                      padding: '8px 16px',
-                      borderRadius: 8,
+                      padding: '4px 10px',
+                      borderRadius: 6,
                       background: activeClusterId === c.id ? 'var(--accent-blue)' : 'var(--bg-secondary)',
                       color: activeClusterId === c.id ? 'white' : 'var(--text-primary)',
-                      fontSize: 14,
+                      fontSize: 11,
                       fontWeight: activeClusterId === c.id ? 600 : 400,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
@@ -373,15 +364,23 @@ export default function LogsPage() {
             </div>
           )}
 
-          {/* 主 Tab 切换 */}
-          <div className="page-content" style={{ paddingTop: 0 }}>
+          {/* 主 Tab 切换 - 紧凑样式 */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
-              style={{ '--fixed-active-line-width': '30px' } as any}
+              style={{
+                '--fixed-active-line-width': '20px',
+                '--title-font-size': '12px',
+                '--content-padding': '0px',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+              } as any}
             >
               {/* 云日志 Tab */}
-              <Tabs.Tab title="☁️ 云日志 (CLS)" key="cloud">
+              <Tabs.Tab title="☁️ 云日志" key="cloud">
                 {/* 紧凑控制条：四个下拉 + 搜索框在两行 */}
                 <div style={{
                   padding: '6px 8px',
@@ -532,7 +531,7 @@ export default function LogsPage() {
               </Tabs.Tab>
 
               {/* 容器日志 Tab */}
-              <Tabs.Tab title="📦 容器日志 (Pod)" key="pod">
+              <Tabs.Tab title="📦 容器日志" key="pod">
                 {/* 紧凑控制条 */}
                 <div style={{
                   padding: '6px 8px',
@@ -720,11 +719,11 @@ export default function LogsPage() {
   )
 }
 
-// 单条日志展示组件（可展开、字段可点击）
+// 单条日志展示组件（紧凑单行 + 点击弹窗）
 function CLSLogItem({ log, onFieldClick }: { log: any; onFieldClick: (key: string, value: string) => void }) {
-  const [expanded, setExpanded] = useState(false)
+  const [showDetail, setShowDetail] = useState(false)
 
-  // 尝试将内容解析为JSON对象，如果是键值对则展示为字段列表
+  // 尝试将内容解析为JSON对象
   let parsedFields: { key: string; value: string }[] | null = null
   try {
     if (log.content && typeof log.content === 'string') {
@@ -738,101 +737,111 @@ function CLSLogItem({ log, onFieldClick }: { log: any; onFieldClick: (key: strin
     }
   } catch {}
 
+  const contentPreview = parsedFields
+    ? parsedFields.slice(0, 2).map(f => `${f.key}:${f.value.slice(0, 20)}`).join(' ')
+    : (log.content || '').slice(0, 60)
+
   return (
-    <div style={{
-      background: 'var(--bg-elevated)',
-      borderRadius: 8,
-      padding: 10,
-      border: '1px solid var(--border-color)'
-    }}>
-      {/* 时间戳 */}
-      <div style={{
-        fontSize: 11,
-        color: 'var(--text-tertiary)',
-        marginBottom: 6,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span style={{ fontFamily: 'ui-monospace, monospace' }}>
-          {fmtTime(log.timestamp)}
+    <>
+      {/* 紧凑单行 */}
+      <div
+        onClick={() => setShowDetail(true)}
+        style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 6,
+          padding: '6px 8px',
+          border: '1px solid var(--border-color)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          minHeight: 32
+        }}
+      >
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, monospace', flexShrink: 0 }}>
+          {fmtTime(log.timestamp).slice(11, 19)}
         </span>
         {log.source && (
-          <span
-            onClick={() => onFieldClick('source', log.source)}
-            style={{
-              background: 'var(--accent-blue-bg)',
-              color: 'var(--accent-blue)',
-              padding: '2px 6px',
-              borderRadius: 4,
-              cursor: 'pointer'
-            }}
-          >
+          <span style={{ fontSize: 9, background: 'var(--accent-blue-bg)', color: 'var(--accent-blue)', padding: '1px 4px', borderRadius: 3, flexShrink: 0 }}>
             {log.source}
           </span>
         )}
+        <span style={{ fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+          {contentPreview}
+        </span>
+        <span style={{ fontSize: 16, color: 'var(--text-tertiary)', flexShrink: 0 }}>›</span>
       </div>
 
-      {/* 内容 */}
-      {parsedFields && parsedFields.length > 0 ? (
-        <div>
-          {(expanded ? parsedFields : parsedFields.slice(0, 5)).map((f, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, fontSize: 12, alignItems: 'flex-start' }}>
-              <span
-                onClick={() => onFieldClick(f.key, f.value)}
-                style={{
-                  color: 'var(--accent-blue)',
-                  fontWeight: 600,
-                  fontFamily: 'ui-monospace, monospace',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  minWidth: 80
-                }}
-              >
-                {f.key}
+      {/* 详情弹窗 */}
+      {showDetail && (
+        <div
+          onClick={() => setShowDetail(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: 16,
+              maxWidth: '90vw',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+            }}
+          >
+            {/* 顶部时间 + 关闭 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid var(--border-color)', paddingBottom: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, monospace' }}>
+                {fmtTime(log.timestamp)}
               </span>
-              <span style={{
-                color: 'var(--text-primary)',
-                fontFamily: 'ui-monospace, monospace',
-                wordBreak: 'break-all',
-                flex: 1,
-                background: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
-                borderLeft: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? '3px solid #DC2626' : 'none',
-                padding: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(f.value) ? '2px 4px' : '0'
-              }}>
-                {f.value}
-              </span>
+              <span onClick={() => setShowDetail(false)} style={{ fontSize: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>×</span>
             </div>
-          ))}
-          {parsedFields.length > 5 && (
-            <div
-              onClick={() => setExpanded(!expanded)}
-              style={{
-                fontSize: 11,
-                color: 'var(--accent-blue)',
-                cursor: 'pointer',
-                marginTop: 4,
-                textAlign: 'center'
-              }}
-            >
-              {expanded ? '收起' : `展开全部 (${parsedFields.length} 个字段)`}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={{
-          fontSize: 12,
-          fontFamily: 'ui-monospace, Monaco, Menlo, monospace',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-          color: 'var(--text-primary)',
-          background: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? 'rgba(220, 38, 38, 0.15)' : 'transparent',
-          borderLeft: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? '3px solid #DC2626' : 'none',
-          padding: /ERROR|FATAL|CRITICAL|Exception|exception|error|fail|failed/i.test(log.content) ? '6px' : '0'
-        }}>
-          {log.content}
+
+            {/* 字段列表 */}
+            {parsedFields && parsedFields.length > 0 ? (
+              <div>
+                {parsedFields.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, fontSize: 12, alignItems: 'flex-start' }}>
+                    <span
+                      onClick={() => onFieldClick(f.key, f.value)}
+                      style={{
+                        fontWeight: 600,
+                        color: 'var(--accent-blue)',
+                        flexShrink: 0,
+                        cursor: 'pointer',
+                        fontFamily: 'ui-monospace, monospace'
+                      }}
+                    >
+                      {f.key}:
+                    </span>
+                    <span
+                      onClick={() => onFieldClick(f.key, f.value)}
+                      style={{
+                        color: 'var(--text-primary)',
+                        wordBreak: 'break-all',
+                        cursor: 'pointer',
+                        fontFamily: 'ui-monospace, monospace'
+                      }}
+                    >
+                      {f.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'ui-monospace, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {log.content}
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

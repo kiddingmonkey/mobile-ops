@@ -94,16 +94,18 @@ export default function HomePage() {
     <div className="page">
       <RemoteStatusBanner />
 
-      {/* 顶部 header */}
-      <div style={{ padding: 'calc(env(safe-area-inset-top) + 10px) 16px 8px' }}>
+      {/* 顶部 header - flex-shrink: 0 不参与滚动 */}
+      <div style={{ flexShrink: 0, padding: 'calc(env(safe-area-inset-top) + 10px) 16px 8px', background: 'var(--bg-primary)' }}>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{greeting()}</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginTop: 1 }}>
           {user?.display_name || user?.username || 'SRE'}
         </div>
       </div>
 
-      <PullToRefresh onRefresh={load}>
-        <div style={{ padding: '0 12px 80px' }}>
+      {/* 内容区 - flex: 1 + overflow: auto */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        <PullToRefresh onRefresh={load}>
+          <div style={{ padding: '0 12px 16px' }}>
 
           {/* ① 系统健康状态条 */}
           <div
@@ -268,6 +270,7 @@ export default function HomePage() {
 
         </div>
       </PullToRefresh>
+      </div>
     </div>
   )
 }

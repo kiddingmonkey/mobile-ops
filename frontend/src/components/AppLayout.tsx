@@ -47,7 +47,8 @@ export default function AppLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      {/* 内容区：不滚动，让每个页面内部自己控制滚动 */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         <Outlet />
       </div>
 

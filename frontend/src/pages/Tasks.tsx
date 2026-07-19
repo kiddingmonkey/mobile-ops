@@ -107,13 +107,23 @@ export default function TasksPage() {
 
   return (
     <div className="page">
-      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))', padding: '12px 16px' }}>
-        <span className="title" style={{ fontSize: 18 }}>📋 运维</span>
+      <div style={{
+        flexShrink: 0,
+        paddingTop: 'max(12px, env(safe-area-inset-top))',
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'var(--bg-primary)',
+        borderBottom: '1px solid var(--border-color)'
+      }}>
+        <span style={{ fontSize: 18, fontWeight: 700 }}>📋 运维</span>
         <Button size="mini" fill="none" onClick={load} loading={loading}>刷新</Button>
       </div>
 
-      <PullToRefresh onRefresh={load}>
-        <div style={{ padding: '0 12px 80px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        <PullToRefresh onRefresh={load}>
+          <div style={{ padding: '0 12px 16px' }}>
 
           {/* === 综合运维场景入口 === */}
           {scenarios.map((s, idx) => (
@@ -227,6 +237,7 @@ export default function TasksPage() {
 
         </div>
       </PullToRefresh>
+      </div>
     </div>
   )
 }

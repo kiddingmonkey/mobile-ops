@@ -16,10 +16,11 @@ export default function PageShell({ title, subtitle, onBack, right, children, fl
   return (
     <div
       className="page"
-      style={flex ? { height: '100%', display: 'flex', flexDirection: 'column', paddingBottom: 0 } : undefined}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
       <div style={{
-        position: 'sticky', top: 0, zIndex: 100,
+        flexShrink: 0,
+        zIndex: 100,
         background: 'var(--bg-primary)',
         borderBottom: '1px solid var(--border-color)',
         paddingTop: 'env(safe-area-inset-top)',
@@ -59,9 +60,9 @@ export default function PageShell({ title, subtitle, onBack, right, children, fl
         {right && <div style={{ padding: '0 8px', flexShrink: 0 }}>{right}</div>}
       </div>
       {flex ? (
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>{children}</div>
       ) : (
-        <div className="page-content">
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '16px' }}>
           {children}
         </div>
       )}
