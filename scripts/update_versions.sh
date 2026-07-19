@@ -82,8 +82,8 @@ if echo "$EXISTING" | jq -e ".versions[] | select(.version == \"$APP_VERSION\")"
   EXISTING=$(echo "$EXISTING" | jq "del(.versions[] | select(.version == \"$APP_VERSION\"))")
 fi
 
-# 添加新版本到数组末尾
-UPDATED=$(echo "$EXISTING" | jq ".versions += [$NEW_VERSION]")
+# 添加新版本到数组开头（最新版本在最上面）
+UPDATED=$(echo "$EXISTING" | jq ".versions = [$NEW_VERSION] + .versions")
 
 # 写入文件
 echo "$UPDATED" > "$VERSIONS_FILE"

@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from 'react'
+import { useEffect, useState, memo, useRef } from 'react'
 import { Tabs, PullToRefresh, Grid, Button, Toast, Dialog, Form, Input, Popup, Selector } from 'antd-mobile'
 import { AddOutline, UnorderedListOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
@@ -34,11 +34,15 @@ const AddPanelPopup = memo(function AddPanelPopup({
   const [form] = Form.useForm()
   const [useSmartViewer, setUseSmartViewer] = useState(false)
 
+  // 只在弹窗打开时重置（从关闭变为打开），避免每次 visible 变化都重置
+  const prevVisibleRef = useRef(visible)
   useEffect(() => {
-    if (visible) {
+    if (visible && !prevVisibleRef.current) {
+      // 从关闭到打开，才重置
       form.resetFields()
       setUseSmartViewer(false)
     }
+    prevVisibleRef.current = visible
   }, [visible])
 
   const handleSubmit = async () => {
