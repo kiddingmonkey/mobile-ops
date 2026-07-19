@@ -1,12 +1,13 @@
 import { useEffect, useState, memo, useRef } from 'react'
 import { Tabs, PullToRefresh, Grid, Button, Toast, Dialog, Form, Input, Popup, Selector } from 'antd-mobile'
-import { AddOutline, UnorderedListOutline } from 'antd-mobile-icons'
+import { AddOutline, UnorderedListOutline, CloseOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useUI } from '@/store'
 import { fmtRelative, fmtPercent, fmtNumber } from '@/utils/format'
 import GrafanaPanel from '@/components/GrafanaPanel'
 import GrafanaDashboardViewer from '@/components/GrafanaDashboardViewer'
+import { CompactHeader, Toolbar } from '@/components/MonitorComponents'
 
 interface PanelConfig {
   id: string
@@ -260,112 +261,13 @@ export default function MonitorPage() {
 
   return (
     <div className="page">
-      {/* 固定顶栏 */}
-      <div style={{ flexShrink: 0 }}>
-        {/* 顶部工具栏 */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 'max(12px, env(safe-area-inset-top)) 16px 12px',
-          background: 'var(--bg-elevated)',
-          borderBottom: '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>监控</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              size="small"
-              fill="outline"
-              onClick={openGrafanaManager}
-            >
-              <UnorderedListOutline /> Grafana
-            </Button>
-            <Button
-              size="small"
-              color="primary"
-              onClick={() => setShowAddPanel(true)}
-            >
-              <AddOutline /> 添加
-            </Button>
-          </div>
-        </div>
+      {/* 精简顶栏 */}
+      <CompactHeader
+        onGrafanaManager={openGrafanaManager}
+        onAddPanel={() => setShowAddPanel(true)}
+      />
 
-        {/* 集群选择 + 时间范围选择 - 统一在顶栏 */}
-        <div style={{
-          padding: '12px 16px',
-          background: 'var(--bg-elevated)',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12
-        }}>
-          {/* 集群选择 */}
-          {clusters.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 500 }}>集群</div>
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                {clusters.map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => setActive(c.id)}
-                    style={{
-                      display: 'inline-block',
-                      padding: '8px 16px',
-                      borderRadius: 8,
-                      background: activeClusterId === c.id ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                      color: activeClusterId === c.id ? 'white' : 'var(--text-primary)',
-                      fontSize: 13,
-                      fontWeight: activeClusterId === c.id ? 600 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      border: activeClusterId === c.id ? 'none' : '1px solid var(--border-color)',
-                      flexShrink: 0,
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {c.display_name || c.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 时间范围选择 */}
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 500 }}>时间范围</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
-                { label: '1小时', value: 'now-1h' },
-                { label: '6小时', value: 'now-6h' },
-                { label: '24小时', value: 'now-24h' },
-                { label: '7天', value: 'now-7d' }
-              ].map(opt => (
-                <div
-                  key={opt.value}
-                  onClick={() => setTimeRange(opt.value)}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    background: timeRange === opt.value ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                    color: timeRange === opt.value ? 'white' : 'var(--text-primary)',
-                    fontSize: 13,
-                    fontWeight: timeRange === opt.value ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    border: timeRange === opt.value ? 'none' : '1px solid var(--border-color)',
-                    textAlign: 'center'
-                  }}
-                >
-                  {opt.label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 独立滚动内容区 */}
+      {/* 内容区 */}
       {clusters.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="empty-state">
@@ -376,121 +278,129 @@ export default function MonitorPage() {
       ) : (
         <div style={{ flex: 1, overflow: 'auto' }}>
           <PullToRefresh onRefresh={load}>
-            <div style={{ paddingTop: 0 }}>
+            <div>
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
-                style={{ '--fixed-active-line-width': '30px' } as any}
+                style={{ '--content-padding': '0' }}
               >
-                {/* Grafana Tab */}
-                <Tabs.Tab title="📊 Grafana 面板" key="grafana">
+                {/* Grafana Tab - 全屏优化版 */}
+                <Tabs.Tab title="📊 Grafana" key="grafana">
+                  {/* 工具栏 */}
+                  <Toolbar
+                    clusters={clusters}
+                    activeClusterId={activeClusterId}
+                    onClusterChange={setActive}
+                    timeRange={timeRange}
+                    onTimeRangeChange={setTimeRange}
+                    showClusters={clusters.length > 1}
+                    showTimeRange={activePanel && !activePanel.useSmartViewer}
+                  />
+
                   {panels.length === 0 ? (
                     <div style={{
                       textAlign: 'center',
-                      padding: '60px 20px',
+                      padding: '80px 20px',
                       color: 'var(--text-tertiary)'
                     }}>
                       <div style={{ fontSize: 48, marginBottom: 12 }}>📈</div>
                       <div style={{ fontSize: 15, marginBottom: 8 }}>还没有添加 Grafana 面板</div>
-                      <div style={{ fontSize: 13 }}>点击右上角「添加」按钮开始</div>
+                      <div style={{ fontSize: 13 }}>点击右上角按钮添加</div>
                     </div>
-                  ) : (
-                    <>
-                      {/* 面板切换器 */}
+                  ) : activePanel ? (
+                    <div style={{ position: 'relative', background: 'var(--bg-primary)', minHeight: '70vh' }}>
+                      {/* 面板切换悬浮按钮 */}
                       {panels.length > 1 && (
-                        <div className="card">
-                          <div style={{
-                            display: 'flex',
-                            gap: 8,
-                            overflowX: 'auto',
-                            paddingBottom: 4
-                          }}>
-                            {panels.map(pn => (
-                              <div
-                                key={pn.id}
-                                onClick={() => setActivePanelId(pn.id)}
-                                style={{
-                                  flex: '0 0 auto',
-                                  padding: '8px 14px',
-                                  borderRadius: 8,
-                                  background: activePanelId === pn.id ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                                  color: activePanelId === pn.id ? 'white' : 'var(--text-primary)',
-                                  fontSize: 13,
-                                  fontWeight: activePanelId === pn.id ? 600 : 400,
-                                  cursor: 'pointer',
-                                  border: activePanelId === pn.id ? 'none' : '1px solid var(--border-color)',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {pn.title}
-                              </div>
-                            ))}
-                          </div>
+                        <div style={{
+                          position: 'absolute',
+                          top: 8,
+                          left: 8,
+                          zIndex: 100,
+                          background: 'rgba(0,0,0,0.65)',
+                          borderRadius: 6,
+                          padding: '4px 8px',
+                          fontSize: 12,
+                          color: 'white',
+                          display: 'flex',
+                          gap: 4,
+                          alignItems: 'center',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }}>
+                          {panels.map((p, idx) => (
+                            <div
+                              key={p.id}
+                              onClick={() => setActivePanelId(p.id)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: 4,
+                                background: p.id === activePanelId ? 'var(--accent-blue)' : 'transparent',
+                                fontWeight: p.id === activePanelId ? 600 : 400,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {idx + 1}
+                            </div>
+                          ))}
                         </div>
                       )}
 
-                      {/* 当前激活的面板 */}
-                      {activePanel && (
-                        <div style={{ position: 'relative' }}>
-                          {activePanel.useSmartViewer ? (
-                            // 智能查看器模式 - 大型 Dashboard
-                            <>
-                              <GrafanaDashboardViewer
-                                originalUrl={activePanel.originalUrl}
-                                apiToken={activePanel.apiToken}
-                              />
-                              <Button
-                                size="small"
-                                color="danger"
-                                fill="outline"
-                                style={{
-                                  position: 'absolute',
-                                  top: 8,
-                                  right: 8,
-                                  zIndex: 100,
-                                  fontSize: 12,
-                                  padding: '4px 8px'
-                                }}
-                                onClick={() => removePanel(activePanel.id)}
-                              >
-                                删除
-                              </Button>
-                            </>
-                          ) : (
-                            // 传统嵌入模式
-                            <>
-                              <GrafanaPanel
-                                url={`${activePanel.originalUrl}&from=${timeRange}&to=now`}
-                                title={activePanel.title}
-                                height={activePanel.height || 400}
-                                enableFullscreen
-                              />
-                              <Button
-                                size="small"
-                                color="danger"
-                                fill="outline"
-                                style={{
-                                  position: 'absolute',
-                                  top: 8,
-                                  right: 50,
-                                  zIndex: 10,
-                                  fontSize: 12,
-                                  padding: '4px 8px'
-                                }}
-                                onClick={() => removePanel(activePanel.id)}
-                              >
-                                删除
-                              </Button>
-                            </>
-                          )}
+                      {/* 删除按钮悬浮 */}
+                      <div
+                        onClick={() => removePanel(activePanel.id)}
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          zIndex: 100,
+                          background: 'rgba(220,38,38,0.9)',
+                          color: 'white',
+                          borderRadius: 6,
+                          padding: '6px 12px',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }}
+                      >
+                        <CloseOutline fontSize={14} /> 删除
+                      </div>
+
+                      {/* Grafana 面板内容 - 全屏显示 */}
+                      {activePanel.useSmartViewer ? (
+                        <GrafanaDashboardViewer
+                          originalUrl={activePanel.originalUrl}
+                          apiToken={activePanel.apiToken}
+                        />
+                      ) : (
+                        <div style={{ paddingTop: 0 }}>
+                          <GrafanaPanel
+                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now`}
+                            title={activePanel.title}
+                            height={activePanel.height || 400}
+                            enableFullscreen
+                          />
                         </div>
                       )}
-                    </>
-                  )}
+                    </div>
+                  ) : null}
                 </Tabs.Tab>
 
                 {/* K8s 统计 Tab */}
                 <Tabs.Tab title="⚙️ K8s 统计" key="k8s">
+                  {/* 工具栏 */}
+                  <Toolbar
+                    clusters={clusters}
+                    activeClusterId={activeClusterId}
+                    onClusterChange={setActive}
+                    showClusters={clusters.length > 1}
+                    showTimeRange={false}
+                  />
+
+                  <div style={{ padding: '0 12px' }}>
                   {/* 核心指标 */}
                   <div className="card">
                     <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -591,6 +501,7 @@ export default function MonitorPage() {
                       ))}
                     </div>
                   )}
+                  </div>
                 </Tabs.Tab>
               </Tabs>
             </div>
