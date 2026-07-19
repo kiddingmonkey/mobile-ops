@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { Tabs, PullToRefresh, Grid, Button, Toast, Dialog, Form, Input, Popup, Selector } from 'antd-mobile'
 import { AddOutline, UnorderedListOutline } from 'antd-mobile-icons'
 import { useNavigate } from 'react-router-dom'
@@ -17,6 +17,76 @@ interface PanelConfig {
 function panelsKey(clusterId: number) {
   return `mobile-ops-panels-${clusterId}`
 }
+
+// 独立的添加面板弹窗组件（memo 隔离父组件 re-render，避免输入吞字）
+const AddPanelPopup = memo(function AddPanelPopup({
+  visible,
+  onClose,
+  onSubmit
+}: {
+  visible: boolean
+  onClose: () => void
+  onSubmit: (values: { url: string; title: string; height?: string }) => void
+}) {
+  const [form] = Form.useForm()
+
+  useEffect(() => {
+    if (visible) form.resetFields()
+  }, [visible])
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields()
+      onSubmit(values)
+    } catch {}
+  }
+
+  return (
+    <Popup
+      visible={visible}
+      onMaskClick={onClose}
+      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '50vh' }}
+    >
+      <div style={{ padding: '20px 16px' }}>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>添加 Grafana 面板</div>
+        <Form
+          form={form}
+          layout="vertical"
+          footer={
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button block onClick={onClose}>取消</Button>
+              <Button block color="primary" onClick={handleSubmit}>添加</Button>
+            </div>
+          }
+        >
+          <Form.Item
+            name="url"
+            label="Grafana URL"
+            rules={[{ required: true, message: '请输入 URL' }]}
+            help="从 Grafana 复制 dashboard 或面板的分享链接"
+          >
+            <Input placeholder="https://grafana.example.com/d/..." />
+          </Form.Item>
+          <Form.Item
+            name="title"
+            label="面板名称"
+            rules={[{ required: true, message: '请输入名称' }]}
+          >
+            <Input placeholder="例如：集群 CPU 使用率" />
+          </Form.Item>
+          <Form.Item
+            name="height"
+            label="面板高度（像素）"
+            help="留空自动设置：单面板 300px，整个 dashboard 600px"
+          >
+            <Input type="number" placeholder="300" />
+          </Form.Item>
+        </Form>
+      </div>
+    </Popup>
+  )
+})
+
 function loadPanels(clusterId: number): PanelConfig[] {
   try {
     return JSON.parse(localStorage.getItem(panelsKey(clusterId)) || '[]')
@@ -42,9 +112,6 @@ export default function MonitorPage() {
   const [showGrafanaList, setShowGrafanaList] = useState(false)
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [grafanaList, setGrafanaList] = useState<any[]>([])
-
-  // 添加面板表单
-  const [addPanelForm] = Form.useForm()
 
   useEffect(() => {
     api.listClusters().then(cs => {
@@ -96,13 +163,7 @@ export default function MonitorPage() {
     loadGrafanaList()
   }
 
-  const openAddPanelForm = () => {
-    addPanelForm.resetFields()
-    setShowAddPanel(true)
-  }
-
-  const submitAddPanel = async () => {
-    const values = await addPanelForm.validateFields()
+  const submitAddPanel = (values: { url: string; title: string; height?: string }) => {
     const { url, title, height } = values
 
     if (!/\/d\/[a-zA-Z0-9_-]+/.test(url)) {
@@ -113,7 +174,7 @@ export default function MonitorPage() {
     if (!activeClusterId) return
 
     const isSinglePanel = /[?&](?:viewPanel|panelId)=/.test(url)
-    const finalHeight = height || (isSinglePanel ? 300 : 600)
+    const finalHeight = Number(height) || (isSinglePanel ? 300 : 600)
     const newPanel = { id: crypto.randomUUID(), originalUrl: url, title, height: finalHeight }
     const next = [...panels, newPanel]
     setPanels(next)
@@ -170,7 +231,7 @@ export default function MonitorPage() {
             <Button
               size="small"
               color="primary"
-              onClick={openAddPanelForm}
+              onClick={() => setShowAddPanel(true)}
             >
               <AddOutline /> 添加
             </Button>
@@ -525,49 +586,12 @@ export default function MonitorPage() {
         </div>
       </Popup>
 
-      {/* 添加面板表单弹窗 */}
-      <Popup
+      {/* 添加面板表单弹窗 - 独立组件，隔离父组件 re-render */}
+      <AddPanelPopup
         visible={showAddPanel}
-        onMaskClick={() => setShowAddPanel(false)}
-        bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '50vh' }}
-      >
-        <div style={{ padding: '20px 16px' }}>
-          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>添加 Grafana 面板</div>
-          <Form
-            form={addPanelForm}
-            layout="vertical"
-            footer={
-              <div style={{ display: 'flex', gap: 12 }}>
-                <Button block onClick={() => setShowAddPanel(false)}>取消</Button>
-                <Button block color="primary" onClick={submitAddPanel}>添加</Button>
-              </div>
-            }
-          >
-            <Form.Item
-              name="url"
-              label="Grafana URL"
-              rules={[{ required: true, message: '请输入 URL' }]}
-              help="从 Grafana 复制 dashboard 或面板的分享链接"
-            >
-              <Input placeholder="https://grafana.example.com/d/..." />
-            </Form.Item>
-            <Form.Item
-              name="title"
-              label="面板名称"
-              rules={[{ required: true, message: '请输入名称' }]}
-            >
-              <Input placeholder="例如：集群 CPU 使用率" />
-            </Form.Item>
-            <Form.Item
-              name="height"
-              label="面板高度（像素）"
-              help="留空自动设置：单面板 300px，整个 dashboard 600px"
-            >
-              <Input type="number" placeholder="300" />
-            </Form.Item>
-          </Form>
-        </div>
-      </Popup>
+        onClose={() => setShowAddPanel(false)}
+        onSubmit={submitAddPanel}
+      />
     </div>
   )
 }
