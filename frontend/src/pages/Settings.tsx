@@ -21,7 +21,8 @@ export default function SettingsPage() {
   const nav = useNavigate()
   const user = useAuth(s => s.user)
   const logout = useAuth(s => s.logout)
-  const [themeMode, setThemeMode] = useTheme(s => [s.mode, s.setMode])
+  const themeMode = useTheme(s => s.mode)
+  const setThemeMode = useTheme(s => s.setMode)
 
   const [grafana, setGrafana] = useState<any[]>([])
   const [prom, setProm] = useState<any[]>([])
