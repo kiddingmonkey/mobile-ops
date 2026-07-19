@@ -45,6 +45,18 @@ export default function InputDebugPage() {
     addLog('onKeyDown', e.key, `keyCode: ${e.keyCode}, which: ${e.which}`)
   }
 
+  const handleCompositionEnd = (e: any) => {
+    const val = e.target.value || e.data || ''
+    addLog('onCompositionEnd', val, `组合输入结束，最终值: ${val}`)
+    setTestValue(val)
+  }
+
+  const handleNativeCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    const val = e.currentTarget.value
+    addLog('[原生]onCompositionEnd', val, `组合输入结束，最终值: ${val}`)
+    setNativeValue(val)
+  }
+
   const copyLogs = () => {
     const text = logs.map(log =>
       `[${log.timestamp}] ${log.event}: "${log.value}" ${log.detail}`
@@ -111,6 +123,7 @@ export default function InputDebugPage() {
               onFocus={handleFocus}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown as any}
+              onCompositionEnd={handleCompositionEnd as any}
             />
           </div>
           <div style={{ fontSize: 13, marginBottom: 8 }}>
@@ -147,6 +160,7 @@ export default function InputDebugPage() {
               onBlur={(e) => {
                 addLog('[原生]onBlur', nativeValue, `type: ${e.target.type}`)
               }}
+              onCompositionEnd={handleNativeCompositionEnd}
               style={{
                 width: '100%',
                 padding: '8px 12px',
