@@ -75,6 +75,18 @@ export default function InputDebugPage() {
     // 如果在组合输入中，不更新 state，等待 compositionend
   }
 
+  const handleNativeBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // 失去焦点时，强制同步 input 的实际值到 state
+    const actualValue = e.currentTarget.value
+    addLog('[原生]onBlur', actualValue, `type: ${e.target.type}, 强制同步值`)
+
+    // 如果 DOM 值和 state 不一致，同步
+    if (actualValue !== nativeValue) {
+      addLog('[原生]同步', actualValue, `检测到值不一致，从 "${nativeValue}" 同步到 "${actualValue}"`)
+      setNativeValue(actualValue)
+    }
+  }
+
   const copyLogs = () => {
     const text = logs.map(log =>
       `[${log.timestamp}] ${log.event}: "${log.value}" ${log.detail}`
@@ -171,9 +183,7 @@ export default function InputDebugPage() {
               onFocus={(e) => {
                 addLog('[原生]onFocus', nativeValue, `type: ${e.target.type}`)
               }}
-              onBlur={(e) => {
-                addLog('[原生]onBlur', nativeValue, `type: ${e.target.type}`)
-              }}
+              onBlur={handleNativeBlur}
               onCompositionStart={handleNativeCompositionStart}
               onCompositionEnd={handleNativeCompositionEnd}
               style={{
