@@ -81,7 +81,6 @@ echo "✅ 前端部署完成！"
 
 echo ""
 echo "🔄 自动更新版本历史..."
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 bash "$SCRIPT_DIR/update_versions.sh"
 
 echo ""
