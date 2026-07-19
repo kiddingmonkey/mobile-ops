@@ -88,6 +88,7 @@ const AddPanelPopup = memo(function AddPanelPopup({
           >
             <Input
               type="text"
+              inputMode="text"
               placeholder="https://grafana.example.com/d/..."
               onChange={(val) => {
                 console.log('URL 输入值变化:', val)
@@ -102,6 +103,7 @@ const AddPanelPopup = memo(function AddPanelPopup({
           >
             <Input
               type="text"
+              inputMode="text"
               placeholder="例如：集群 CPU 使用率"
               onChange={(val) => {
                 console.log('面板名称输入值变化:', val)
