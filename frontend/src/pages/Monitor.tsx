@@ -6,12 +6,15 @@ import { api } from '@/api/client'
 import { useUI } from '@/store'
 import { fmtRelative, fmtPercent, fmtNumber } from '@/utils/format'
 import GrafanaPanel from '@/components/GrafanaPanel'
+import GrafanaDashboardViewer from '@/components/GrafanaDashboardViewer'
 
 interface PanelConfig {
   id: string
   originalUrl: string
   title: string
   height: number
+  useSmartViewer?: boolean  // 是否使用智能查看器
+  apiToken?: string          // Grafana API Token
 }
 
 function panelsKey(clusterId: number) {
@@ -26,18 +29,22 @@ const AddPanelPopup = memo(function AddPanelPopup({
 }: {
   visible: boolean
   onClose: () => void
-  onSubmit: (values: { url: string; title: string; height?: string }) => void
+  onSubmit: (values: { url: string; title: string; height?: string; useSmartViewer?: boolean; apiToken?: string }) => void
 }) {
   const [form] = Form.useForm()
+  const [useSmartViewer, setUseSmartViewer] = useState(false)
 
   useEffect(() => {
-    if (visible) form.resetFields()
+    if (visible) {
+      form.resetFields()
+      setUseSmartViewer(false)
+    }
   }, [visible])
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
-      onSubmit(values)
+      onSubmit({ ...values, useSmartViewer })
     } catch {}
   }
 
@@ -45,7 +52,7 @@ const AddPanelPopup = memo(function AddPanelPopup({
     <Popup
       visible={visible}
       onMaskClick={onClose}
-      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '50vh' }}
+      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '60vh' }}
     >
       <div style={{ padding: '20px 16px' }}>
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>添加 Grafana 面板</div>
@@ -74,13 +81,47 @@ const AddPanelPopup = memo(function AddPanelPopup({
           >
             <Input placeholder="例如：集群 CPU 使用率" />
           </Form.Item>
+
+          {/* 智能查看器开关 */}
           <Form.Item
-            name="height"
-            label="面板高度（像素）"
-            help="留空自动设置：单面板 300px，整个 dashboard 600px"
+            label={
+              <div>
+                <div>显示模式</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400, marginTop: 2 }}>
+                  大型 Dashboard（20+ 面板）推荐使用智能查看器
+                </div>
+              </div>
+            }
           >
-            <Input type="number" placeholder="300" />
+            <Selector
+              options={[
+                { label: '直接嵌入', value: 'embed', description: '适合单个面板或小型 Dashboard' },
+                { label: '智能查看器', value: 'smart', description: '按分组折叠，支持全屏查看' }
+              ]}
+              value={[useSmartViewer ? 'smart' : 'embed']}
+              onChange={(v) => setUseSmartViewer(v[0] === 'smart')}
+            />
           </Form.Item>
+
+          {useSmartViewer && (
+            <Form.Item
+              name="apiToken"
+              label="Grafana API Token（可选）"
+              help="用于读取 Dashboard 结构，留空则无法自动分组"
+            >
+              <Input placeholder="eyJrIjoixxxx..." />
+            </Form.Item>
+          )}
+
+          {!useSmartViewer && (
+            <Form.Item
+              name="height"
+              label="面板高度（像素）"
+              help="留空自动设置：单面板 300px，整个 dashboard 600px"
+            >
+              <Input type="number" placeholder="300" />
+            </Form.Item>
+          )}
         </Form>
       </div>
     </Popup>
@@ -163,8 +204,8 @@ export default function MonitorPage() {
     loadGrafanaList()
   }
 
-  const submitAddPanel = (values: { url: string; title: string; height?: string }) => {
-    const { url, title, height } = values
+  const submitAddPanel = (values: { url: string; title: string; height?: string; useSmartViewer?: boolean; apiToken?: string }) => {
+    const { url, title, height, useSmartViewer, apiToken } = values
 
     if (!/\/d\/[a-zA-Z0-9_-]+/.test(url)) {
       Toast.show({ content: '不是有效的 Grafana dashboard URL', icon: 'fail' })
@@ -175,7 +216,14 @@ export default function MonitorPage() {
 
     const isSinglePanel = /[?&](?:viewPanel|panelId)=/.test(url)
     const finalHeight = Number(height) || (isSinglePanel ? 300 : 600)
-    const newPanel = { id: crypto.randomUUID(), originalUrl: url, title, height: finalHeight }
+    const newPanel: PanelConfig = {
+      id: crypto.randomUUID(),
+      originalUrl: url,
+      title,
+      height: finalHeight,
+      useSmartViewer,
+      apiToken
+    }
     const next = [...panels, newPanel]
     setPanels(next)
     savePanels(activeClusterId, next)
@@ -380,28 +428,57 @@ export default function MonitorPage() {
                       {/* 当前激活的面板 */}
                       {activePanel && (
                         <div style={{ position: 'relative' }}>
-                          <GrafanaPanel
-                            url={`${activePanel.originalUrl}&from=${timeRange}&to=now`}
-                            title={activePanel.title}
-                            height={activePanel.height || 400}
-                            enableFullscreen
-                          />
-                          <Button
-                            size="small"
-                            color="danger"
-                            fill="outline"
-                            style={{
-                              position: 'absolute',
-                              top: 8,
-                              right: 50,
-                              zIndex: 10,
-                              fontSize: 12,
-                              padding: '4px 8px'
-                            }}
-                            onClick={() => removePanel(activePanel.id)}
-                          >
-                            删除
-                          </Button>
+                          {activePanel.useSmartViewer ? (
+                            // 智能查看器模式 - 大型 Dashboard
+                            <>
+                              <GrafanaDashboardViewer
+                                originalUrl={activePanel.originalUrl}
+                                apiToken={activePanel.apiToken}
+                              />
+                              <Button
+                                size="small"
+                                color="danger"
+                                fill="outline"
+                                style={{
+                                  position: 'absolute',
+                                  top: 8,
+                                  right: 8,
+                                  zIndex: 100,
+                                  fontSize: 12,
+                                  padding: '4px 8px'
+                                }}
+                                onClick={() => removePanel(activePanel.id)}
+                              >
+                                删除
+                              </Button>
+                            </>
+                          ) : (
+                            // 传统嵌入模式
+                            <>
+                              <GrafanaPanel
+                                url={`${activePanel.originalUrl}&from=${timeRange}&to=now`}
+                                title={activePanel.title}
+                                height={activePanel.height || 400}
+                                enableFullscreen
+                              />
+                              <Button
+                                size="small"
+                                color="danger"
+                                fill="outline"
+                                style={{
+                                  position: 'absolute',
+                                  top: 8,
+                                  right: 50,
+                                  zIndex: 10,
+                                  fontSize: 12,
+                                  padding: '4px 8px'
+                                }}
+                                onClick={() => removePanel(activePanel.id)}
+                              >
+                                删除
+                              </Button>
+                            </>
+                          )}
                         </div>
                       )}
                     </>
