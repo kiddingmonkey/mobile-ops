@@ -6,6 +6,8 @@ import { api } from '@/api/client'
 import { useTheme, useAuth } from '@/store'
 import { getActiveVersion, versionShort, relTime } from '@/utils/version'
 import { hapticLight } from '@/utils/haptics'
+import { getCurrentVersion } from '@/utils/otaUpdater'
+import VersionSelector from '@/components/VersionSelector'
 
 const StatusDot = ({ connected }: { connected: boolean }) => (
   <div style={{
@@ -30,6 +32,7 @@ export default function SettingsPage() {
   const [clusters, setClusters] = useState<any[]>([])
   const [keyword, setKeyword] = useState('')
   const [activeKeys, setActiveKeys] = useState<string[]>([])
+  const [showVersionSelector, setShowVersionSelector] = useState(false)
 
   useEffect(() => {
     api.listGrafana().then(g => setGrafana(g || [])).catch(() => {})
@@ -167,7 +170,7 @@ export default function SettingsPage() {
     {
       key: 'about',
       title: 'ℹ️ 关于',
-      keywords: ['关于', '版本'],
+      keywords: ['关于', '版本', '更新', 'OTA'],
       render: () => (
         <List mode="card" style={{ '--border-radius': '8px' } as any}>
           <List.Item
@@ -178,13 +181,16 @@ export default function SettingsPage() {
                 : undefined
             }
           >当前版本</List.Item>
-          {import.meta.env.MODE === 'development' && (
-            <List.Item
-              arrow={<RightOutline />}
-              onClick={() => { hapticLight(); nav('/ota-debug') }}
-              description="OTA 调试面板"
-            >🔧 OTA 调试</List.Item>
-          )}
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); setShowVersionSelector(true) }}
+            description="查看版本历史和更新日志"
+          >📦 检查更新</List.Item>
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); nav('/ota-debug') }}
+            description="OTA 更新调试日志"
+          >🔧 OTA 调试</List.Item>
         </List>
       )
     }
@@ -267,6 +273,12 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <VersionSelector
+        visible={showVersionSelector}
+        currentVersion={getCurrentVersion()}
+        onClose={() => setShowVersionSelector(false)}
+      />
     </div>
   )
 }

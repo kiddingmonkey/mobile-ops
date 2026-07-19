@@ -147,42 +147,38 @@ export default function MonitorPage() {
 
   return (
     <div className="page">
-      {/* 顶部工具栏 */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 'max(12px, env(safe-area-inset-top)) 16px 12px',
-        background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border-color)'
-      }}>
-        <div className="page-header" style={{ margin: 0, padding: 0 }}>监控</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button
-            size="small"
-            fill="outline"
-            onClick={openGrafanaManager}
-          >
-            <UnorderedListOutline /> Grafana
-          </Button>
-          <Button
-            size="small"
-            color="primary"
-            onClick={openAddPanelForm}
-          >
-            <AddOutline /> 添加
-          </Button>
+      {/* 固定顶栏 */}
+      <div style={{ flexShrink: 0 }}>
+        {/* 顶部工具栏 */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 'max(12px, env(safe-area-inset-top)) 16px 12px',
+          background: 'var(--bg-elevated)',
+          borderBottom: '1px solid var(--border-color)'
+        }}>
+          <div className="page-header" style={{ margin: 0, padding: 0 }}>监控</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              size="small"
+              fill="outline"
+              onClick={openGrafanaManager}
+            >
+              <UnorderedListOutline /> Grafana
+            </Button>
+            <Button
+              size="small"
+              color="primary"
+              onClick={openAddPanelForm}
+            >
+              <AddOutline /> 添加
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {clusters.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">📊</div>
-          <div className="empty-text">还没有集群<br/>先去「设置」添加</div>
-        </div>
-      ) : (
-        <>
-          {/* 集群切换 - 顶部横向滚动 */}
+        {/* 集群切换 - 顶部横向滚动 */}
+        {clusters.length > 0 && (
           <div style={{
             padding: '12px 0',
             background: 'var(--bg-elevated)',
@@ -215,10 +211,21 @@ export default function MonitorPage() {
               ))}
             </div>
           </div>
+        )}
+      </div>
 
-          {/* 主 Tab 切换 */}
+      {/* 独立滚动内容区 */}
+      {clusters.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="empty-state">
+            <div className="empty-icon">📊</div>
+            <div className="empty-text">还没有集群<br/>先去「设置」添加</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflow: 'auto' }}>
           <PullToRefresh onRefresh={load}>
-            <div className="page-content" style={{ paddingTop: 0 }}>
+            <div style={{ paddingTop: 0 }}>
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -427,7 +434,7 @@ export default function MonitorPage() {
               </Tabs>
             </div>
           </PullToRefresh>
-        </>
+        </div>
       )}
 
       {/* Grafana 管理弹窗 */}
