@@ -2,6 +2,11 @@
 # 自动更新 versions.json - 从 git commit 提取版本信息
 set -e
 
+# 确保在项目根目录执行
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 SERVER="${REMOTE_HOST:-10.211.79.100}"
 SERVER_USER="${REMOTE_USER:-root}"
 VERSIONS_FILE="/data2/haowu33/mobile/frontend/versions.json"

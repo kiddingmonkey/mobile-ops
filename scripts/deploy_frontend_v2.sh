@@ -3,6 +3,11 @@
 # 功能：编译 -> 打包 tar.gz -> 上传 -> 服务器端解压（避免 scp 数百个小文件超时）
 set -e
 
+# 确保在项目根目录执行
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 SERVER="${REMOTE_HOST:-10.211.79.100}"
 SERVER_USER="${REMOTE_USER:-root}"
 SERVER_PASS="${SSHPASS:-t*YhMbizGYe41Kvi}"
