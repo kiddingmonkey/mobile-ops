@@ -44,20 +44,22 @@ const AddPanelPopup = memo(function AddPanelPopup({
       setUseSmartViewer(false)
     }
     prevVisibleRef.current = visible
-  }, [visible])
+  }, [visible, form])
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
       onSubmit({ ...values, useSmartViewer })
-    } catch {}
+    } catch (err) {
+      console.error('表单验证失败:', err)
+    }
   }
 
   return (
     <Popup
       visible={visible}
       onMaskClick={onClose}
-      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '60vh' }}
+      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, minHeight: '50vh', maxHeight: '80vh' }}
     >
       <div style={{ padding: '20px 16px' }}>
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>添加 Grafana 面板</div>
@@ -75,46 +77,68 @@ const AddPanelPopup = memo(function AddPanelPopup({
             name="url"
             label="Grafana URL"
             rules={[{ required: true, message: '请输入 URL' }]}
-            help="从 Grafana 复制 dashboard 或面板的分享链接"
           >
-            <Input placeholder="https://grafana.example.com/d/..." />
+            <Input placeholder="https://grafana.example.com/d/..." clearable />
           </Form.Item>
+
           <Form.Item
             name="title"
             label="面板名称"
             rules={[{ required: true, message: '请输入名称' }]}
           >
-            <Input placeholder="例如：集群 CPU 使用率" />
+            <Input placeholder="例如：集群 CPU 使用率" clearable />
           </Form.Item>
 
-          {/* 智能查看器开关 */}
-          <Form.Item
-            label={
-              <div>
-                <div>显示模式</div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400, marginTop: 2 }}>
-                  大型 Dashboard（20+ 面板）推荐使用智能查看器
-                </div>
+          {/* 简化的模式切换 - 紧凑单选按钮 */}
+          <Form.Item label="显示模式">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div
+                onClick={() => setUseSmartViewer(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  background: !useSmartViewer ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                  color: !useSmartViewer ? 'white' : 'var(--text-primary)',
+                  fontSize: 13,
+                  fontWeight: !useSmartViewer ? 600 : 400,
+                  textAlign: 'center',
+                  border: !useSmartViewer ? 'none' : '1px solid var(--border-color)',
+                  cursor: 'pointer'
+                }}
+              >
+                直接嵌入
               </div>
-            }
-          >
-            <Selector
-              options={[
-                { label: '直接嵌入', value: 'embed', description: '适合单个面板或小型 Dashboard' },
-                { label: '智能查看器', value: 'smart', description: '按分组折叠，支持全屏查看' }
-              ]}
-              value={[useSmartViewer ? 'smart' : 'embed']}
-              onChange={(v) => setUseSmartViewer(v[0] === 'smart')}
-            />
+              <div
+                onClick={() => setUseSmartViewer(true)}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  background: useSmartViewer ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                  color: useSmartViewer ? 'white' : 'var(--text-primary)',
+                  fontSize: 13,
+                  fontWeight: useSmartViewer ? 600 : 400,
+                  textAlign: 'center',
+                  border: useSmartViewer ? 'none' : '1px solid var(--border-color)',
+                  cursor: 'pointer'
+                }}
+              >
+                智能查看器
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              {useSmartViewer ? '大型 Dashboard（20+ 面板）推荐' : '适合单个面板或小型 Dashboard'}
+            </div>
           </Form.Item>
 
           {useSmartViewer && (
             <Form.Item
               name="apiToken"
               label="Grafana API Token（可选）"
-              help="用于读取 Dashboard 结构，留空则无法自动分组"
+              help="用于读取 Dashboard 结构并分组显示"
             >
-              <Input placeholder="eyJrIjoixxxx..." />
+              <Input placeholder="eyJrIjoixxxx..." clearable />
             </Form.Item>
           )}
 
