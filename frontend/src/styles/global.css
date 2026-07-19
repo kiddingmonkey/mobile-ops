@@ -195,7 +195,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; color: var(--text-primary); le
 .page-header {
   flex-shrink: 0;
   z-index: 100;
-  background: var(--bg-primary);
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
   padding: 14px 20px;
   display: flex;
@@ -209,6 +209,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; color: var(--text-primary); le
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .page-header .subtitle {
@@ -222,7 +223,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; color: var(--text-primary); le
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -474,6 +475,26 @@ body.mo-light .adm-list-body {
 .adm-selector-item {
   --border-radius: 10px !important;
   font-weight: 500;
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1.5px solid var(--border-color) !important;
+  transition: all 0.2s ease !important;
+}
+
+.adm-selector-item:active {
+  transform: scale(0.98);
+}
+
+.adm-selector-item-active {
+  background: var(--accent-blue) !important;
+  color: white !important;
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 2px 8px rgba(74, 126, 248, 0.25) !important;
+}
+
+.adm-selector-item-active .adm-selector-item-label {
+  color: white !important;
+  font-weight: 600 !important;
 }
 
 /* Toast */
@@ -568,6 +589,21 @@ option {
   background: var(--bg-secondary) !important;
 }
 
+.adm-picker-view-column-item {
+  color: var(--text-primary) !important;
+  font-weight: 500;
+}
+
+.adm-picker-view-column-item-selected {
+  color: var(--accent-blue) !important;
+  font-weight: 600;
+}
+
+.adm-picker-header-button {
+  color: var(--accent-blue) !important;
+  font-weight: 600;
+}
+
 /* Input/TextArea placeholder */
 .adm-input-element::placeholder,
 .adm-text-area-element::placeholder {
@@ -647,13 +683,54 @@ option {
 .adm-selector-item {
   background: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
+  border: 1.5px solid var(--border-color) !important;
+  transition: all 0.2s ease !important;
+  font-weight: 500;
+}
+
+.adm-selector-item:hover {
+  border-color: var(--accent-blue) !important;
 }
 
 .adm-selector-item-active {
-  background: var(--accent-blue-bg) !important;
-  color: var(--accent-blue) !important;
+  background: var(--accent-blue) !important;
+  color: white !important;
   border-color: var(--accent-blue) !important;
+  box-shadow: 0 2px 8px rgba(74, 126, 248, 0.25) !important;
+}
+
+.adm-selector-item-active .adm-selector-item-label {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* 原生 select 美化 */
+select {
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1.5px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+select:focus {
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 3px rgba(74, 126, 248, 0.1) !important;
+}
+
+select:hover {
+  border-color: var(--accent-blue) !important;
+}
+
+option {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  padding: 8px !important;
 }
 
 /* Switch 深色适配 */

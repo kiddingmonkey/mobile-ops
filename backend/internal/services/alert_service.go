@@ -81,20 +81,22 @@ func (s *AlertService) List(ctx context.Context, limit int) ([]AlertRow, error) 
 	var out []AlertRow
 	err := s.db.SelectContext(ctx, &out,
 		`SELECT id, fingerprint, severity, alertname, summary, description,
-		 status, starts_at, ends_at, received_at
+		 labels, annotations, status, starts_at, ends_at, received_at
 		 FROM alerts_cache ORDER BY starts_at DESC LIMIT $1`, limit)
 	return out, err
 }
 
 type AlertRow struct {
-	ID          int64      `db:"id" json:"id"`
-	Fingerprint string     `db:"fingerprint" json:"fingerprint"`
-	Severity    string     `db:"severity" json:"severity"`
-	AlertName   string     `db:"alertname" json:"alertname"`
-	Summary     *string    `db:"summary" json:"summary,omitempty"`
-	Description *string    `db:"description" json:"description,omitempty"`
-	Status      string     `db:"status" json:"status"`
-	StartsAt    time.Time  `db:"starts_at" json:"starts_at"`
-	EndsAt      *time.Time `db:"ends_at" json:"ends_at,omitempty"`
-	ReceivedAt  time.Time  `db:"received_at" json:"received_at"`
+	ID          int64           `db:"id" json:"id"`
+	Fingerprint string          `db:"fingerprint" json:"fingerprint"`
+	Severity    string          `db:"severity" json:"severity"`
+	AlertName   string          `db:"alertname" json:"alertname"`
+	Summary     *string         `db:"summary" json:"summary,omitempty"`
+	Description *string         `db:"description" json:"description,omitempty"`
+	Labels      json.RawMessage `db:"labels" json:"labels,omitempty"`
+	Annotations json.RawMessage `db:"annotations" json:"annotations,omitempty"`
+	Status      string          `db:"status" json:"status"`
+	StartsAt    time.Time       `db:"starts_at" json:"starts_at"`
+	EndsAt      *time.Time      `db:"ends_at" json:"ends_at,omitempty"`
+	ReceivedAt  time.Time       `db:"received_at" json:"received_at"`
 }

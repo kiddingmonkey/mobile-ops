@@ -158,7 +158,7 @@ export default function MonitorPage() {
           background: 'var(--bg-elevated)',
           borderBottom: '1px solid var(--border-color)'
         }}>
-          <div className="page-header" style={{ margin: 0, padding: 0 }}>监控</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>监控</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
               size="small"
@@ -177,41 +177,79 @@ export default function MonitorPage() {
           </div>
         </div>
 
-        {/* 集群切换 - 顶部横向滚动 */}
-        {clusters.length > 0 && (
-          <div style={{
-            padding: '12px 0',
-            background: 'var(--bg-elevated)',
-            borderBottom: '1px solid var(--border-color)',
-            overflowX: 'auto',
-            whiteSpace: 'nowrap',
-            WebkitOverflowScrolling: 'touch'
-          }}>
-            <div style={{ display: 'inline-flex', gap: 8, padding: '0 16px', minWidth: '100%' }}>
-              {clusters.map(c => (
+        {/* 集群选择 + 时间范围选择 - 统一在顶栏 */}
+        <div style={{
+          padding: '12px 16px',
+          background: 'var(--bg-elevated)',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12
+        }}>
+          {/* 集群选择 */}
+          {clusters.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 500 }}>集群</div>
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                {clusters.map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => setActive(c.id)}
+                    style={{
+                      display: 'inline-block',
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      background: activeClusterId === c.id ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                      color: activeClusterId === c.id ? 'white' : 'var(--text-primary)',
+                      fontSize: 13,
+                      fontWeight: activeClusterId === c.id ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      border: activeClusterId === c.id ? 'none' : '1px solid var(--border-color)',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {c.display_name || c.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 时间范围选择 */}
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 500 }}>时间范围</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { label: '1小时', value: 'now-1h' },
+                { label: '6小时', value: 'now-6h' },
+                { label: '24小时', value: 'now-24h' },
+                { label: '7天', value: 'now-7d' }
+              ].map(opt => (
                 <div
-                  key={c.id}
-                  onClick={() => setActive(c.id)}
+                  key={opt.value}
+                  onClick={() => setTimeRange(opt.value)}
                   style={{
-                    display: 'inline-block',
-                    padding: '8px 16px',
+                    flex: 1,
+                    padding: '8px 12px',
                     borderRadius: 8,
-                    background: activeClusterId === c.id ? 'var(--accent-blue)' : 'var(--bg-secondary)',
-                    color: activeClusterId === c.id ? 'white' : 'var(--text-primary)',
-                    fontSize: 14,
-                    fontWeight: activeClusterId === c.id ? 600 : 400,
+                    background: timeRange === opt.value ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                    color: timeRange === opt.value ? 'white' : 'var(--text-primary)',
+                    fontSize: 13,
+                    fontWeight: timeRange === opt.value ? 600 : 500,
                     cursor: 'pointer',
                     transition: 'all 0.2s',
-                    border: activeClusterId === c.id ? 'none' : '1px solid var(--border-color)',
-                    flexShrink: 0
+                    border: timeRange === opt.value ? 'none' : '1px solid var(--border-color)',
+                    textAlign: 'center'
                   }}
                 >
-                  {c.display_name || c.name}
+                  {opt.label}
                 </div>
               ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* 独立滚动内容区 */}
@@ -277,25 +315,6 @@ export default function MonitorPage() {
                           </div>
                         </div>
                       )}
-
-                      {/* 时间范围选择 */}
-                      <div className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>时间范围</span>
-                          <Selector
-                            columns={4}
-                            value={[timeRange]}
-                            onChange={v => v[0] && setTimeRange(v[0] as string)}
-                            options={[
-                              { label: '1h', value: 'now-1h' },
-                              { label: '6h', value: 'now-6h' },
-                              { label: '24h', value: 'now-24h' },
-                              { label: '7d', value: 'now-7d' }
-                            ]}
-                            style={{ '--padding': '4px 10px', fontSize: 13 } as any}
-                          />
-                        </div>
-                      </div>
 
                       {/* 当前激活的面板 */}
                       {activePanel && (

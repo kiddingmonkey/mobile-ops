@@ -13,6 +13,9 @@ export default function AlertsPage() {
   const nav = useNavigate()
   const [alerts, setAlerts] = useState<any[]>([])
   const [tab, setTab] = useState('all')
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
   const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
   // 本地状态：已确认和已静默的告警 ID（后端未实现时用 localStorage）
@@ -213,28 +216,71 @@ export default function AlertsPage() {
     : tab === 'warning' ? alerts.filter(a => a.severity === 'warning')
     : alerts.filter(a => a.status === 'resolved')
 
+  // 搜索过滤
+  const searchFiltered = searchKeyword
+    ? rawFiltered.filter(a =>
+        a.alertname?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        a.summary?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        a.labels?.pod?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        a.labels?.namespace?.toLowerCase().includes(searchKeyword.toLowerCase())
+      )
+    : rawFiltered
+
   // 只对 firing 状态的告警聚合，resolved 不聚合
-  const filtered = rawFiltered[0]?.status === 'firing' ? aggregateAlerts(rawFiltered) : rawFiltered
+  const aggregated = searchFiltered[0]?.status === 'firing' ? aggregateAlerts(searchFiltered) : searchFiltered
+
+  // 分页
+  const totalPages = Math.ceil(aggregated.length / pageSize)
+  const filtered = aggregated.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  // 切换 tab 或搜索时重置到第一页
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [tab, searchKeyword])
 
   const severityColor = (s: string) =>
     s === 'critical' ? 'var(--danger)' : s === 'warning' ? 'var(--warning)' : 'var(--accent-blue)'
 
   return (
     <div className="page">
-      <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
-        <span className="title">告警中心</span>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button
-            size="mini"
-            color="primary"
-            fill="outline"
-            onClick={showTestMenu}
-          >
-            测试
-          </Button>
-          <span className="text-xs">{firing.length} 活跃</span>
+      {/* 固定顶栏 */}
+      <div style={{ flexShrink: 0 }}>
+        <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+          <span className="title">告警中心</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button
+              size="mini"
+              color="primary"
+              fill="outline"
+              onClick={showTestMenu}
+            >
+              测试
+            </Button>
+            <span className="text-xs">{firing.length} 活跃</span>
+          </div>
+        </div>
+
+        {/* 搜索框 - 固定在顶部 */}
+        <div style={{ padding: '8px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)' }}>
+          <input
+            type="text"
+            placeholder="搜索告警名称、摘要、Pod..."
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: 13,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 8,
+              color: 'var(--text-primary)',
+              outline: 'none'
+            }}
+          />
         </div>
       </div>
+
       <PullToRefresh onRefresh={load}>
         <div className="page-content">
           <StatCard items={[
@@ -260,13 +306,18 @@ export default function AlertsPage() {
               <div className="empty-icon">🔔</div>
               <div className="empty-title">暂无{tab === 'all' ? '' : '此类'}告警</div>
               <div className="empty-text">
-                配置 alertmanager webhook 到<br/>
-                <code style={{ color: 'var(--accent-blue)', fontSize: 11 }}>/api/v1/alerts/webhook</code>
+                {searchKeyword ? '没有匹配的告警' : (
+                  <>
+                    配置 alertmanager webhook 到<br/>
+                    <code style={{ color: 'var(--accent-blue)', fontSize: 11 }}>/api/v1/alerts/webhook</code>
+                  </>
+                )}
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {filtered.map(a => (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {filtered.map(a => (
                 <div key={a.id} className="card" style={{ padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     {/* 左侧状态点 */}
@@ -515,6 +566,39 @@ export default function AlertsPage() {
                 </div>
               ))}
             </div>
+
+            {/* 分页控件 */}
+            {totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 12,
+                padding: '16px 0',
+                marginTop: 8
+              }}>
+                <Button
+                  size="small"
+                  fill="outline"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                >
+                  上一页
+                </Button>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  size="small"
+                  fill="outline"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                >
+                  下一页
+                </Button>
+              </div>
+            )}
+          </>
           )}
         </div>
       </PullToRefresh>
