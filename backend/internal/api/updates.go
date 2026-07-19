@@ -52,14 +52,18 @@ func (h *Handler) UpdatesLatest(c *gin.Context) {
 	io.Copy(hasher, f)
 	sum := hex.EncodeToString(hasher.Sum(nil))
 
-	// 读取 package.json 获取版本号
-	pkgPath := "/data2/haowu33/mobile/frontend/dist/package.json"
+	// 读取 version.json 获取 buildSha（作为唯一版本标识）
+	versionJsonPath := "/data2/haowu33/mobile/frontend/dist/version.json"
 	version := "unknown"
-	if data, err := os.ReadFile(pkgPath); err == nil {
-		var pkg map[string]interface{}
-		if json.Unmarshal(data, &pkg) == nil {
-			if v, ok := pkg["version"].(string); ok {
-				version = v
+	if data, err := os.ReadFile(versionJsonPath); err == nil {
+		var versionInfo map[string]interface{}
+		if json.Unmarshal(data, &versionInfo) == nil {
+			// 使用 buildSha 作为版本标识（每次构建都不同）
+			if buildSha, ok := versionInfo["buildSha"].(string); ok {
+				version = buildSha
+			} else if appVersion, ok := versionInfo["appVersion"].(string); ok {
+				// 降级方案：如果没有 buildSha，使用 appVersion
+				version = appVersion
 			}
 		}
 	}

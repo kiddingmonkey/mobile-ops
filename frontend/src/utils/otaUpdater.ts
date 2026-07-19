@@ -102,6 +102,9 @@ export interface UpdateInfo {
   download: string
 }
 
+// 本地保存的版本信息（用于更精确的更新检测）
+const SAVED_SHA256_KEY = 'mobile_ops_dist_sha256'
+
 // Capacitor 8 WebView plugin (setServerBasePath)
 async function tryGetWebViewPlugin(): Promise<any | null> {
   try {
@@ -120,7 +123,8 @@ export async function checkForUpdate(): Promise<{
   error?: string
 }> {
   const currentVersion = localStorage.getItem(CURRENT_VERSION_KEY) || 'builtin'
-  otaDebugLogger.log('info', 'checkForUpdate', `开始检查更新，当前版本: ${currentVersion}`)
+  const currentSha256 = localStorage.getItem(SAVED_SHA256_KEY) || ''
+  otaDebugLogger.log('info', 'checkForUpdate', `开始检查更新，当前版本: ${currentVersion}, SHA256: ${currentSha256.slice(0, 8)}...`)
 
   try {
     const r = await axios.get(`${API_BASE}/updates/latest`, {
@@ -130,13 +134,15 @@ export async function checkForUpdate(): Promise<{
       }
     })
     const info = r.data as UpdateInfo
-    const hasUpdate = info.version !== currentVersion
+
+    // 优先使用 sha256 判断是否有更新（更准确），降级到 version 比对
+    const hasUpdate = currentSha256 ? (info.sha256 !== currentSha256) : (info.version !== currentVersion)
 
     otaDebugLogger.log(
       hasUpdate ? 'success' : 'info',
       'checkForUpdate',
-      hasUpdate ? `发现新版本: ${info.version}` : `已是最新版本: ${info.version}`,
-      { info }
+      hasUpdate ? `发现新版本: ${info.version} (SHA256 不同)` : `已是最新版本: ${info.version}`,
+      { info, currentSha256: currentSha256.slice(0, 8) + '...', serverSha256: info.sha256.slice(0, 8) + '...' }
     )
 
     return {
@@ -322,10 +328,11 @@ export async function downloadAndApply(
         message: e.message,
         stack: e.stack
       })
-      // 如果 getUri 失败，保存版本号后让用户手动重启
+      // 如果 getUri 失败，保存版本号和 SHA256 后让用户手动重启
       localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+      localStorage.setItem(SAVED_SHA256_KEY, info.sha256)
       localStorage.setItem('OTA_RESTART_PENDING', Date.now().toString())
-      otaDebugLogger.log('info', 'exitApp', '保存版本号成功，准备提示用户手动重启')
+      otaDebugLogger.log('info', 'exitApp', '保存版本号和 SHA256 成功，准备提示用户手动重启')
       onStatus?.('更新完成！请手动重启 App 生效')
       return
     }
@@ -333,12 +340,13 @@ export async function downloadAndApply(
     // 5. 跳过 setServerBasePath（可能导致 WebView 死锁，App 启动时会自动检测新路径）
     otaDebugLogger.log('info', 'setServerBasePath', '跳过 setServerBasePath，依赖 App 启动时自动检测')
 
-    // 6. 保存版本号（用同步的标记确保写入）
-    otaDebugLogger.log('info', 'saveVersion', `保存版本号: ${info.version}`)
+    // 6. 保存版本号和 SHA256（用同步的标记确保写入）
+    otaDebugLogger.log('info', 'saveVersion', `保存版本号: ${info.version}, SHA256: ${info.sha256.slice(0, 8)}...`)
     localStorage.setItem(CURRENT_VERSION_KEY, info.version)
+    localStorage.setItem(SAVED_SHA256_KEY, info.sha256)
     // 设置一个重启标记，App 启动时检测到这个标记说明是更新后重启
     localStorage.setItem('OTA_RESTART_PENDING', Date.now().toString())
-    otaDebugLogger.log('success', 'saveVersion', '版本号保存成功，已设置重启标记')
+    otaDebugLogger.log('success', 'saveVersion', '版本号和 SHA256 保存成功，已设置重启标记')
 
     // 7. 温和退出 App 让用户手动重启（比强制 reload 更安全）
     otaDebugLogger.log('info', 'exitApp', '准备温和退出 App')
