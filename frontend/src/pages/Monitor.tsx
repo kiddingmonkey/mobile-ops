@@ -35,6 +35,10 @@ const AddPanelPopup = memo(function AddPanelPopup({
   const [form] = Form.useForm()
   const [useSmartViewer, setUseSmartViewer] = useState(false)
 
+  // 添加 ref 来存储原生 input 的实际值
+  const urlInputRef = useRef<HTMLInputElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
   // 只在弹窗打开时重置（从关闭变为打开），避免每次 visible 变化都重置
   const prevVisibleRef = useRef(visible)
   useEffect(() => {
@@ -50,6 +54,14 @@ const AddPanelPopup = memo(function AddPanelPopup({
 
   const handleSubmit = async () => {
     try {
+      // 在提交前，强制从 DOM 读取实际值并同步到表单
+      if (urlInputRef.current) {
+        form.setFieldValue('url', urlInputRef.current.value)
+      }
+      if (titleInputRef.current) {
+        form.setFieldValue('title', titleInputRef.current.value)
+      }
+
       const values = await form.validateFields()
       console.log('表单验证成功，值为:', values)
       onSubmit({ ...values, useSmartViewer })
@@ -86,12 +98,30 @@ const AddPanelPopup = memo(function AddPanelPopup({
             label="Grafana URL"
             rules={[{ required: true, message: '请输入 URL' }]}
           >
-            <Input
+            <input
+              ref={urlInputRef}
               type="text"
               inputMode="text"
               placeholder="https://grafana.example.com/d/..."
-              onChange={(val) => {
+              onChange={(e) => {
+                const val = e.target.value
+                form.setFieldValue('url', val)
                 console.log('URL 输入值变化:', val)
+              }}
+              onBlur={(e) => {
+                // 失去焦点时强制同步实际值
+                const actualValue = e.currentTarget.value
+                form.setFieldValue('url', actualValue)
+                console.log('URL blur 同步:', actualValue)
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 14,
+                border: '1px solid var(--border-color)',
+                borderRadius: 4,
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)'
               }}
             />
           </Form.Item>
@@ -101,12 +131,30 @@ const AddPanelPopup = memo(function AddPanelPopup({
             label="面板名称"
             rules={[{ required: true, message: '请输入名称' }]}
           >
-            <Input
+            <input
+              ref={titleInputRef}
               type="text"
               inputMode="text"
               placeholder="例如：集群 CPU 使用率"
-              onChange={(val) => {
+              onChange={(e) => {
+                const val = e.target.value
+                form.setFieldValue('title', val)
                 console.log('面板名称输入值变化:', val)
+              }}
+              onBlur={(e) => {
+                // 失去焦点时强制同步实际值
+                const actualValue = e.currentTarget.value
+                form.setFieldValue('title', actualValue)
+                console.log('面板名称 blur 同步:', actualValue)
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 14,
+                border: '1px solid var(--border-color)',
+                borderRadius: 4,
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)'
               }}
             />
           </Form.Item>
