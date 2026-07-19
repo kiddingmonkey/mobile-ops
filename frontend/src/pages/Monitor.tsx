@@ -44,7 +44,7 @@ const AddPanelPopup = memo(function AddPanelPopup({
       setUseSmartViewer(false)
     }
     prevVisibleRef.current = visible
-  }, [visible, form])
+  }, [visible]) // 移除 form 依赖，避免不必要的重置
 
   const handleSubmit = async () => {
     try {
@@ -93,7 +93,12 @@ const AddPanelPopup = memo(function AddPanelPopup({
           <Form.Item label="显示模式">
             <div style={{ display: 'flex', gap: 8 }}>
               <div
-                onClick={() => setUseSmartViewer(false)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setUseSmartViewer(false)
+                }}
+                onMouseDown={(e) => e.preventDefault()}
                 style={{
                   flex: 1,
                   padding: '10px 12px',
@@ -104,13 +109,19 @@ const AddPanelPopup = memo(function AddPanelPopup({
                   fontWeight: !useSmartViewer ? 600 : 400,
                   textAlign: 'center',
                   border: !useSmartViewer ? 'none' : '1px solid var(--border-color)',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  userSelect: 'none'
                 }}
               >
                 直接嵌入
               </div>
               <div
-                onClick={() => setUseSmartViewer(true)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setUseSmartViewer(true)
+                }}
+                onMouseDown={(e) => e.preventDefault()}
                 style={{
                   flex: 1,
                   padding: '10px 12px',
@@ -121,7 +132,8 @@ const AddPanelPopup = memo(function AddPanelPopup({
                   fontWeight: useSmartViewer ? 600 : 400,
                   textAlign: 'center',
                   border: useSmartViewer ? 'none' : '1px solid var(--border-color)',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  userSelect: 'none'
                 }}
               >
                 智能查看器
