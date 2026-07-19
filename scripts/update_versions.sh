@@ -28,8 +28,11 @@ APP_VERSION=$(jq -r .appVersion dist/version.json)
 BUILD_SHA=$(jq -r .buildSha dist/version.json)
 BUILD_TIME=$(jq -r .buildTime dist/version.json)
 
+# 使用 appVersion + buildSha 前8位作为唯一版本标识
+UNIQUE_VERSION="${APP_VERSION}-${BUILD_SHA:0:8}"
+
 echo "📦 当前构建信息："
-echo "   版本: $APP_VERSION"
+echo "   版本: $UNIQUE_VERSION"
 echo "   Commit: $BUILD_SHA"
 echo "   时间: $BUILD_TIME"
 echo ""
@@ -49,7 +52,7 @@ echo ""
 # 生成新的版本记录（写入临时文件避免 heredoc 转义问题）
 cat > /tmp/new_version.json <<EOF
 {
-  "version": "$APP_VERSION",
+  "version": "$UNIQUE_VERSION",
   "sha256": "",
   "size": $(stat -f%z frontend/dist.zip 2>/dev/null || stat -c%s frontend/dist.zip 2>/dev/null || echo 700000),
   "released_at": "$BUILD_TIME",
@@ -80,19 +83,17 @@ else
   EXISTING='{"versions":[]}'
 fi
 
-# 检查是否已存在相同版本
-if echo "$EXISTING" | jq -e ".versions[] | select(.version == \"$APP_VERSION\")" >/dev/null 2>&1; then
-  echo "⚠️  版本 $APP_VERSION 已存在，替换为最新构建"
-  # 移除旧版本
-  EXISTING=$(echo "$EXISTING" | jq "del(.versions[] | select(.version == \"$APP_VERSION\"))")
+# 检查是否已存在相同版本（基于 UNIQUE_VERSION）
+if echo "$EXISTING" | jq -e ".versions[] | select(.version == \"$UNIQUE_VERSION\")" >/dev/null 2>&1; then
+  echo "⚠️  版本 $UNIQUE_VERSION 已存在，跳过"
+else
+  # 添加新版本到数组开头（最新版本在最上面）
+  UPDATED=$(echo "$EXISTING" | jq ".versions = [$NEW_VERSION] + .versions")
+
+  # 写入文件
+  echo "$UPDATED" > "$VERSIONS_FILE"
+  echo "✅ 已更新 versions.json"
 fi
-
-# 添加新版本到数组开头（最新版本在最上面）
-UPDATED=$(echo "$EXISTING" | jq ".versions = [$NEW_VERSION] + .versions")
-
-# 写入文件
-echo "$UPDATED" > "$VERSIONS_FILE"
-echo "✅ 已更新 versions.json"
 
 # 显示最新版本
 echo ""
