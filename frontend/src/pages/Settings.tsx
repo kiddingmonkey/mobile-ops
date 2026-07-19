@@ -188,9 +188,14 @@ export default function SettingsPage() {
           >📦 检查更新</List.Item>
           <List.Item
             arrow={<RightOutline />}
-            onClick={() => { hapticLight(); nav('/ota-debug') }}
+            onClick={() => { hapticLight(); nav('/settings/ota-debug') }}
             description="OTA 更新调试日志"
           >🔧 OTA 调试</List.Item>
+          <List.Item
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); nav('/settings/input-debug') }}
+            description="输入框调试工具"
+          >⌨️ 输入调试</List.Item>
         </List>
       )
     }

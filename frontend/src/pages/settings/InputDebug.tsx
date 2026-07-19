@@ -1,0 +1,189 @@
+import { useState, useRef } from 'react'
+import { Input, Button, Card, Toast, NavBar } from 'antd-mobile'
+import { useNavigate } from 'react-router-dom'
+
+interface LogEntry {
+  timestamp: string
+  event: string
+  value: string
+  detail: string
+}
+
+export default function InputDebugPage() {
+  const nav = useNavigate()
+  const [testValue, setTestValue] = useState('')
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const inputRef = useRef<any>(null)
+
+  const addLog = (event: string, value: string, detail: string = '') => {
+    const entry: LogEntry = {
+      timestamp: new Date().toLocaleTimeString(),
+      event,
+      value,
+      detail
+    }
+    setLogs(prev => [entry, ...prev].slice(0, 50)) // 只保留最近50条
+    console.log('[InputDebug]', entry)
+  }
+
+  const handleChange = (val: string) => {
+    setTestValue(val)
+    addLog('onChange', val, `length: ${val.length}`)
+  }
+
+  const handleFocus = (e: any) => {
+    addLog('onFocus', testValue, `type: ${e?.target?.type}, inputMode: ${e?.target?.inputMode}`)
+  }
+
+  const handleBlur = (e: any) => {
+    addLog('onBlur', testValue, `type: ${e?.target?.type}`)
+  }
+
+  const handleKeyDown = (e: any) => {
+    addLog('onKeyDown', e.key, `keyCode: ${e.keyCode}, which: ${e.which}`)
+  }
+
+  const copyLogs = () => {
+    const text = logs.map(log =>
+      `[${log.timestamp}] ${log.event}: "${log.value}" ${log.detail}`
+    ).join('\n')
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        Toast.show({ content: '日志已复制', icon: 'success' })
+      })
+    } else {
+      // 降级方案
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      Toast.show({ content: '日志已复制', icon: 'success' })
+    }
+  }
+
+  const clearLogs = () => {
+    setLogs([])
+    setTestValue('')
+    Toast.show({ content: '已清空' })
+  }
+
+  const getInputInfo = () => {
+    const input = inputRef.current?.nativeElement
+    if (input) {
+      const info = {
+        type: input.type,
+        inputMode: input.inputMode,
+        value: input.value,
+        readOnly: input.readOnly,
+        disabled: input.disabled,
+        className: input.className,
+        tagName: input.tagName
+      }
+      addLog('getInputInfo', JSON.stringify(info), '')
+    } else {
+      addLog('getInputInfo', 'input ref 为空', '')
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      <NavBar onBack={() => nav(-1)}>输入调试</NavBar>
+
+      <div style={{ padding: 12 }}>
+        {/* 测试输入框 */}
+        <Card title="测试输入框" style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              输入任何内容（中文、英文、数字），观察下方日志
+            </div>
+            <Input
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              placeholder="请输入测试内容..."
+              value={testValue}
+              onChange={handleChange}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown as any}
+            />
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>
+            当前值: <code style={{ background: '#f0f0f0', padding: '2px 6px', borderRadius: 3 }}>
+              {testValue || '(空)'}
+            </code>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button size="small" onClick={getInputInfo}>获取输入框信息</Button>
+            <Button size="small" onClick={() => setTestValue('')}>清空输入</Button>
+          </div>
+        </Card>
+
+        {/* 操作按钮 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <Button block onClick={copyLogs} disabled={logs.length === 0}>
+            复制日志 ({logs.length})
+          </Button>
+          <Button block onClick={clearLogs} disabled={logs.length === 0}>
+            清空日志
+          </Button>
+        </div>
+
+        {/* 日志列表 */}
+        <Card title="事件日志" style={{ marginBottom: 12 }}>
+          {logs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              暂无日志，请在上方输入框输入内容
+            </div>
+          ) : (
+            <div style={{
+              maxHeight: '60vh',
+              overflow: 'auto',
+              fontSize: 12,
+              fontFamily: 'monospace'
+            }}>
+              {logs.map((log, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '6px 8px',
+                    borderBottom: '1px solid var(--border-color)',
+                    background: idx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)'
+                  }}
+                >
+                  <div style={{ color: 'var(--text-tertiary)' }}>
+                    {log.timestamp} <strong style={{ color: 'var(--accent-blue)' }}>{log.event}</strong>
+                  </div>
+                  <div style={{ color: 'var(--text-primary)' }}>
+                    值: "{log.value}"
+                  </div>
+                  {log.detail && (
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                      {log.detail}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* 说明 */}
+        <Card title="使用说明">
+          <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+            <p>1. 在测试输入框中输入内容（尝试中文、英文、数字）</p>
+            <p>2. 观察日志中记录的事件和值</p>
+            <p>3. 点击"复制日志"按钮，将日志发送给开发者</p>
+            <p>4. 重点关注：
+              <br />- onChange 事件的 value 是否正确
+              <br />- 输入框 type 和 inputMode 属性
+            </p>
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
