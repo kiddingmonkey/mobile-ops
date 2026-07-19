@@ -34,15 +34,15 @@ cd ..
 COMMIT_MSG=$(git log -1 --pretty=%B $BUILD_SHA 2>/dev/null || git log -1 --pretty=%B)
 # 提取 commit message 的第一行作为描述
 DESCRIPTION=$(echo "$COMMIT_MSG" | head -1 | sed 's/^[a-z]*: //')
-# 将多行 commit message 转为 JSON 数组
-CHANGELOG=$(echo "$COMMIT_MSG" | tail -n +2 | grep -v '^$' | sed 's/^- //' | jq -R . | jq -s .)
+# 将多行 commit message 转为 JSON 数组（过滤空行和特殊字符）
+CHANGELOG=$(echo "$COMMIT_MSG" | tail -n +2 | grep -v '^$' | grep -v '^Co-Authored' | sed 's/^- //' | head -10 | jq -R . | jq -s .)
 
 echo "📝 Changelog:"
-echo "$COMMIT_MSG"
+echo "$COMMIT_MSG" | head -20
 echo ""
 
-# 生成新的版本记录
-NEW_VERSION=$(cat <<EOF
+# 生成新的版本记录（写入临时文件避免 heredoc 转义问题）
+cat > /tmp/new_version.json <<EOF
 {
   "version": "$APP_VERSION",
   "sha256": "",
@@ -52,38 +52,50 @@ NEW_VERSION=$(cat <<EOF
   "description": "$DESCRIPTION"
 }
 EOF
-)
+
+NEW_VERSION=$(cat /tmp/new_version.json)
 
 echo "🔄 更新服务器上的 versions.json..."
 export SSHPASS
-sshpass -e ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER bash <<REMOTE_EOF
+
+# 将新版本 JSON 上传到服务器临时文件
+sshpass -e scp -o StrictHostKeyChecking=no /tmp/new_version.json $SERVER_USER@$SERVER:/tmp/new_version.json
+
+sshpass -e ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER bash <<'REMOTE_EOF'
 set -e
+
+VERSIONS_FILE="/data2/haowu33/mobile/frontend/versions.json"
+NEW_VERSION=$(cat /tmp/new_version.json)
+APP_VERSION=$(echo "$NEW_VERSION" | jq -r .version)
 
 # 读取现有版本历史
 if [ -f "$VERSIONS_FILE" ]; then
-  EXISTING=\$(cat "$VERSIONS_FILE")
+  EXISTING=$(cat "$VERSIONS_FILE")
 else
   EXISTING='{"versions":[]}'
 fi
 
 # 检查是否已存在相同版本
-if echo "\$EXISTING" | jq -e ".versions[] | select(.version == \"$APP_VERSION\")" >/dev/null 2>&1; then
+if echo "$EXISTING" | jq -e ".versions[] | select(.version == \"$APP_VERSION\")" >/dev/null 2>&1; then
   echo "⚠️  版本 $APP_VERSION 已存在，替换为最新构建"
   # 移除旧版本
-  EXISTING=\$(echo "\$EXISTING" | jq "del(.versions[] | select(.version == \"$APP_VERSION\"))")
+  EXISTING=$(echo "$EXISTING" | jq "del(.versions[] | select(.version == \"$APP_VERSION\"))")
 fi
 
 # 添加新版本到数组末尾
-UPDATED=\$(echo "\$EXISTING" | jq ".versions += [$NEW_VERSION]")
+UPDATED=$(echo "$EXISTING" | jq ".versions += [$NEW_VERSION]")
 
 # 写入文件
-echo "\$UPDATED" > "$VERSIONS_FILE"
+echo "$UPDATED" > "$VERSIONS_FILE"
 echo "✅ 已更新 versions.json"
 
 # 显示最新版本
 echo ""
 echo "📋 最新版本列表:"
 jq -r '.versions[] | "  \(.version) - \(.description) (\(.released_at | split("T")[0]))"' "$VERSIONS_FILE"
+
+# 清理临时文件
+rm -f /tmp/new_version.json
 REMOTE_EOF
 
 echo ""

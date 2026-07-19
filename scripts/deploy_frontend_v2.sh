@@ -76,7 +76,8 @@ echo "✅ 前端部署完成！"
 
 echo ""
 echo "🔄 自动更新版本历史..."
-bash "$(dirname "$0")/update_versions.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+bash "$SCRIPT_DIR/update_versions.sh"
 
 echo ""
 echo "🌐 Web 访问: https://101-43-172-231.nip.io:18443/"
