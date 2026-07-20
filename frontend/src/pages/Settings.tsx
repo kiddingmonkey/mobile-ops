@@ -89,6 +89,12 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => { hapticLight(); nav('/settings/vm') }}
           >VictoriaMetrics</List.Item>
+          <List.Item
+            prefix={<StatusDot connected={true} />}
+            extra="告警屏蔽"
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); nav('/settings/alertmanager') }}
+          >Alertmanager</List.Item>
         </List>
       )
     },

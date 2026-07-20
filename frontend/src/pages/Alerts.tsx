@@ -19,6 +19,7 @@ export default function AlertsPage() {
   const pageSize = 20
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
   const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
+  const [activeSilences, setActiveSilences] = useState<any[]>([])
   // 本地状态：已确认和已静默的告警 ID（后端未实现时用 localStorage）
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => {
     try {
@@ -45,6 +46,9 @@ export default function AlertsPage() {
   const load = async () => {
     const a = await api.listAlerts(200).catch(() => [])
     setAlerts(a || [])
+    // 加载活跃的 silences（使用默认 Alertmanager ID=1）
+    const silences = await api.listSilences(1).catch(() => [])
+    setActiveSilences(silences.filter((s: any) => s.status?.state === 'active'))
   }
   useEffect(() => { load() }, [])
 
@@ -363,6 +367,7 @@ export default function AlertsPage() {
             <Tabs.Tab title={`严重 (${critical.length})`} key="critical" />
             <Tabs.Tab title={`警告 (${warning.length})`} key="warning" />
             <Tabs.Tab title="已恢复" key="resolved" />
+            <Tabs.Tab title={`屏蔽 (${activeSilences.length})`} key="silenced" />
           </Tabs>
 
           {filtered.length === 0 ? (
@@ -380,6 +385,53 @@ export default function AlertsPage() {
             </div>
           ) : (
             <>
+              {tab === 'silenced' ? (
+                // 屏蔽列表
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {activeSilences.map(s => (
+                    <div key={s.id} className="card" style={{ padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                            {s.matchers?.map((m: any) => `${m.name}=${m.value}`).join(', ')}
+                          </div>
+                          {s.comment && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                              {s.comment}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                            创建者: {s.createdBy} | 过期: {new Date(s.endsAt).toLocaleString('zh-CN')}
+                          </div>
+                        </div>
+                        <Button
+                          size="mini"
+                          color="danger"
+                          fill="outline"
+                          onClick={async () => {
+                            const confirm = await Dialog.confirm({ content: '确认取消屏蔽？' })
+                            if (!confirm) return
+                            try {
+                              await api.deleteSilence(1, s.id)
+                              Toast.show({ icon: 'success', content: '已取消屏蔽' })
+                              load()
+                            } catch (e) {
+                              Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+                            }
+                          }}
+                        >
+                          取消
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {activeSilences.length === 0 && (
+                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                      暂无屏蔽规则
+                    </div>
+                  )}
+                </div>
+              ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {filtered.map(a => (
                 <div key={a.id} className="card" style={{ padding: '14px 16px' }}>
@@ -653,6 +705,7 @@ export default function AlertsPage() {
                 </div>
               ))}
             </div>
+              )}
 
             {/* 分页控件 */}
             {totalPages > 1 && (
