@@ -29,6 +29,7 @@ type DialingConfig struct {
 	PullIntervalSeconds int    `mapstructure:"pull_interval_seconds"`
 	BastionURL          string `mapstructure:"bastion_url"`
 	ScriptBaseDir       string `mapstructure:"script_base_dir"`
+	TokenTTLDays        int    `mapstructure:"token_ttl_days"` // JWT 有效期（天），默认 30
 }
 
 type ServerConfig struct {

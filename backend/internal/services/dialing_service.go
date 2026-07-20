@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -132,6 +133,14 @@ func (s *DialingService) SyncAll(ctx context.Context) error {
 	start := time.Now()
 	var syncID int64
 	_ = s.db.QueryRowContext(ctx, `INSERT INTO dialing_sync_status (started_at) VALUES (NOW()) RETURNING id`).Scan(&syncID)
+
+	// 检查 token 有效期，快过期时 warn
+	if status, err := s.GetTokenStatus(ctx); err == nil {
+		if needRefresh, ok := status["needRefresh"].(bool); ok && needRefresh {
+			remaining, _ := status["remainingDays"].(int)
+			logrus.WithField("remainingDays", remaining).Warn("dialing token 即将过期，请手动刷新")
+		}
+	}
 
 	page := 1
 	total := 0
@@ -537,4 +546,53 @@ func (s *DialingService) GetSyncStatus(ctx context.Context) (map[string]any, err
 	}
 	return map[string]any{"lastSync": m}, nil
 }
+
+// GetTokenStatus 解析 JWT 的 iat，计算剩余有效期（基于 config.TokenTTLDays）
+func (s *DialingService) GetTokenStatus(ctx context.Context) (map[string]any, error) {
+	tok := s.cfg.Token
+	if tok == "" {
+		return map[string]any{"status": "empty", "message": "未配置 token"}, nil
+	}
+	// JWT 格式: header.payload.signature
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return map[string]any{"status": "invalid", "message": "token 格式错误"}, nil
+	}
+	// 解析 payload (base64 decode)
+	payloadRaw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		// 可能带 padding，尝试 StdEncoding
+		payloadRaw, err = base64.RawStdEncoding.DecodeString(parts[1])
+		if err != nil {
+			return map[string]any{"status": "invalid", "message": "payload 解码失败"}, nil
+		}
+	}
+	var payload struct {
+		Iat int64 `json:"iat"`
+	}
+	if err := json.Unmarshal(payloadRaw, &payload); err != nil {
+		return map[string]any{"status": "invalid", "message": "payload JSON 解析失败"}, nil
+	}
+	if payload.Iat == 0 {
+		return map[string]any{"status": "invalid", "message": "JWT 无 iat 字段"}, nil
+	}
+	ttlDays := s.cfg.TokenTTLDays
+	if ttlDays <= 0 {
+		ttlDays = 30 // 默认 30 天
+	}
+	issuedAt := time.Unix(payload.Iat, 0)
+	expireAt := issuedAt.Add(time.Duration(ttlDays) * 24 * time.Hour)
+	remaining := time.Until(expireAt)
+	remainingDays := int(remaining.Hours() / 24)
+
+	needRefresh := remainingDays < 3
+	return map[string]any{
+		"status":        "ok",
+		"issuedAt":      issuedAt.Format(time.RFC3339),
+		"expireAt":      expireAt.Format(time.RFC3339),
+		"remainingDays": remainingDays,
+		"needRefresh":   needRefresh,
+	}, nil
+}
+
 

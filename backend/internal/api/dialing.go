@@ -281,6 +281,20 @@ func (h *Handler) GetDialingSyncStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, status)
 }
 
+// GetDialingTokenStatus GET /dialing/token-status  返回 token 有效期状态（剩余天数/是否需刷新）
+func (h *Handler) GetDialingTokenStatus(c *gin.Context) {
+	if h.dialing == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dialing service disabled"})
+		return
+	}
+	status, err := h.dialing.GetTokenStatus(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

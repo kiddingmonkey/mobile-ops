@@ -156,6 +156,8 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/dialing/tasks/:id/rerun-history", h.ListDialingRerunHistory)
 		priv.POST("/dialing/sync", h.SyncDialingTasks)
 		priv.GET("/dialing/sync-status", h.GetDialingSyncStatus)
+		priv.GET("/dialing/token-status", h.GetDialingTokenStatus)
+
 
 
 		// 通知渠道（飞书 Webhook 等）

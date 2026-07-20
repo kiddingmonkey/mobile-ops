@@ -373,6 +373,17 @@ class ApiClient {
       } | null
     }
   }
+  async getDialingTokenStatus() {
+    return (await this.http.get('/dialing/token-status')).data as {
+      status: string
+      issuedAt?: string
+      expireAt?: string
+      remainingDays?: number
+      needRefresh?: boolean
+      message?: string
+    }
+  }
+
 
 
   // ============ CLS 日志服务 ============

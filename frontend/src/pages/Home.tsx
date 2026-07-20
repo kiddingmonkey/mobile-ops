@@ -19,6 +19,7 @@ export default function HomePage() {
   const [ops, setOps]             = useState<any[]>(() => getCache('ops_10') || [])
   const [loading, setLoading]     = useState(!getCache('clusters'))
   const [err, setErr]             = useState<string | null>(null)
+  const [tokenWarning, setTokenWarning] = useState<{ remainingDays: number; needRefresh: boolean } | null>(null)
 
   const load = useCallback(async () => {
     setErr(null)
@@ -31,6 +32,12 @@ export default function HomePage() {
       setClusters(cs || [])
       setAlerts(al || [])
       setOps(op || [])
+      // 检查拨测 token 有效期
+      api.getDialingTokenStatus().then(r => {
+        if (r.needRefresh && r.remainingDays !== undefined) {
+          setTokenWarning({ remainingDays: r.remainingDays, needRefresh: true })
+        }
+      }).catch(() => {})
       // 并发拉各集群指标（不阻塞主渲染）
       ;(cs || []).forEach(async (c: any) => {
         try {
@@ -136,6 +143,36 @@ export default function HomePage() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>›</div>
           </div>
+
+          {/* ② Token 过期告警 */}
+          {tokenWarning && tokenWarning.needRefresh && (
+            <div
+              onClick={() => { hapticLight(); nav('/settings/dialing') }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(255, 80, 80, 0.12) 0%, rgba(255, 80, 80, 0.05) 100%)',
+                border: '1.5px solid rgba(255, 80, 80, 0.3)',
+                borderLeft: '4px solid var(--danger)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                marginBottom: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ fontSize: 20 }}>⚠️</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--danger)' }}>
+                  拨测平台 Token 即将过期
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  剩余 {tokenWarning.remainingDays} 天，点击查看刷新指引
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>›</div>
+            </div>
+          )}
 
           {err && !loading && (
             <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12 }}>
