@@ -35,6 +35,7 @@ import AlertmanagerSettingsPage from '@/pages/settings/AlertmanagerSettings'
 import AlertFilterSettingsPage from '@/pages/settings/AlertFilterSettings'
 import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
 import SecurityGroupNewPage from '@/pages/settings/SecurityGroupNew'
+import SecurityGroupEditPage from '@/pages/settings/SecurityGroupEdit'
 import PromSettingsPage from '@/pages/settings/PromSettings'
 import CloudSettingsPage from '@/pages/settings/CloudSettings'
 import ClustersSettingsPage from '@/pages/settings/ClustersSettings'
@@ -201,6 +202,7 @@ export default function App() {
           {/* 安全组页面：支持未登录访问（只需要公网IP和腾讯云API，不依赖后端） */}
           <Route path="/settings/security-groups" element={<SecurityGroupsPage />} />
           <Route path="/settings/security-groups/new" element={<Protected><SecurityGroupNewPage /></Protected>} />
+          <Route path="/settings/security-groups/:id/edit" element={<Protected><SecurityGroupEditPage /></Protected>} />
 
           {/* 主界面（含底部 TabBar） */}
           <Route element={<Protected><AppLayout /></Protected>}>

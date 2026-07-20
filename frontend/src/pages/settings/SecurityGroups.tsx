@@ -430,8 +430,11 @@ export default function SecurityGroupsPage() {
                 padding: 12,
                 marginBottom: 8
               }}
-                onClick={() => {
-                  Dialog.alert({
+                onClick={(e) => {
+                  // 忽略"一键更新"按钮的点击
+                  const target = e.target as HTMLElement
+                  if (target.closest('button')) return
+                  Dialog.show({
                     title: row.name,
                     content: (
                       <div style={{ fontSize: 12, lineHeight: 1.8, textAlign: 'left' }}>
@@ -448,7 +451,11 @@ export default function SecurityGroupsPage() {
                         </div>
                       </div>
                     ),
-                    confirmText: '关闭'
+                    closeOnAction: true,
+                    actions: [[
+                      { key: 'close', text: '关闭' },
+                      { key: 'edit', text: '编辑', bold: true, onClick: () => nav(`/settings/security-groups/${row.id}/edit`) }
+                    ]]
                   })
                 }}
               >
