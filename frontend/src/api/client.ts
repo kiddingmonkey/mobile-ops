@@ -384,6 +384,27 @@ class ApiClient {
     }
   }
 
+  // ============ VictoriaMetrics ============
+  async listVMSources() {
+    return (await this.http.get('/vm-sources')).data as any[]
+  }
+  async createVMSource(params: { name: string; url: string; description?: string; is_default?: boolean }) {
+    return (await this.http.post('/vm-sources', params)).data
+  }
+  async deleteVMSource(id: number) {
+    return (await this.http.delete(`/vm-sources/${id}`)).data
+  }
+  async vmQuery(vmId: number, query: string, time?: string) {
+    const params: any = { query }
+    if (time) params.time = time
+    return (await this.http.get(`/vm/${vmId}/query`, { params })).data
+  }
+  async vmQueryRange(vmId: number, query: string, start: string, end: string, step?: string) {
+    const params: any = { query, start, end }
+    if (step) params.step = step
+    return (await this.http.get(`/vm/${vmId}/query_range`, { params })).data
+  }
+
 
 
   // ============ CLS 日志服务 ============

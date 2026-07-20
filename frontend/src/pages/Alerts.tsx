@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { PullToRefresh, Tabs, Collapse, Button, Dialog, Toast, Switch } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
+import { api, friendlyApiError } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
 import StatCard from '@/components/StatCard'
 import { sendUrgentAlert, getTTSEnabled, setTTSEnabled, getFloatingAlertEnabled, setFloatingAlertEnabled, requestFloatingPermission, testTTS } from '@/utils/alertNotifier'
 import { analyzeAlert } from '@/utils/alertAnalyzer'
 import { shareAlertCard } from '@/utils/shareCard'
+import { extractPromQLFromURL, formatPromResult } from '@/utils/promql'
 import { Capacitor } from '@capacitor/core'
 
 export default function AlertsPage() {
@@ -82,6 +83,39 @@ export default function AlertsPage() {
 
   // 获取告警唯一 ID
   const getAlertId = (a: any) => `${a.alertname}_${a.labels?.instance || ''}_${a.labels?.pod || ''}`
+
+  // 执行告警查询（提取 generatorURL 里的 PromQL 并查询 VM）
+  const executeQuery = async (alert: any) => {
+    // 假设告警对象有 generator_url 或从 annotations 获取
+    const generatorURL = alert.generator_url || alert.annotations?.generator_url
+    const query = extractPromQLFromURL(generatorURL)
+    if (!query) {
+      Toast.show({ icon: 'fail', content: '无法提取查询语句' })
+      return
+    }
+    Toast.show({ icon: 'loading', content: '查询中...', duration: 0 })
+    try {
+      // 使用默认 VM 源（ID=1）
+      const result = await api.vmQuery(1, query)
+      Toast.clear()
+      const formatted = formatPromResult(result)
+      Dialog.alert({
+        title: '查询结果',
+        content: (
+          <div style={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>PromQL:</div>
+            <div style={{ marginBottom: 12, color: 'var(--primary)' }}>{query}</div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>结果:</div>
+            <div>{formatted}</div>
+          </div>
+        ),
+        confirmText: '关闭'
+      })
+    } catch (e) {
+      Toast.clear()
+      Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+    }
+  }
 
   // 测试告警通知
   const testAlert = async (severity: 'critical' | 'warning') => {
@@ -456,6 +490,19 @@ export default function AlertsPage() {
                             style={{ fontSize: 10, padding: '2px 8px' }}
                           >
                             📤 分享
+                          </Button>
+
+                          <Button
+                            size="mini"
+                            color="primary"
+                            fill="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              executeQuery(a)
+                            }}
+                            style={{ fontSize: 10, padding: '2px 8px' }}
+                          >
+                            🔍 查询
                           </Button>
                         </div>
                       )}

@@ -83,6 +83,12 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => { hapticLight(); nav('/settings/prom') }}
           >Prometheus</List.Item>
+          <List.Item
+            prefix={<StatusDot connected={true} />}
+            extra="监控查询"
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); nav('/settings/vm') }}
+          >VictoriaMetrics</List.Item>
         </List>
       )
     },

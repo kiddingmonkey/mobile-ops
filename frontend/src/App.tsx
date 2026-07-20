@@ -30,6 +30,7 @@ import DialingPage from '@/pages/Dialing'
 import DialingDetailPage from '@/pages/DialingDetail'
 import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
 import DialingSettingsPage from '@/pages/settings/DialingSettings'
+import VMSettingsPage from '@/pages/settings/VMSettings'
 import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
 import SecurityGroupNewPage from '@/pages/settings/SecurityGroupNew'
 import PromSettingsPage from '@/pages/settings/PromSettings'
@@ -182,6 +183,7 @@ export default function App() {
           <Route path="/settings/grafana" element={<Protected><GrafanaSettingsPage /></Protected>} />
           <Route path="/settings/grafana/new" element={<Protected><GrafanaNewPage /></Protected>} />
           <Route path="/settings/dialing" element={<Protected><DialingSettingsPage /></Protected>} />
+          <Route path="/settings/vm" element={<Protected><VMSettingsPage /></Protected>} />
           <Route path="/settings/prom" element={<Protected><PromSettingsPage /></Protected>} />
           <Route path="/settings/prom/new" element={<Protected><PromNewPage /></Protected>} />
           <Route path="/settings/cloud" element={<Protected><CloudSettingsPage /></Protected>} />
