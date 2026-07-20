@@ -15,6 +15,8 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [tab, setTab] = useState('all')
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [filterNamespace, setFilterNamespace] = useState<string>('all')
+  const [filterLabel, setFilterLabel] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 20
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
@@ -337,17 +339,31 @@ export default function AlertsPage() {
   const rawFiltered = tab === 'all' ? alerts
     : tab === 'critical' ? alerts.filter(a => a.severity === 'critical')
     : tab === 'warning' ? alerts.filter(a => a.severity === 'warning')
-    : alerts.filter(a => a.status === 'resolved')
+    : tab === 'silenced' ? alerts : alerts.filter(a => a.status === 'resolved')
+
+  // namespace 过滤
+  const nsFiltered = filterNamespace === 'all' ? rawFiltered
+    : rawFiltered.filter(a => a.labels?.namespace === filterNamespace)
+
+  // 自定义 label 过滤（格式: "key=value"）
+  const labelFiltered = filterLabel === 'all' ? nsFiltered
+    : nsFiltered.filter(a => {
+        const [k, v] = filterLabel.split('=')
+        return a.labels?.[k] === v
+      })
 
   // 搜索过滤
   const searchFiltered = searchKeyword
-    ? rawFiltered.filter(a =>
+    ? labelFiltered.filter(a =>
         a.alertname?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         a.summary?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         a.labels?.pod?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         a.labels?.namespace?.toLowerCase().includes(searchKeyword.toLowerCase())
       )
-    : rawFiltered
+    : labelFiltered
+
+  // 提取所有 namespace（用于过滤下拉）
+  const allNamespaces = [...new Set(alerts.map(a => a.labels?.namespace).filter(Boolean))] as string[]
 
   // 只对 firing 状态的告警聚合，resolved 不聚合
   const aggregated = searchFiltered[0]?.status === 'firing' ? aggregateAlerts(searchFiltered) : searchFiltered
@@ -359,7 +375,7 @@ export default function AlertsPage() {
   // 切换 tab 或搜索时重置到第一页
   useEffect(() => {
     setCurrentPage(1)
-  }, [tab, searchKeyword])
+  }, [tab, searchKeyword, filterNamespace, filterLabel])
 
   const severityColor = (s: string) =>
     s === 'critical' ? 'var(--danger)' : s === 'warning' ? 'var(--warning)' : 'var(--accent-blue)'
@@ -405,7 +421,7 @@ export default function AlertsPage() {
       </div>
 
       <PullToRefresh onRefresh={load}>
-        <div className="page-content">
+        <div style={{ padding: '0 12px 80px', minHeight: '100vh' }}>
           <StatCard items={[
             { label: '严重', value: critical.length, color: 'var(--danger)' },
             { label: '警告', value: warning.length, color: 'var(--warning)' },
@@ -424,6 +440,38 @@ export default function AlertsPage() {
             <Tabs.Tab title="已恢复" key="resolved" />
             <Tabs.Tab title={`屏蔽 (${activeSilences.length})`} key="silenced" />
           </Tabs>
+
+          {/* 过滤器 */}
+          {allNamespaces.length > 0 && tab !== 'silenced' && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px 0', overflowX: 'auto', flexWrap: 'nowrap' }}>
+              <select
+                value={filterNamespace}
+                onChange={e => setFilterNamespace(e.target.value)}
+                style={{
+                  fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                  border: '1px solid var(--border-color)', background: 'var(--bg-input)',
+                  color: 'var(--text-primary)', flexShrink: 0
+                }}
+              >
+                <option value="all">全部命名空间</option>
+                {allNamespaces.map(ns => <option key={ns} value={ns}>{ns}</option>)}
+              </select>
+              <select
+                value={filterLabel}
+                onChange={e => setFilterLabel(e.target.value)}
+                style={{
+                  fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                  border: '1px solid var(--border-color)', background: 'var(--bg-input)',
+                  color: 'var(--text-primary)', flexShrink: 0
+                }}
+              >
+                <option value="all">全部标签</option>
+                {[...new Set(alerts.flatMap(a => Object.entries(a.labels || {}).filter(([k]) => ['cluster', 'job', 'service'].includes(k)).map(([k, v]) => `${k}=${v}`)))].slice(0, 20).map(l => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {filtered.length === 0 ? (
             <div className="empty-state">
@@ -487,56 +535,59 @@ export default function AlertsPage() {
                   )}
                 </div>
               ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {filtered.map(a => (
-                <div key={a.id} className="card" style={{ padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div key={a.id} className="card" style={{ padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {/* 左侧状态点 */}
                     <div style={{
-                      width: 10, height: 10, borderRadius: '50%',
+                      width: 8, height: 8, borderRadius: '50%',
                       background: a.status === 'firing' ? severityColor(a.severity) : 'var(--success)',
-                      marginTop: 5, flexShrink: 0,
-                      boxShadow: a.status === 'firing' ? `0 0 6px ${severityColor(a.severity)}` : 'none'
+                      flexShrink: 0,
+                      boxShadow: a.status === 'firing' ? `0 0 4px ${severityColor(a.severity)}` : 'none'
                     }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* 标题行 */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontWeight: 600, fontSize: 14 }}>{a.alertname}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>{a.alertname}</span>
                           {a.count > 1 && (
                             <span style={{
                               background: severityColor(a.severity),
                               color: 'white',
-                              fontSize: 10,
+                              fontSize: 9,
                               fontWeight: 600,
-                              padding: '2px 6px',
-                              borderRadius: 10
+                              padding: '1px 5px',
+                              borderRadius: 8
                             }}>
                               ×{a.count}
                             </span>
                           )}
                         </div>
-                        <span className={`status-badge ${a.status === 'firing' ? 'danger' : 'success'}`} style={{ fontSize: 10 }}>
-                          {a.status}
-                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>{fmtRelative(a.starts_at)}</span>
                       </div>
-                      {/* 摘要 */}
+                      {/* 摘要（截断一行） */}
                       {a.summary && (
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {a.summary}
                         </div>
                       )}
-                      {/* 时间 + severity */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                        <span className={`status-badge ${a.severity === 'critical' ? 'danger' : a.severity === 'warning' ? 'warning' : 'info'}`}>
-                          {a.severity}
+                      {/* namespace 标签 */}
+                      {a.labels?.namespace && (
+                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '1px 4px', borderRadius: 3, marginTop: 2, display: 'inline-block' }}>
+                          {a.labels.namespace}
                         </span>
-                        <span className="text-xs">{fmtRelative(a.starts_at)}</span>
-                      </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* 折叠操作区 */}
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ fontSize: 10, color: 'var(--accent-blue)', cursor: 'pointer' }}>操作</summary>
+                    <div style={{ marginTop: 6 }}>
 
                       {/* 快捷操作按钮 */}
                       {a.status === 'firing' && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           {!acknowledged.has(getAlertId(a)) ? (
                             <Button
                               size="mini"
@@ -768,7 +819,7 @@ export default function AlertsPage() {
                         </details>
                       )}
                     </div>
-                  </div>
+                  </details>
                 </div>
               ))}
             </div>
