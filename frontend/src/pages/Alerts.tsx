@@ -13,12 +13,12 @@ import { Capacitor } from '@capacitor/core'
 export default function AlertsPage() {
   const nav = useNavigate()
   const [alerts, setAlerts] = useState<any[]>([])
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState('mine')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [filterNamespace, setFilterNamespace] = useState<string>('all')
   const [filterLabel, setFilterLabel] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 20
+  const pageSize = 50 // 增大单页数量让第一页尽可能展示所有
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
   const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
   const [activeSilences, setActiveSilences] = useState<any[]>([])
@@ -332,6 +332,40 @@ export default function AlertsPage() {
   const critical = firing.filter(a => a.severity === 'critical')
   const warning = firing.filter(a => a.severity === 'warning')
 
+  // === 告警分类策略（从 localStorage 读取配置） ===
+  const alertFilterConfig = (() => {
+    try {
+      const saved = localStorage.getItem('alert_filter_config')
+      return saved ? JSON.parse(saved) : {
+        clusterValues: ['jyyun'],
+        systemNameValues: [],
+        staleDays: 3
+      }
+    } catch {
+      return { clusterValues: ['jyyun'], systemNameValues: [], staleDays: 3 }
+    }
+  })()
+
+  // 判断是否是"我的告警"
+  const isMyAlert = (a: any) => {
+    const cluster = a.labels?.cluster || ''
+    const sysName = a.labels?.system_name || a.labels?.exported_system_name || ''
+    const clusterMatch = alertFilterConfig.clusterValues.length === 0 || alertFilterConfig.clusterValues.includes(cluster)
+    if (!clusterMatch) return false
+    if (alertFilterConfig.systemNameValues.length === 0) return true
+    return alertFilterConfig.systemNameValues.includes(sysName)
+  }
+
+  // 超过 N 天的告警自动归入已忽略
+  const staleDays = alertFilterConfig.staleDays || 3
+  const staleAlerts = alerts.filter(a => {
+    if (a.status !== 'firing') return false
+    if (ignoredAlerts.has(a.alertname)) return false
+    const start = new Date(a.starts_at).getTime()
+    const days = (Date.now() - start) / (1000 * 60 * 60 * 24)
+    return days > staleDays
+  })
+
   // 告警聚合：相同 alertname 的合并
   const aggregateAlerts = (alertList: any[]) => {
     const groups = new Map<string, any[]>()
@@ -355,12 +389,14 @@ export default function AlertsPage() {
     }))
   }
 
-  const rawFiltered = tab === 'all' ? alerts.filter(a => !ignoredAlerts.has(a.alertname))
-    : tab === 'critical' ? alerts.filter(a => a.severity === 'critical' && !ignoredAlerts.has(a.alertname))
-    : tab === 'warning' ? alerts.filter(a => a.severity === 'warning' && !ignoredAlerts.has(a.alertname))
+  const rawFiltered = tab === 'mine'
+    ? alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && isMyAlert(a) && !staleAlerts.includes(a))
+    : tab === 'other'
+    ? alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && !isMyAlert(a) && !staleAlerts.includes(a))
     : tab === 'silenced' ? alerts
-    : tab === 'ignored' ? alerts.filter(a => ignoredAlerts.has(a.alertname))
-    : alerts.filter(a => a.status === 'resolved' && !ignoredAlerts.has(a.alertname))
+    : tab === 'ignored'
+    ? [...alerts.filter(a => ignoredAlerts.has(a.alertname)), ...staleAlerts]
+    : alerts
 
   // namespace 过滤
   const nsFiltered = filterNamespace === 'all' ? rawFiltered
@@ -445,34 +481,26 @@ export default function AlertsPage() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
       <PullToRefresh onRefresh={load}>
         <div style={{ padding: '0 12px 80px' }}>
-          <StatCard items={[
-            { label: '严重', value: critical.length, color: 'var(--danger)' },
-            { label: '警告', value: warning.length, color: 'var(--warning)' },
-            { label: '已恢复', value: alerts.filter(a => a.status === 'resolved').length, color: 'var(--success)' },
-            { label: '总计', value: alerts.length }
-          ]} />
 
           <Tabs activeKey={tab} onChange={setTab} style={{
-            '--title-font-size': '13px',
+            '--title-font-size': '12px',
             '--active-title-color': 'var(--accent-blue)',
             '--active-line-color': 'var(--accent-blue)'
           } as any}>
-            <Tabs.Tab title={`全部 (${alerts.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="all" />
-            <Tabs.Tab title={`严重 (${critical.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="critical" />
-            <Tabs.Tab title={`警告 (${warning.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="warning" />
-            <Tabs.Tab title="已恢复" key="resolved" />
+            <Tabs.Tab title={`我的 (${alerts.filter(a => !ignoredAlerts.has(a.alertname) && isMyAlert(a)).length})`} key="mine" />
+            <Tabs.Tab title={`其他 (${alerts.filter(a => !ignoredAlerts.has(a.alertname) && !isMyAlert(a)).length})`} key="other" />
             <Tabs.Tab title={`屏蔽 (${activeSilences.length})`} key="silenced" />
-            <Tabs.Tab title={`已忽略 (${ignoredAlerts.size})`} key="ignored" />
+            <Tabs.Tab title={`已忽略 (${ignoredAlerts.size + staleAlerts.length})`} key="ignored" />
           </Tabs>
 
           {/* 过滤器 */}
-          {allNamespaces.length > 0 && tab !== 'silenced' && (
-            <div style={{ display: 'flex', gap: 6, padding: '8px 0', overflowX: 'auto', flexWrap: 'nowrap' }}>
+          {allNamespaces.length > 0 && tab !== 'silenced' && tab !== 'ignored' && (
+            <div style={{ display: 'flex', gap: 6, padding: '6px 0', overflowX: 'auto', flexWrap: 'nowrap' }}>
               <select
                 value={filterNamespace}
                 onChange={e => setFilterNamespace(e.target.value)}
                 style={{
-                  fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                  fontSize: 11, padding: '3px 6px', borderRadius: 6,
                   border: '1px solid var(--border-color)', background: 'var(--bg-input)',
                   color: 'var(--text-primary)', flexShrink: 0
                 }}
@@ -484,7 +512,7 @@ export default function AlertsPage() {
                 value={filterLabel}
                 onChange={e => setFilterLabel(e.target.value)}
                 style={{
-                  fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                  fontSize: 11, padding: '3px 6px', borderRadius: 6,
                   border: '1px solid var(--border-color)', background: 'var(--bg-input)',
                   color: 'var(--text-primary)', flexShrink: 0
                 }}
@@ -600,6 +628,11 @@ export default function AlertsPage() {
                       {a.labels?.namespace && (
                         <span style={{ fontSize: 9, color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '1px 4px', borderRadius: 3, marginTop: 2, display: 'inline-block' }}>
                           {a.labels.namespace}
+                        </span>
+                      )}
+                      {staleAlerts.includes(a) && (
+                        <span style={{ fontSize: 9, color: 'var(--danger)', background: 'var(--danger-bg)', padding: '1px 4px', borderRadius: 3, marginTop: 2, marginLeft: 4, display: 'inline-block' }}>
+                          超过{staleDays}天
                         </span>
                       )}
                     </div>

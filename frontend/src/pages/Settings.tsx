@@ -95,6 +95,12 @@ export default function SettingsPage() {
             arrow={<RightOutline />}
             onClick={() => { hapticLight(); nav('/settings/alertmanager') }}
           >Alertmanager</List.Item>
+          <List.Item
+            prefix={<StatusDot connected={true} />}
+            extra="分类策略"
+            arrow={<RightOutline />}
+            onClick={() => { hapticLight(); nav('/settings/alert-filter') }}
+          >告警分类</List.Item>
         </List>
       )
     },

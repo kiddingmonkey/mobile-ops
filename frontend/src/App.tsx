@@ -32,6 +32,7 @@ import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
 import DialingSettingsPage from '@/pages/settings/DialingSettings'
 import VMSettingsPage from '@/pages/settings/VMSettings'
 import AlertmanagerSettingsPage from '@/pages/settings/AlertmanagerSettings'
+import AlertFilterSettingsPage from '@/pages/settings/AlertFilterSettings'
 import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
 import SecurityGroupNewPage from '@/pages/settings/SecurityGroupNew'
 import PromSettingsPage from '@/pages/settings/PromSettings'
@@ -186,6 +187,7 @@ export default function App() {
           <Route path="/settings/dialing" element={<Protected><DialingSettingsPage /></Protected>} />
           <Route path="/settings/vm" element={<Protected><VMSettingsPage /></Protected>} />
           <Route path="/settings/alertmanager" element={<Protected><AlertmanagerSettingsPage /></Protected>} />
+          <Route path="/settings/alert-filter" element={<Protected><AlertFilterSettingsPage /></Protected>} />
           <Route path="/settings/prom" element={<Protected><PromSettingsPage /></Protected>} />
           <Route path="/settings/prom/new" element={<Protected><PromNewPage /></Protected>} />
           <Route path="/settings/cloud" element={<Protected><CloudSettingsPage /></Protected>} />
