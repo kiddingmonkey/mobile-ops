@@ -441,8 +441,10 @@ export default function AlertsPage() {
         </div>
       </div>
 
+      {/* 可滚动区域 */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
       <PullToRefresh onRefresh={load}>
-        <div style={{ padding: '0 12px 80px', minHeight: '100vh' }}>
+        <div style={{ padding: '0 12px 80px' }}>
           <StatCard items={[
             { label: '严重', value: critical.length, color: 'var(--danger)' },
             { label: '警告', value: warning.length, color: 'var(--warning)' },
@@ -909,6 +911,7 @@ export default function AlertsPage() {
           )}
         </div>
       </PullToRefresh>
+      </div>
     </div>
   )
 }
