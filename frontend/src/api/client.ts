@@ -405,6 +405,26 @@ class ApiClient {
     return (await this.http.get(`/vm/${vmId}/query_range`, { params })).data
   }
 
+  // ============ Alertmanager ============
+  async listAlertmanagerSources() {
+    return (await this.http.get('/alertmanager-sources')).data as any[]
+  }
+  async createAlertmanagerSource(params: { name: string; url: string; description?: string; is_default?: boolean }) {
+    return (await this.http.post('/alertmanager-sources', params)).data
+  }
+  async deleteAlertmanagerSource(id: number) {
+    return (await this.http.delete(`/alertmanager-sources/${id}`)).data
+  }
+  async listSilences(amId: number) {
+    return (await this.http.get(`/alertmanager/${amId}/silences`)).data as any[]
+  }
+  async createSilence(amId: number, silence: any) {
+    return (await this.http.post(`/alertmanager/${amId}/silences`, silence)).data
+  }
+  async deleteSilence(amId: number, silenceId: string) {
+    return (await this.http.delete(`/alertmanager/${amId}/silences/${silenceId}`)).data
+  }
+
 
 
   // ============ CLS 日志服务 ============

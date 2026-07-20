@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PullToRefresh, Tabs, Collapse, Button, Dialog, Toast, Switch } from 'antd-mobile'
+import { PullToRefresh, Tabs, Collapse, Button, Dialog, Toast, Switch, ActionSheet } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api, friendlyApiError } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
@@ -64,14 +64,44 @@ export default function AlertsPage() {
     Toast.show({ content: '已确认告警', icon: 'success' })
   }
 
-  // 静默告警 30 分钟
-  const silenceAlert = (alertId: string) => {
-    const until = Date.now() + 30 * 60 * 1000
-    setSilenced(prev => new Map(prev).set(alertId, until))
-    Toast.show({ content: '已静默 30 分钟', icon: 'success' })
+  // 屏蔽告警（创建 Alertmanager Silence）
+  const silenceAlert = async (alert: any, duration: string) => {
+    const durationMap: Record<string, number> = {
+      '30m': 30,
+      '1h': 60,
+      '6h': 360,
+      '1d': 1440
+    }
+    const minutes = durationMap[duration] || 30
+    const now = new Date()
+    const endsAt = new Date(now.getTime() + minutes * 60 * 1000)
+
+    // 构造 silence matchers（基于 alertname）
+    const silence = {
+      matchers: [
+        { name: 'alertname', value: alert.alertname, isRegex: false, isEqual: true }
+      ],
+      startsAt: now.toISOString(),
+      endsAt: endsAt.toISOString(),
+      createdBy: 'mobile-ops',
+      comment: `屏蔽 ${duration}（手机端创建）`
+    }
+
+    Toast.show({ icon: 'loading', content: '创建屏蔽中...', duration: 0 })
+    try {
+      // 使用默认 Alertmanager（ID=1）
+      await api.createSilence(1, silence)
+      Toast.clear()
+      Toast.show({ icon: 'success', content: `已屏蔽 ${duration}` })
+      // 刷新告警列表
+      load()
+    } catch (e) {
+      Toast.clear()
+      Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+    }
   }
 
-  // 取消静默
+  // 取消静默（保留本地版本作为后备）
   const unsilenceAlert = (alertId: string) => {
     setSilenced(prev => {
       const next = new Map(prev)
@@ -422,13 +452,23 @@ export default function AlertsPage() {
                               size="mini"
                               color="warning"
                               fill="outline"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation()
-                                silenceAlert(getAlertId(a))
+                                const action = await ActionSheet.show({
+                                  actions: [
+                                    { key: '30m', text: '30 分钟' },
+                                    { key: '1h', text: '1 小时' },
+                                    { key: '6h', text: '6 小时' },
+                                    { key: '1d', text: '1 天' }
+                                  ]
+                                })
+                                if (action && typeof action === 'object' && 'key' in action) {
+                                  await silenceAlert(a, action.key as string)
+                                }
                               }}
                               style={{ fontSize: 10, padding: '2px 8px' }}
                             >
-                              🔇 静音30分
+                              🔇 屏蔽
                             </Button>
                           ) : (
                             <Button

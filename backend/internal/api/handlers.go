@@ -1628,3 +1628,101 @@ func parseTime(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
+
+// ============ Alertmanager Sources & Silences ============
+
+func (h *Handler) ListAlertmanagerSources(c *gin.Context) {
+	list, err := h.config.ListAlertmanagerSources(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createAlertmanagerReq struct {
+	Name        string `json:"name" binding:"required"`
+	URL         string `json:"url" binding:"required"`
+	Description string `json:"description"`
+	IsDefault   bool   `json:"is_default"`
+}
+
+func (h *Handler) CreateAlertmanagerSource(c *gin.Context) {
+	var r createAlertmanagerReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := h.config.CreateAlertmanagerSource(c.Request.Context(), r.Name, r.URL, r.Description, r.IsDefault)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) DeleteAlertmanagerSource(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.config.DeleteAlertmanagerSource(c.Request.Context(), id); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+// ListSilences GET /alertmanager/:id/silences
+func (h *Handler) ListSilences(c *gin.Context) {
+	amID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	am, err := h.config.GetAlertmanagerSource(c.Request.Context(), amID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "alertmanager source not found"})
+		return
+	}
+	cli := clients.NewAlertmanagerClient(am.URL)
+	silences, err := cli.ListSilences(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, silences)
+}
+
+// CreateSilence POST /alertmanager/:id/silences
+func (h *Handler) CreateSilence(c *gin.Context) {
+	amID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	am, err := h.config.GetAlertmanagerSource(c.Request.Context(), amID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "alertmanager source not found"})
+		return
+	}
+	var silence clients.Silence
+	if err := c.ShouldBindJSON(&silence); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	cli := clients.NewAlertmanagerClient(am.URL)
+	silenceID, err := cli.CreateSilence(c.Request.Context(), &silence)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"silenceID": silenceID})
+}
+
+// DeleteSilence DELETE /alertmanager/:id/silences/:silenceId
+func (h *Handler) DeleteSilence(c *gin.Context) {
+	amID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	silenceID := c.Param("silenceId")
+	am, err := h.config.GetAlertmanagerSource(c.Request.Context(), amID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "alertmanager source not found"})
+		return
+	}
+	cli := clients.NewAlertmanagerClient(am.URL)
+	if err := cli.DeleteSilence(c.Request.Context(), silenceID); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+

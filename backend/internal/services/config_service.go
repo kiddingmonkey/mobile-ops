@@ -1029,3 +1029,55 @@ func (s *ConfigService) GetVMSource(ctx context.Context, id int64) (*models.Vict
 	return &vm, nil
 }
 
+// ============ Alertmanager Sources ============
+
+func (s *ConfigService) ListAlertmanagerSources(ctx context.Context) ([]models.AlertmanagerSource, error) {
+	var list []models.AlertmanagerSource
+	err := s.db.SelectContext(ctx, &list,
+		`SELECT id, name, url, description, is_default, created_at, updated_at
+		 FROM alertmanager_sources ORDER BY id DESC`)
+	return list, err
+}
+
+func (s *ConfigService) CreateAlertmanagerSource(ctx context.Context, name, url, description string, isDefault bool) (*models.AlertmanagerSource, error) {
+	if name == "" || url == "" {
+		return nil, errors.New("name/url required")
+	}
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if isDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE alertmanager_sources SET is_default=FALSE`); err != nil {
+			return nil, err
+		}
+	}
+	var out models.AlertmanagerSource
+	err = tx.QueryRowxContext(ctx,
+		`INSERT INTO alertmanager_sources(name, url, description, is_default)
+		 VALUES ($1,$2,$3,$4) RETURNING id, name, url, description, is_default, created_at, updated_at`,
+		name, url, description, isDefault).StructScan(&out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, tx.Commit()
+}
+
+func (s *ConfigService) DeleteAlertmanagerSource(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM alertmanager_sources WHERE id=$1`, id)
+	return err
+}
+
+func (s *ConfigService) GetAlertmanagerSource(ctx context.Context, id int64) (*models.AlertmanagerSource, error) {
+	var am models.AlertmanagerSource
+	err := s.db.GetContext(ctx, &am,
+		`SELECT id, name, url, description, is_default, created_at, updated_at
+		 FROM alertmanager_sources WHERE id=$1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &am, nil
+}
+
+

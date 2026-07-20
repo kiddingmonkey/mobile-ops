@@ -60,6 +60,14 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/vm/:id/query", h.VMQuery)
 		priv.GET("/vm/:id/query_range", h.VMQueryRange)
 
+		priv.GET("/alertmanager-sources", h.ListAlertmanagerSources)
+		priv.POST("/alertmanager-sources", h.CreateAlertmanagerSource)
+		priv.DELETE("/alertmanager-sources/:id", h.DeleteAlertmanagerSource)
+
+		priv.GET("/alertmanager/:id/silences", h.ListSilences)
+		priv.POST("/alertmanager/:id/silences", h.CreateSilence)
+		priv.DELETE("/alertmanager/:id/silences/:silenceId", h.DeleteSilence)
+
 		priv.GET("/cloud-accounts", h.ListCloudAccounts)
 		priv.POST("/cloud-accounts", h.CreateCloudAccount)
 
