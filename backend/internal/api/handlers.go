@@ -1726,3 +1726,45 @@ func (h *Handler) DeleteSilence(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
+
+// GetVMRules GET /grafana/:id/vmrules  抓取 Grafana 的 vmrules 页面并解析告警规则
+func (h *Handler) GetVMRules(c *gin.Context) {
+	grafanaID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	client, err := h.config.GetGrafanaClient(c.Request.Context(), grafanaID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "grafana source not found"})
+		return
+	}
+	
+	// 抓取 vmrules 页面（Grafana 提供的告警规则列表）
+	// 通常路径是 /vmrules 或 /api/v1/rules
+	req, err := http.NewRequestWithContext(c.Request.Context(), "GET", client.GetBaseURL()+"/api/v1/rules", nil)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+client.GetToken())
+	
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		c.JSON(resp.StatusCode, gin.H{"error": string(body)})
+		return
+	}
+	
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	
+	c.JSON(200, result)
+}
+

@@ -49,6 +49,7 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/grafana-sources", h.ListGrafanaSources)
 		priv.POST("/grafana-sources", h.CreateGrafanaSource)
 		priv.DELETE("/grafana-sources/:id", h.DeleteGrafanaSource)
+		priv.GET("/grafana/:id/vmrules", h.GetVMRules)
 
 		priv.GET("/prom-sources", h.ListPromSources)
 		priv.POST("/prom-sources", h.CreatePromSource)

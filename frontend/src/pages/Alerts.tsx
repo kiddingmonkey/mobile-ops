@@ -151,6 +151,61 @@ export default function AlertsPage() {
     }
   }
 
+  // 查看告警规则（从 Grafana vmrules 获取）
+  const viewAlertRule = async (alert: any) => {
+    Toast.show({ icon: 'loading', content: '加载规则...', duration: 0 })
+    try {
+      // 使用默认 Grafana（ID=1）
+      const rules = await api.getVMRules(1)
+      Toast.clear()
+
+      // 查找匹配的规则（根据 alertname）
+      let matchedRule: any = null
+      if (rules?.data?.groups) {
+        for (const group of rules.data.groups) {
+          const found = group.rules?.find((r: any) => r.name === alert.alertname || r.alert === alert.alertname)
+          if (found) {
+            matchedRule = found
+            break
+          }
+        }
+      }
+
+      if (matchedRule) {
+        Dialog.alert({
+          title: '告警规则',
+          content: (
+            <div style={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ marginBottom: 8, fontWeight: 600 }}>规则名称:</div>
+              <div style={{ marginBottom: 12, color: 'var(--primary)' }}>{matchedRule.name || matchedRule.alert}</div>
+              <div style={{ marginBottom: 8, fontWeight: 600 }}>表达式:</div>
+              <div style={{ marginBottom: 12 }}>{matchedRule.expr || matchedRule.query}</div>
+              {matchedRule.labels && (
+                <>
+                  <div style={{ marginBottom: 8, fontWeight: 600 }}>标签:</div>
+                  <div>{JSON.stringify(matchedRule.labels, null, 2)}</div>
+                </>
+              )}
+            </div>
+          ),
+          confirmText: '关闭'
+        })
+      } else {
+        Dialog.confirm({
+          title: '未找到规则',
+          content: '在 Grafana vmrules 中未找到匹配的规则，是否前往查看？',
+          confirmText: '前往 Grafana',
+          onConfirm: () => {
+            window.open('http://jyyun.grafana.changyan.cn/vmrules', '_blank')
+          }
+        })
+      }
+    } catch (e) {
+      Toast.clear()
+      Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+    }
+  }
+
   // 测试告警通知
   const testAlert = async (severity: 'critical' | 'warning') => {
     const testData = {
@@ -595,6 +650,18 @@ export default function AlertsPage() {
                             style={{ fontSize: 10, padding: '2px 8px' }}
                           >
                             🔍 查询
+                          </Button>
+
+                          <Button
+                            size="mini"
+                            fill="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              viewAlertRule(a)
+                            }}
+                            style={{ fontSize: 10, padding: '2px 8px' }}
+                          >
+                            📋 规则
                           </Button>
                         </div>
                       )}

@@ -425,6 +425,10 @@ class ApiClient {
     return (await this.http.delete(`/alertmanager/${amId}/silences/${silenceId}`)).data
   }
 
+  async getVMRules(grafanaId: number) {
+    return (await this.http.get(`/grafana/${grafanaId}/vmrules`)).data
+  }
+
 
 
   // ============ CLS 日志服务 ============
