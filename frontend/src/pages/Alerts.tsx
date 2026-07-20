@@ -546,10 +546,19 @@ export default function AlertsPage() {
               {tab === 'silenced' ? (
                 // 屏蔽列表（与告警卡片一致的紧凑样式）
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {activeSilences
-                    .filter(s => !searchKeyword || s.matchers?.some((m: any) => m.value?.includes(searchKeyword)) || s.comment?.includes(searchKeyword))
-                    .slice(0, pageSize)
-                    .map(s => (
+                  {(() => {
+                    const filteredSilences = activeSilences
+                      .filter(s => !searchKeyword || s.matchers?.some((m: any) => m.value?.includes(searchKeyword)) || s.comment?.includes(searchKeyword))
+                    const totalPagesSilence = Math.ceil(filteredSilences.length / pageSize)
+                    const pagedSilences = filteredSilences.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    return (
+                      <>
+                        {filteredSilences.length > pageSize && (
+                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', padding: '4px 0', textAlign: 'center' }}>
+                            共 {filteredSilences.length} 条，第 {currentPage}/{totalPagesSilence} 页
+                          </div>
+                        )}
+                        {pagedSilences.map(s => (
                     <div key={s.id} className="card" style={{ padding: '10px 12px' }}
                       onClick={() => {
                         Dialog.alert({
@@ -598,6 +607,16 @@ export default function AlertsPage() {
                       </div>
                     </div>
                   ))}
+                        {totalPagesSilence > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '12px 0' }}>
+                            <Button size="mini" fill="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>上一页</Button>
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{currentPage} / {totalPagesSilence}</span>
+                            <Button size="mini" fill="outline" disabled={currentPage >= totalPagesSilence} onClick={() => setCurrentPage(p => p + 1)}>下一页</Button>
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
                   {activeSilences.length === 0 && (
                     <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>暂无屏蔽规则</div>
                   )}
