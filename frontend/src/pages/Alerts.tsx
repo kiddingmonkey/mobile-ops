@@ -445,12 +445,21 @@ export default function AlertsPage() {
       <div style={{ flexShrink: 0 }}>
         <div className="page-header" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
           <span className="title">告警中心</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <Button
+              size="mini"
+              fill="outline"
+              onClick={() => nav('/settings/alert-filter')}
+              style={{ fontSize: 10 }}
+            >
+              策略
+            </Button>
             <Button
               size="mini"
               color="primary"
               fill="outline"
               onClick={showTestMenu}
+              style={{ fontSize: 10 }}
             >
               测试
             </Button>
@@ -902,10 +911,61 @@ export default function AlertsPage() {
                         <div
                           onClick={(e) => {
                             e.stopPropagation()
+                            const durationMs = a.ends_at
+                              ? new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()
+                              : Date.now() - new Date(a.starts_at).getTime()
+                            const durationMin = Math.floor(durationMs / 60000)
+                            const durationText = durationMin < 60
+                              ? `${durationMin} 分钟`
+                              : durationMin < 1440
+                              ? `${(durationMin / 60).toFixed(1)} 小时`
+                              : `${(durationMin / 1440).toFixed(1)} 天`
+
                             Dialog.alert({
                               title: a.alertname,
                               content: (
                                 <div style={{ fontSize: 11, maxHeight: '60vh', overflowY: 'auto', lineHeight: 1.6 }}>
+                                  {/* 状态徽章 */}
+                                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                                    <span style={{
+                                      fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
+                                      background: a.status === 'firing' ? severityColor(a.severity) : 'var(--success)',
+                                      color: 'white'
+                                    }}>
+                                      {a.status === 'firing' ? '● 触发中' : '✓ 已恢复'}
+                                    </span>
+                                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                                      {a.severity}
+                                    </span>
+                                  </div>
+
+                                  {/* 时间线 */}
+                                  <div style={{ background: 'var(--bg-secondary)', padding: 8, borderRadius: 6, marginBottom: 8 }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11 }}>⏱️ 时间线</div>
+                                    <div style={{ position: 'relative', paddingLeft: 12 }}>
+                                      <div style={{ position: 'absolute', left: 3, top: 6, bottom: 6, width: 2, background: 'var(--border-color)' }}/>
+                                      <div style={{ position: 'relative', marginBottom: 6 }}>
+                                        <div style={{ position: 'absolute', left: -12, top: 3, width: 8, height: 8, borderRadius: '50%', background: severityColor(a.severity) }}/>
+                                        <div style={{ fontSize: 11 }}>告警触发</div>
+                                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{fmtTime(a.starts_at)}</div>
+                                      </div>
+                                      {a.ends_at ? (
+                                        <div style={{ position: 'relative' }}>
+                                          <div style={{ position: 'absolute', left: -12, top: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }}/>
+                                          <div style={{ fontSize: 11 }}>告警恢复</div>
+                                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{fmtTime(a.ends_at)}</div>
+                                          <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>持续 {durationText}</div>
+                                        </div>
+                                      ) : (
+                                        <div style={{ position: 'relative' }}>
+                                          <div style={{ position: 'absolute', left: -12, top: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', animation: 'pulse 1.5s infinite' }}/>
+                                          <div style={{ fontSize: 11, color: 'var(--warning)' }}>持续触发中...</div>
+                                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>已持续 {durationText}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
                                   {a.count > 1 ? (
                                     <div>
                                       <div style={{ fontWeight: 600, marginBottom: 6 }}>受影响实例 ({a.count}):</div>
@@ -914,21 +974,19 @@ export default function AlertsPage() {
                                           {item.labels?.pod && <div><b>Pod:</b> {item.labels.pod}</div>}
                                           {item.labels?.instance && <div><b>实例:</b> {item.labels.instance}</div>}
                                           {item.labels?.namespace && <div><b>NS:</b> {item.labels.namespace}</div>}
-                                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>开始: {fmtTime(item.starts_at)}</div>
+                                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{fmtTime(item.starts_at)}{item.ends_at ? ` → ${fmtTime(item.ends_at)}` : ''}</div>
                                         </div>
                                       ))}
                                     </div>
                                   ) : (
                                     <div>
+                                      {a.summary && <div style={{ marginBottom: 6, fontWeight: 600 }}>{a.summary}</div>}
+                                      {a.description && <div style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>{a.description}</div>}
+                                      <div style={{ fontWeight: 600, marginBottom: 4 }}>标签:</div>
                                       {a.labels && Object.entries(a.labels).map(([k, v]) => (
-                                        <div key={k}><b>{k}:</b> {String(v)}</div>
+                                        <div key={k} style={{ fontSize: 10 }}><b>{k}:</b> {String(v)}</div>
                                       ))}
-                                      {a.annotations && Object.entries(a.annotations).map(([k, v]) => (
-                                        <div key={k} style={{ marginTop: 4 }}><b>{k}:</b> {String(v)}</div>
-                                      ))}
-                                      <div style={{ marginTop: 6 }}>开始: {fmtTime(a.starts_at)}</div>
-                                      {a.ends_at && <div>恢复: {fmtTime(a.ends_at)}</div>}
-                                      {a.generator_url && <div style={{ marginTop: 4, fontSize: 10, wordBreak: 'break-all', color: 'var(--accent-blue)' }}>{a.generator_url}</div>}
+                                      {a.generator_url && <div style={{ marginTop: 8, fontSize: 10, wordBreak: 'break-all', color: 'var(--accent-blue)' }}>🔗 {a.generator_url}</div>}
                                     </div>
                                   )}
                                 </div>
