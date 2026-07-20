@@ -134,10 +134,96 @@ export async function sharePodCard(data: PodShareData): Promise<boolean> {
 }
 
 /**
- * 快捷分享告警卡片
+ * 快捷分享告警卡片（图片 + 文字双重分享）
  */
 export async function shareAlertCard(data: AlertShareData): Promise<boolean> {
-  return shareText(formatAlertCard(data), `告警: ${data.alertname}`)
+  const text = formatAlertCard(data)
+
+  // 尝试生成卡片图片
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = 720
+    canvas.height = 400
+    const ctx = canvas.getContext('2d')!
+
+    // 背景渐变
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400)
+    if (data.severity === 'critical') {
+      gradient.addColorStop(0, '#1a1a2e')
+      gradient.addColorStop(1, '#2d1f3d')
+    } else {
+      gradient.addColorStop(0, '#1a2332')
+      gradient.addColorStop(1, '#1f2d3d')
+    }
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, 720, 400)
+
+    // 顶部色条
+    ctx.fillStyle = data.severity === 'critical' ? '#ef4444' : '#f59e0b'
+    ctx.fillRect(0, 0, 720, 6)
+
+    // severity badge
+    ctx.fillStyle = data.severity === 'critical' ? '#ef4444' : '#f59e0b'
+    ctx.beginPath()
+    ctx.roundRect(32, 32, 80, 28, 4)
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 14px sans-serif'
+    ctx.fillText(data.severity.toUpperCase(), 44, 51)
+
+    // alertname
+    ctx.fillStyle = '#f8fafc'
+    ctx.font = 'bold 22px sans-serif'
+    ctx.fillText(data.alertname, 32, 100)
+
+    // 分隔线
+    ctx.strokeStyle = '#334155'
+    ctx.beginPath()
+    ctx.moveTo(32, 120)
+    ctx.lineTo(688, 120)
+    ctx.stroke()
+
+    // 详细信息
+    ctx.fillStyle = '#94a3b8'
+    ctx.font = '15px sans-serif'
+    let y = 152
+    if (data.cluster) { ctx.fillText(`集群: ${data.cluster}`, 32, y); y += 30 }
+    if (data.namespace) { ctx.fillText(`命名空间: ${data.namespace}`, 32, y); y += 30 }
+    if (data.pod) { ctx.fillText(`Pod: ${data.pod}`, 32, y); y += 30 }
+    if (data.summary) {
+      ctx.fillStyle = '#e2e8f0'
+      ctx.font = '14px sans-serif'
+      const lines = data.summary.length > 60 ? [data.summary.slice(0, 60), data.summary.slice(60, 120)] : [data.summary]
+      lines.forEach(l => { ctx.fillText(l, 32, y); y += 24 })
+    }
+    if (data.starts_at) {
+      ctx.fillStyle = '#64748b'
+      ctx.font = '13px sans-serif'
+      ctx.fillText(`开始: ${new Date(data.starts_at).toLocaleString('zh-CN')}`, 32, y + 10)
+    }
+
+    // 底部 branding
+    ctx.fillStyle = '#475569'
+    ctx.font = '12px sans-serif'
+    ctx.fillText('CloudPilot 云驾 · Mobile SRE', 32, 376)
+    ctx.fillText(new Date().toLocaleString('zh-CN'), 520, 376)
+
+    // 转换为 blob 用于分享
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/png'))
+    const file = new File([blob], 'alert-card.png', { type: 'image/png' })
+
+    if (Capacitor.isNativePlatform() || navigator.share) {
+      const shareData: any = { title: `告警: ${data.alertname}`, text, files: [file] }
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData)
+        return true
+      }
+    }
+  } catch {
+    // 图片生成或分享失败，降级到纯文字
+  }
+
+  return shareText(text, `告警: ${data.alertname}`)
 }
 
 /**

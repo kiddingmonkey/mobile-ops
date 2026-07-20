@@ -38,49 +38,30 @@ export function stopAlertPolling() {
 // 检查新告警
 async function checkNewAlerts() {
   try {
-    // 获取最近的告警（最近1小时）
-    const alerts = await api.get('/alerts', {
-      params: {
-        start: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-        end: new Date().toISOString(),
-        limit: 50
-      }
-    })
+    const alerts = await api.listAlerts(50).catch(() => [])
 
     if (!Array.isArray(alerts)) return
 
-    // 过滤出新的紧急/警告级别告警
     const newUrgentAlerts = alerts.filter((alert: any) => {
-      // 只处理未见过的告警
       if (seenAlertIds.has(alert.id)) return false
-
-      // 只处理紧急和警告级别
+      if (alert.status !== 'firing') return false
       const severity = alert.severity?.toLowerCase() || ''
       if (!['critical', 'warning'].includes(severity)) return false
-
-      // 只处理激活状态的告警
-      if (alert.state !== 'firing' && alert.state !== 'pending') return false
-
-      // 标记为已见
       seenAlertIds.add(alert.id)
-
       return true
     })
 
-    // 发送通知
     for (const alert of newUrgentAlerts) {
       console.log('[AlertPoller] New urgent alert:', alert)
-
       await sendUrgentAlert({
         id: alert.id,
-        title: alert.name || alert.alertname || '未知告警',
-        message: alert.summary || alert.description || alert.message || '无详细信息',
+        title: alert.alertname || '未知告警',
+        message: alert.summary || alert.description || '无详细信息',
         severity: alert.severity?.toLowerCase() === 'critical' ? 'critical' : 'warning',
-        source: alert.cluster_name || alert.instance || alert.job || undefined
+        source: alert.labels?.cluster || alert.labels?.instance || undefined
       })
     }
 
-    // 清理旧的已见ID（保留最近1000个）
     if (seenAlertIds.size > 1000) {
       const arr = Array.from(seenAlertIds)
       seenAlertIds.clear()

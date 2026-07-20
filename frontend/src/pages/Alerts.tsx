@@ -544,49 +544,42 @@ export default function AlertsPage() {
           ) : (
             <>
               {tab === 'silenced' ? (
-                // 屏蔽列表
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {activeSilences.map(s => (
-                    <div key={s.id} className="card" style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                            {s.matchers?.map((m: any) => `${m.name}=${m.value}`).join(', ')}
+                // 屏蔽列表（与告警卡片一致的紧凑样式）
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {activeSilences
+                    .filter(s => !searchKeyword || s.matchers?.some((m: any) => m.value?.includes(searchKeyword)) || s.comment?.includes(searchKeyword))
+                    .slice(0, pageSize)
+                    .map(s => (
+                    <div key={s.id} className="card" style={{ padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }}/>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                              {s.matchers?.map((m: any) => `${m.name}=${m.value}`).join(', ')}
+                            </span>
+                            <Button size="mini" color="danger" fill="outline" style={{ fontSize: 10, padding: '2px 6px' }}
+                              onClick={async () => {
+                                const confirm = await Dialog.confirm({ content: '确认取消屏蔽？' })
+                                if (!confirm) return
+                                try {
+                                  await api.deleteSilence(1, s.id)
+                                  Toast.show({ icon: 'success', content: '已取消屏蔽' })
+                                  load()
+                                } catch (e) { Toast.show({ icon: 'fail', content: friendlyApiError(e) }) }
+                              }}
+                            >取消</Button>
                           </div>
-                          {s.comment && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                              {s.comment}
-                            </div>
-                          )}
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            创建者: {s.createdBy} | 过期: {new Date(s.endsAt).toLocaleString('zh-CN')}
+                          {s.comment && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.comment}</div>}
+                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                            {s.createdBy} | 过期 {new Date(s.endsAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
-                        <Button
-                          size="mini"
-                          color="danger"
-                          fill="outline"
-                          onClick={async () => {
-                            const confirm = await Dialog.confirm({ content: '确认取消屏蔽？' })
-                            if (!confirm) return
-                            try {
-                              await api.deleteSilence(1, s.id)
-                              Toast.show({ icon: 'success', content: '已取消屏蔽' })
-                              load()
-                            } catch (e) {
-                              Toast.show({ icon: 'fail', content: friendlyApiError(e) })
-                            }
-                          }}
-                        >
-                          取消
-                        </Button>
                       </div>
                     </div>
                   ))}
                   {activeSilences.length === 0 && (
-                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                      暂无屏蔽规则
-                    </div>
+                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>暂无屏蔽规则</div>
                   )}
                 </div>
               ) : (
