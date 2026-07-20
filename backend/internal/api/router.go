@@ -19,12 +19,14 @@ type Handler struct {
 	config  *services.ConfigService
 	scale   *services.ScaleService
 	alert   *services.AlertService
+	dialing *services.DialingService
 	cipher  *utils.Cipher
 }
 
 func NewHandler(db *sqlx.DB, cfg *config.Config, auth *services.AuthService,
-	configSvc *services.ConfigService, scale *services.ScaleService, alert *services.AlertService, cipher *utils.Cipher) *Handler {
-	return &Handler{db: db, cfg: cfg, auth: auth, config: configSvc, scale: scale, alert: alert, cipher: cipher}
+	configSvc *services.ConfigService, scale *services.ScaleService, alert *services.AlertService,
+	dialing *services.DialingService, cipher *utils.Cipher) *Handler {
+	return &Handler{db: db, cfg: cfg, auth: auth, config: configSvc, scale: scale, alert: alert, dialing: dialing, cipher: cipher}
 }
 
 func (h *Handler) Register(r *gin.Engine) {
@@ -145,6 +147,14 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/cls/regions/:region/logsets", h.ListCLSLogsets)
 		priv.GET("/cls/regions/:region/logsets/:logset_id/topics", h.ListCLSTopics)
 		priv.POST("/cls/search", h.SearchCLSLogs)
+
+		// 拨测任务
+		priv.GET("/dialing/tasks", h.ListDialingTasks)
+		priv.GET("/dialing/tasks/:id", h.GetDialingTaskDetail)
+		priv.GET("/dialing/tasks/:id/rerun-command", h.BuildRerunCommand)
+		priv.POST("/dialing/tasks/:id/rerun", h.TriggerDialingRerun)
+		priv.GET("/dialing/tasks/:id/rerun-history", h.ListDialingRerunHistory)
+		priv.POST("/dialing/sync", h.SyncDialingTasks)
 
 		// 通知渠道（飞书 Webhook 等）
 		priv.GET("/notifications/webhooks", h.ListNotificationWebhooks)

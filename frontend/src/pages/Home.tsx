@@ -153,12 +153,13 @@ export default function HomePage() {
             </Section>
           )}
 
-          {/* ③ 快速操作 4 宫格 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+          {/* ③ 快速操作 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 16 }}>
             {[
               { icon: '⚡', label: '扩容', path: '/scale', color: 'var(--accent-blue)' },
               { icon: '🔍', label: '诊断', path: '/diagnose', color: 'var(--success)' },
               { icon: '☸️', label: '资源', path: clusters[0] ? `/clusters/${clusters[0].id}/resources` : '/settings/clusters', color: 'var(--warning)' },
+              { icon: '📡', label: '拨测', path: '/dialing', color: 'var(--accent-blue)' },
               { icon: '🔒', label: '安全组', path: '/settings/security-groups', color: 'var(--text-secondary)' }
             ].map((it, i) => (
               <div

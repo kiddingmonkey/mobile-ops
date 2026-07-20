@@ -15,6 +15,20 @@ type Config struct {
 	PrometheusDefault PrometheusSourceConfig  `mapstructure:"prometheus_default"`
 	AlertManager      AlertManagerConfig      `mapstructure:"alertmanager"`
 	Policy            PolicyConfig            `mapstructure:"policy"`
+	Dialing           DialingConfig           `mapstructure:"dialing"`
+}
+
+type DialingConfig struct {
+	Enabled             bool   `mapstructure:"enabled"`
+	BaseURL             string `mapstructure:"base_url"`
+	ApplicationID       string `mapstructure:"application_id"`
+	Token               string `mapstructure:"token"`
+	Username            string `mapstructure:"username"`
+	Password            string `mapstructure:"password"`
+	LoginURL            string `mapstructure:"login_url"`
+	PullIntervalSeconds int    `mapstructure:"pull_interval_seconds"`
+	BastionURL          string `mapstructure:"bastion_url"`
+	ScriptBaseDir       string `mapstructure:"script_base_dir"`
 }
 
 type ServerConfig struct {

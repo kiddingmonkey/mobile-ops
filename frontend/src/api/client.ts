@@ -312,6 +312,56 @@ class ApiClient {
     return (await this.http.post(`/security-groups/whitelists/${id}/apply`, ip ? { ip } : {})).data
   }
 
+  // ============ Dialing 拨测 ============
+  async listDialingTasks(params: {
+    keyword?: string
+    isactive?: string
+    notification_enable?: string
+    page?: number
+    page_size?: number
+  } = {}) {
+    return (await this.http.get('/dialing/tasks', { params })).data as {
+      total: number; page: number; page_size: number; items: any[]
+    }
+  }
+  async getDialingTaskDetail(id: string) {
+    return (await this.http.get(`/dialing/tasks/${id}`)).data as {
+      source: 'live' | 'cache'
+      data: any
+    }
+  }
+  async getDialingRerunCommand(id: string, configId?: string) {
+    const params = configId ? { config_id: configId } : {}
+    return (await this.http.get(`/dialing/tasks/${id}/rerun-command`, { params })).data as {
+      taskName: string
+      targetIp: string
+      pointName: string
+      scriptDir: string
+      bastionUrl: string
+      commands: Array<{
+        plugin: string
+        url: string
+        params: string
+        command: string
+        oneLiner: string
+      }>
+    }
+  }
+  async syncDialingTasks() {
+    return (await this.http.post('/dialing/sync')).data
+  }
+  async triggerDialingRerun(id: string) {
+    return (await this.http.post(`/dialing/tasks/${id}/rerun`, {}, { timeout: 90000 })).data as {
+      success: boolean
+      message: string
+      perPoint: Record<string, string>
+      elapsedMs: number
+    }
+  }
+  async dialingRerunHistory(id: string) {
+    return (await this.http.get(`/dialing/tasks/${id}/rerun-history`)).data as any[]
+  }
+
   // ============ CLS 日志服务 ============
   async listCLSLogsets(region: string) {
     const r = (await this.http.get(`/cls/regions/${region}/logsets`)).data

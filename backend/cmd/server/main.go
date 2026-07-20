@@ -78,11 +78,13 @@ func main() {
 	configSvc := services.NewConfigService(database, cipher, k8sPool)
 	scaleSvc := services.NewScaleService(database, cfg.Policy, configSvc)
 	alertSvc := services.NewAlertService(database)
+	dialingSvc := services.NewDialingService(database, cfg.Dialing)
 
 	// 起后台 poller（扩容后节点 Ready 轮询）
 	pollCtx, pollCancel := context.WithCancel(context.Background())
 	defer pollCancel()
 	go scaleSvc.RunPoller(pollCtx)
+	go dialingSvc.RunPoller(pollCtx)
 
 	// 起 HTTP server
 	gin.SetMode(cfg.Server.Mode)
@@ -90,7 +92,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(RequestLogger(logger))
 
-	h := api.NewHandler(database, cfg, authSvc, configSvc, scaleSvc, alertSvc, cipher)
+	h := api.NewHandler(database, cfg, authSvc, configSvc, scaleSvc, alertSvc, dialingSvc, cipher)
 	h.Register(r)
 
 	srv := &http.Server{

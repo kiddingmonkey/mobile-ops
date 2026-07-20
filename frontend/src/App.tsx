@@ -26,6 +26,8 @@ import ClusterResourcesPage from '@/pages/ClusterResources'
 import PodDetailPage from '@/pages/PodDetail'
 import ResourceDetailPage from '@/pages/ResourceDetail'
 import NodePoolDetailPage from '@/pages/NodePoolDetail'
+import DialingPage from '@/pages/Dialing'
+import DialingDetailPage from '@/pages/DialingDetail'
 import GrafanaSettingsPage from '@/pages/settings/GrafanaSettings'
 import SecurityGroupsPage from '@/pages/settings/SecurityGroups'
 import SecurityGroupNewPage from '@/pages/settings/SecurityGroupNew'
@@ -206,6 +208,8 @@ export default function App() {
 
           {/* 独立页面（无底部 TabBar） */}
           <Route path="/operations" element={<Protected><OperationsPage /></Protected>} />
+          <Route path="/dialing" element={<Protected><DialingPage /></Protected>} />
+          <Route path="/dialing/:id" element={<Protected><DialingDetailPage /></Protected>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
