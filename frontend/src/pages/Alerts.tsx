@@ -150,11 +150,16 @@ export default function AlertsPage() {
 
   // 执行告警查询（提取 generatorURL 里的 PromQL 并查询 VM）
   const executeQuery = async (alert: any) => {
-    // 假设告警对象有 generator_url 或从 annotations 获取
-    const generatorURL = alert.generator_url || alert.annotations?.generator_url
+    const generatorURL = alert.generator_url
     const query = extractPromQLFromURL(generatorURL)
     if (!query) {
-      Toast.show({ icon: 'fail', content: '无法提取查询语句' })
+      // 没有 generatorURL，用 alertname 构建查询
+      const fallbackQuery = alert.alertname || ''
+      if (!fallbackQuery) {
+        Toast.show({ icon: 'fail', content: '无查询语句' })
+        return
+      }
+      Toast.show({ content: `该告警无 generatorURL，请在 VMUI 手动查询: ${fallbackQuery}`, duration: 3000 })
       return
     }
     Toast.show({ icon: 'loading', content: '查询中...', duration: 0 })
@@ -181,49 +186,44 @@ export default function AlertsPage() {
     }
   }
 
-  // 查看告警规则（从 Grafana vmrules 获取）
+  // 查看告警规则
   const viewAlertRule = async (alert: any) => {
-    Toast.show({ icon: 'loading', content: '加载规则...', duration: 0 })
     try {
-      const rules = await api.getVMRules(1)
+      Toast.show({ icon: 'loading', content: '加载规则...', duration: 0 })
+      const rules = await api.getVMRules(1).catch(() => null)
       Toast.clear()
 
+      if (!rules || !rules.data || !rules.data.groups) {
+        Toast.show({ content: '暂无法获取规则，请在 Grafana vmrules 查看', duration: 2000 })
+        return
+      }
+
       let matchedRule: any = null
-      if (rules?.data?.groups) {
-        for (const group of rules.data.groups) {
-          const found = group.rules?.find((r: any) => r.name === alert.alertname || r.alert === alert.alertname)
-          if (found) {
-            matchedRule = found
-            break
-          }
-        }
+      for (const group of rules.data.groups) {
+        if (!group.rules) continue
+        const found = group.rules.find((r: any) => r.name === alert.alertname || r.alert === alert.alertname)
+        if (found) { matchedRule = found; break }
       }
 
       if (matchedRule) {
         Dialog.alert({
-          title: '告警规则',
+          title: alert.alertname,
           content: (
-            <div style={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
-              <div style={{ marginBottom: 8, fontWeight: 600 }}>规则名称:</div>
-              <div style={{ marginBottom: 12, color: 'var(--primary)' }}>{matchedRule.name || matchedRule.alert}</div>
-              <div style={{ marginBottom: 8, fontWeight: 600 }}>表达式:</div>
-              <div style={{ marginBottom: 12 }}>{matchedRule.expr || matchedRule.query}</div>
-              {matchedRule.labels && (
-                <>
-                  <div style={{ marginBottom: 8, fontWeight: 600 }}>标签:</div>
-                  <div>{JSON.stringify(matchedRule.labels, null, 2)}</div>
-                </>
-              )}
+            <div style={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '250px', overflowY: 'auto' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>表达式:</div>
+              <div style={{ color: 'var(--primary)', marginBottom: 8 }}>{matchedRule.expr || matchedRule.query || 'N/A'}</div>
+              {matchedRule.for && <div><b>持续:</b> {matchedRule.for}</div>}
+              {matchedRule.labels && <div><b>标签:</b> {JSON.stringify(matchedRule.labels)}</div>}
             </div>
           ),
           confirmText: '关闭'
         })
       } else {
-        Toast.show({ content: '未找到匹配规则，请在 Grafana 中查看 vmrules', duration: 3000 })
+        Toast.show({ content: '未找到匹配规则', duration: 2000 })
       }
-    } catch (e) {
+    } catch {
       Toast.clear()
-      Toast.show({ icon: 'fail', content: '规则加载失败: ' + friendlyApiError(e) })
+      Toast.show({ icon: 'fail', content: '规则加载失败' })
     }
   }
 
@@ -393,6 +393,8 @@ export default function AlertsPage() {
     ? alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && isMyAlert(a) && !staleAlerts.includes(a))
     : tab === 'other'
     ? alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && !isMyAlert(a) && !staleAlerts.includes(a))
+    : tab === 'resolved'
+    ? alerts.filter(a => a.status === 'resolved')
     : tab === 'silenced' ? alerts
     : tab === 'ignored'
     ? [...alerts.filter(a => ignoredAlerts.has(a.alertname)), ...staleAlerts]
@@ -487,8 +489,9 @@ export default function AlertsPage() {
             '--active-title-color': 'var(--accent-blue)',
             '--active-line-color': 'var(--accent-blue)'
           } as any}>
-            <Tabs.Tab title={`我的 (${alerts.filter(a => !ignoredAlerts.has(a.alertname) && isMyAlert(a)).length})`} key="mine" />
-            <Tabs.Tab title={`其他 (${alerts.filter(a => !ignoredAlerts.has(a.alertname) && !isMyAlert(a)).length})`} key="other" />
+            <Tabs.Tab title={`我的 (${alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && isMyAlert(a) && !staleAlerts.includes(a)).length})`} key="mine" />
+            <Tabs.Tab title={`其他 (${alerts.filter(a => a.status === 'firing' && !ignoredAlerts.has(a.alertname) && !isMyAlert(a) && !staleAlerts.includes(a)).length})`} key="other" />
+            <Tabs.Tab title={`已恢复 (${alerts.filter(a => a.status === 'resolved').length})`} key="resolved" />
             <Tabs.Tab title={`屏蔽 (${activeSilences.length})`} key="silenced" />
             <Tabs.Tab title={`已忽略 (${ignoredAlerts.size + staleAlerts.length})`} key="ignored" />
           </Tabs>
@@ -669,16 +672,17 @@ export default function AlertsPage() {
                               fill="outline"
                               onClick={async (e) => {
                                 e.stopPropagation()
-                                const action = await ActionSheet.show({
+                                let selectedDuration = ''
+                                await ActionSheet.show({
                                   actions: [
-                                    { key: '30m', text: '30 分钟' },
-                                    { key: '1h', text: '1 小时' },
-                                    { key: '6h', text: '6 小时' },
-                                    { key: '1d', text: '1 天' }
+                                    { key: '30m', text: '30 分钟', onClick: () => { selectedDuration = '30m' } },
+                                    { key: '1h', text: '1 小时', onClick: () => { selectedDuration = '1h' } },
+                                    { key: '6h', text: '6 小时', onClick: () => { selectedDuration = '6h' } },
+                                    { key: '1d', text: '1 天', onClick: () => { selectedDuration = '1d' } }
                                   ]
                                 })
-                                if (action && typeof action === 'object' && 'key' in action) {
-                                  await silenceAlert(a, action.key as string)
+                                if (selectedDuration) {
+                                  await silenceAlert(a, selectedDuration)
                                 }
                               }}
                               style={{ fontSize: 10, padding: '2px 8px' }}
@@ -861,46 +865,49 @@ export default function AlertsPage() {
                         )
                       })()}
 
-                      {/* 展开详情 */}
+                      {/* 查看详情（弹窗） */}
                       {(a.labels || a.annotations || a.count > 1) && (
-                        <details style={{ marginTop: 8 }}>
-                          <summary style={{ fontSize: 11, color: 'var(--accent-blue)', cursor: 'pointer' }}>
-                            查看详情 {a.count > 1 && `(${a.count} 个实例)`}
-                          </summary>
-                          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
-                            {a.count > 1 ? (
-                              // 聚合告警：展示所有实例
-                              <div>
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>受影响的实例:</div>
-                                {a.items.map((item: any, idx: number) => (
-                                  <div key={idx} style={{
-                                    background: 'var(--bg-secondary)',
-                                    padding: 6,
-                                    borderRadius: 4,
-                                    marginBottom: 4,
-                                    borderLeft: `3px solid ${severityColor(item.severity)}`
-                                  }}>
-                                    {item.labels?.pod && <div><b>Pod:</b> {item.labels.pod}</div>}
-                                    {item.labels?.instance && <div><b>实例:</b> {item.labels.instance}</div>}
-                                    {item.labels?.namespace && <div><b>命名空间:</b> {item.labels.namespace}</div>}
-                                    <div style={{ fontSize: 10, marginTop: 2 }}>开始: {fmtTime(item.starts_at)}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              // 单个告警：展示详细信息
-                              <>
-                                {a.labels && Object.entries(a.labels).map(([k, v]) => (
-                                  <div key={k}><b>{k}:</b> {String(v)}</div>
-                                ))}
-                                {a.annotations && Object.entries(a.annotations).map(([k, v]) => (
-                                  <div key={k}><b>{k}:</b> {String(v)}</div>
-                                ))}
-                                <div style={{ marginTop: 4 }}>开始: {fmtTime(a.starts_at)}</div>
-                              </>
-                            )}
-                          </div>
-                        </details>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            Dialog.alert({
+                              title: a.alertname,
+                              content: (
+                                <div style={{ fontSize: 11, maxHeight: '60vh', overflowY: 'auto', lineHeight: 1.6 }}>
+                                  {a.count > 1 ? (
+                                    <div>
+                                      <div style={{ fontWeight: 600, marginBottom: 6 }}>受影响实例 ({a.count}):</div>
+                                      {a.items.map((item: any, idx: number) => (
+                                        <div key={idx} style={{ background: 'var(--bg-secondary)', padding: 6, borderRadius: 4, marginBottom: 4, borderLeft: `3px solid ${severityColor(item.severity)}` }}>
+                                          {item.labels?.pod && <div><b>Pod:</b> {item.labels.pod}</div>}
+                                          {item.labels?.instance && <div><b>实例:</b> {item.labels.instance}</div>}
+                                          {item.labels?.namespace && <div><b>NS:</b> {item.labels.namespace}</div>}
+                                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>开始: {fmtTime(item.starts_at)}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      {a.labels && Object.entries(a.labels).map(([k, v]) => (
+                                        <div key={k}><b>{k}:</b> {String(v)}</div>
+                                      ))}
+                                      {a.annotations && Object.entries(a.annotations).map(([k, v]) => (
+                                        <div key={k} style={{ marginTop: 4 }}><b>{k}:</b> {String(v)}</div>
+                                      ))}
+                                      <div style={{ marginTop: 6 }}>开始: {fmtTime(a.starts_at)}</div>
+                                      {a.ends_at && <div>恢复: {fmtTime(a.ends_at)}</div>}
+                                      {a.generator_url && <div style={{ marginTop: 4, fontSize: 10, wordBreak: 'break-all', color: 'var(--accent-blue)' }}>{a.generator_url}</div>}
+                                    </div>
+                                  )}
+                                </div>
+                              ),
+                              confirmText: '关闭'
+                            })
+                          }}
+                          style={{ fontSize: 10, color: 'var(--accent-blue)', cursor: 'pointer', marginTop: 4, display: 'inline-block' }}
+                        >
+                          查看详情 {a.count > 1 ? `(${a.count} 个实例)` : ''}
+                        </div>
                       )}
                     </div>
                   </details>
