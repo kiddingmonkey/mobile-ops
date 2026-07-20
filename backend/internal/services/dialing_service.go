@@ -129,8 +129,13 @@ func (s *DialingService) callAPI(ctx context.Context, method, path string, form 
 
 // SyncAll 全量拉取拨测任务并入库
 func (s *DialingService) SyncAll(ctx context.Context) error {
+	start := time.Now()
+	var syncID int64
+	_ = s.db.QueryRowContext(ctx, `INSERT INTO dialing_sync_status (started_at) VALUES (NOW()) RETURNING id`).Scan(&syncID)
+
 	page := 1
 	total := 0
+	var syncErr error
 	for {
 		form := url.Values{}
 		form.Set("applicationId", s.cfg.ApplicationID)
@@ -139,7 +144,8 @@ func (s *DialingService) SyncAll(ctx context.Context) error {
 		form.Set("pageSize", "100")
 		raw, err := s.callAPI(ctx, http.MethodPost, "/uoamp-end/dialingTask/dialingTaskList.do", form)
 		if err != nil {
-			return err
+			syncErr = err
+			break
 		}
 		var resp struct {
 			Code string `json:"code"`
@@ -152,10 +158,12 @@ func (s *DialingService) SyncAll(ctx context.Context) error {
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(raw, &resp); err != nil {
-			return fmt.Errorf("parse list: %w", err)
+			syncErr = fmt.Errorf("parse list: %w", err)
+			break
 		}
 		if resp.Code != "00100000" {
-			return fmt.Errorf("dialing list rc=%s msg=%s", resp.Code, resp.Msg)
+			syncErr = fmt.Errorf("dialing list rc=%s msg=%s", resp.Code, resp.Msg)
+			break
 		}
 		for _, item := range resp.Data.List {
 			if err := s.upsertTask(ctx, item); err != nil {
@@ -168,6 +176,16 @@ func (s *DialingService) SyncAll(ctx context.Context) error {
 		}
 		page++
 	}
+
+	elapsed := time.Since(start).Milliseconds()
+	if syncErr != nil {
+		_, _ = s.db.ExecContext(ctx, `UPDATE dialing_sync_status SET finished_at=NOW(), success=false, task_count=$1, error_message=$2, duration_ms=$3 WHERE id=$4`,
+			total, syncErr.Error(), elapsed, syncID)
+		logrus.WithError(syncErr).WithField("count", total).Warn("dialing sync failed")
+		return syncErr
+	}
+	_, _ = s.db.ExecContext(ctx, `UPDATE dialing_sync_status SET finished_at=NOW(), success=true, task_count=$1, duration_ms=$2 WHERE id=$3`,
+		total, elapsed, syncID)
 	logrus.WithField("count", total).Info("dialing sync done")
 	return nil
 }
@@ -487,3 +505,36 @@ func (s *DialingService) upsertConfig(ctx context.Context, taskID string, c map[
 	)
 	return err
 }
+
+// GetSyncStatus 拿最近一次同步的状态（成功/失败/耗时）
+func (s *DialingService) GetSyncStatus(ctx context.Context) (map[string]any, error) {
+	type row struct {
+		StartedAt    string  `db:"started_at"`
+		FinishedAt   *string `db:"finished_at"`
+		Success      bool    `db:"success"`
+		TaskCount    *int    `db:"task_count"`
+		ErrorMessage *string `db:"error_message"`
+		DurationMs   *int    `db:"duration_ms"`
+	}
+	var r row
+	err := s.db.GetContext(ctx, &r, `SELECT to_char(started_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS started_at,
+	                                         to_char(finished_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS finished_at,
+	                                         success, task_count, error_message, duration_ms
+	                                  FROM dialing_sync_status ORDER BY started_at DESC LIMIT 1`)
+	if err == sql.ErrNoRows {
+		return map[string]any{"lastSync": nil}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]any{
+		"startedAt":    r.StartedAt,
+		"finishedAt":   r.FinishedAt,
+		"success":      r.Success,
+		"taskCount":    r.TaskCount,
+		"errorMessage": r.ErrorMessage,
+		"durationMs":   r.DurationMs,
+	}
+	return map[string]any{"lastSync": m}, nil
+}
+

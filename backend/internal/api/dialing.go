@@ -267,6 +267,20 @@ func (h *Handler) BuildRerunCommand(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json; charset=utf-8", rawJSON)
 }
 
+// GetDialingSyncStatus GET /dialing/sync-status  返回最近一次同步的时间/成功/失败信息
+func (h *Handler) GetDialingSyncStatus(c *gin.Context) {
+	if h.dialing == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dialing service disabled"})
+		return
+	}
+	status, err := h.dialing.GetSyncStatus(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

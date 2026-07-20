@@ -42,6 +42,12 @@ export default function DialingPage() {
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<{
+    startedAt: string
+    finishedAt?: string
+    success: boolean
+    errorMessage?: string
+  } | null>(null)
 
   const load = async (reset: boolean, overrides?: { keyword?: string; isactive?: string; notif?: string }) => {
     if (loading) return
@@ -71,8 +77,18 @@ export default function DialingPage() {
 
   useEffect(() => {
     load(true)
+    loadSyncStatus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadSyncStatus = async () => {
+    try {
+      const r = await api.getDialingSyncStatus()
+      setSyncStatus(r.lastSync)
+    } catch (e) {
+      // 静默失败不影响主功能
+    }
+  }
 
   const onFilter = (nextIsactive: string, nextNotif: string) => {
     setIsactive(nextIsactive)
@@ -87,6 +103,7 @@ export default function DialingPage() {
       Toast.clear()
       Toast.show({ icon: 'success', content: '已刷新' })
       load(true)
+      loadSyncStatus()
     } catch (e) {
       Toast.clear()
       Toast.show({ icon: 'fail', content: friendlyApiError(e) })
@@ -106,6 +123,23 @@ export default function DialingPage() {
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8 }}>
           共 {total} 项 · 启用 {activeCount} · 通知关 {notifOffCount}
         </div>
+        {syncStatus && (
+          <div style={{
+            fontSize: 10, marginBottom: 8, padding: '4px 8px', borderRadius: 6,
+            background: syncStatus.success ? 'rgba(0, 200, 100, 0.05)' : 'rgba(255, 80, 80, 0.08)',
+            border: `1px solid ${syncStatus.success ? 'var(--success)' : 'var(--danger)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <span style={{ color: syncStatus.success ? 'var(--success)' : 'var(--danger)' }}>
+              {syncStatus.success ? '✓' : '✗'} 最后同步: {new Date(syncStatus.startedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </span>
+            {syncStatus.errorMessage && (
+              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', maxWidth: '60%', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {syncStatus.errorMessage}
+              </span>
+            )}
+          </div>
+        )}
         <SearchBar
           placeholder="搜索拨测名 / 描述"
           value={keyword}

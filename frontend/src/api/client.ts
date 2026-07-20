@@ -361,6 +361,19 @@ class ApiClient {
   async dialingRerunHistory(id: string) {
     return (await this.http.get(`/dialing/tasks/${id}/rerun-history`)).data as any[]
   }
+  async getDialingSyncStatus() {
+    return (await this.http.get('/dialing/sync-status')).data as {
+      lastSync: {
+        startedAt: string
+        finishedAt?: string
+        success: boolean
+        taskCount?: number
+        errorMessage?: string
+        durationMs?: number
+      } | null
+    }
+  }
+
 
   // ============ CLS 日志服务 ============
   async listCLSLogsets(region: string) {
