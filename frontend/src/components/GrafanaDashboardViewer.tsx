@@ -24,9 +24,11 @@ interface DashboardStructure {
 }
 
 interface Props {
-  /** 原始 Grafana URL */
+  /** 原始 Grafana URL（仅用来提取 dashboard uid） */
   originalUrl: string
-  /** Grafana API Token */
+  /** 集群 ID，走后端代理拿数据（避免手机端连不上内网 Grafana） */
+  clusterId?: number
+  /** Grafana API Token（直连模式下使用；走代理时忽略） */
   apiToken?: string
   /** 是否显示全部面板（false=仅关键指标） */
   showAll?: boolean
@@ -41,6 +43,7 @@ interface Props {
  */
 const GrafanaDashboardViewer: React.FC<Props> = ({
   originalUrl,
+  clusterId,
   apiToken,
   showAll = false
 }) => {
@@ -70,15 +73,23 @@ const GrafanaDashboardViewer: React.FC<Props> = ({
 
     const fetchDashboard = async () => {
       try {
-        const headers: Record<string, string> = {}
-        if (apiToken) {
-          headers.Authorization = `Bearer ${apiToken}`
+        let resp: any
+        if (clusterId) {
+          // 走后端代理，用集群绑定的 Grafana Source（内网地址+token）
+          const mobileToken = localStorage.getItem('mobile_ops_token') || ''
+          resp = await axios.get(
+            `/api/v1/clusters/${clusterId}/grafana/proxy/api/dashboards/uid/${grafanaInfo.uid}`,
+            { headers: mobileToken ? { Authorization: `Bearer ${mobileToken}` } : {} }
+          )
+        } else {
+          // 兜底：直连原始 URL（仅当集群未配 Grafana Source 时才该走）
+          const headers: Record<string, string> = {}
+          if (apiToken) headers.Authorization = `Bearer ${apiToken}`
+          resp = await axios.get(
+            `${grafanaInfo.baseUrl}/api/dashboards/uid/${grafanaInfo.uid}`,
+            { headers }
+          )
         }
-
-        const resp = await axios.get(
-          `${grafanaInfo.baseUrl}/api/dashboards/uid/${grafanaInfo.uid}`,
-          { headers }
-        )
 
         const dashboard = resp.data.dashboard
         const panels = dashboard.panels || []
@@ -124,11 +135,16 @@ const GrafanaDashboardViewer: React.FC<Props> = ({
     }
 
     fetchDashboard()
-  }, [grafanaInfo, apiToken])
+  }, [grafanaInfo, apiToken, clusterId])
 
-  // 生成面板嵌入 URL
+  // 生成面板嵌入 URL —— 有 clusterId 时走后端代理，iframe 无法带 header 用 _token query 兜底
   const getPanelEmbedUrl = (panelId: number) => {
     if (!grafanaInfo) return ''
+    if (clusterId) {
+      const mobileToken = localStorage.getItem('mobile_ops_token') || ''
+      const q = `orgId=1&panelId=${panelId}&theme=dark&kiosk=${mobileToken ? `&_token=${encodeURIComponent(mobileToken)}` : ''}`
+      return `/api/v1/clusters/${clusterId}/grafana/proxy/d-solo/${grafanaInfo.uid}?${q}`
+    }
     return `${grafanaInfo.baseUrl}/d-solo/${grafanaInfo.uid}?orgId=1&panelId=${panelId}&theme=dark`
   }
 

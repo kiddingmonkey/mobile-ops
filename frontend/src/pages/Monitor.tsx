@@ -506,6 +506,7 @@ export default function MonitorPage() {
                       {activePanel.useSmartViewer ? (
                         <GrafanaDashboardViewer
                           originalUrl={activePanel.originalUrl}
+                          clusterId={activeClusterId || undefined}
                           apiToken={activePanel.apiToken}
                         />
                       ) : (

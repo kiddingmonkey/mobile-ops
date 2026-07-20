@@ -11,12 +11,18 @@ import (
 
 func RequireAuth(auth *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tok string
 		h := c.GetHeader("Authorization")
-		if !strings.HasPrefix(h, "Bearer ") {
+		if strings.HasPrefix(h, "Bearer ") {
+			tok = strings.TrimPrefix(h, "Bearer ")
+		} else if q := c.Query("_token"); q != "" {
+			// iframe / img 无法带 Authorization header，允许 GET 类静态资源用 query 兜底
+			tok = q
+		}
+		if tok == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		tok := strings.TrimPrefix(h, "Bearer ")
 		claims, err := auth.ParseToken(tok)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})

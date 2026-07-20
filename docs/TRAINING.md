@@ -361,25 +361,315 @@ GitHub Actions触发
 
 ### 5.4 OTA热更新机制
 
+#### 5.4.1 整体架构
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│ 设置页 → 检查更新                                        │
-│   ├─ GET /api/v1/updates/latest（获取最新dist.zip版本）   │
-│   ├─ 对比当前版本hash                                    │
-│   └─ 有新版本 → 提示更新                                 │
-│                                                         │
-│ 用户确认更新                                             │
-│   ├─ 下载dist.zip（前端编译包）                          │
-│   ├─ fflate解压到 Filesystem.Data                       │
-│   ├─ WebView.setServerBasePath（切换资源目录）            │
-│   └─ window.location.reload()（重载生效）                │
-│                                                         │
-│ 优点：无需重装APK，秒级更新                              │
-│ 限制：只能更新前端资源，不能更新原生代码                   │
-└─────────────────────────────────────────────────────────┘
+       服务器                                     App
+┌─────────────────────┐             ┌──────────────────────┐
+│ dist/               │             │ 本地版本 (localStorage)│
+│ ├── index.html      │             │  ├── dist_version    │
+│ ├── assets/*.js     │             │  ├── saved_sha256    │
+│ └── version.json    │             │  └── OTA_RESTART_... │
+│                     │             │                      │
+│ dist.zip (打包)     │  ───────►   │ Directory.Data/      │
+│                     │  下载解压    │  webroot/{version}/  │
+│ versions.json       │             │  ├── index.html      │
+│ (历史变更日志)      │              │  ├── assets/*.js    │
+└─────────────────────┘             │  └── version.json    │
+                                    │                      │
+                                    │  WebView 读这里,     │
+                                    │  App 重启后生效      │
+                                    └──────────────────────┘
 ```
 
+#### 5.4.2 三条核心接口 (backend/internal/api/updates.go)
+
+| 接口 | 谁调 | 干啥 |
+|---|---|---|
+| `GET /api/v1/updates/latest` | 手机 App 检查更新 | 返回**当前 dist.zip 的** SHA256、大小、版本号、下载地址 |
+| `GET /api/v1/updates/dist.zip` | 手机 App 下载 | 直接返回 dist.zip 二进制流 |
+| `GET /api/v1/updates/history` | 手机 App 查历史 | 返回 versions.json 里所有历史版本+更新日志 |
+| `POST /api/v1/updates/add-version` | 部署脚本 (可选) | 追加一条 versions.json 记录 |
+
+**关键**：
+- `/updates/latest` 是**动态算的** — 每次调用实时 `sha256(dist.zip)`，服务器上文件变了 SHA256 就变
+- `versions.json` 是**独立维护的更新日志** — 只给用户看，不参与更新判断
+
+#### 5.4.3 更新判断（前端 utils/otaUpdater.ts）
+
+```typescript
+const hasUpdate = currentSha256
+  ? (info.sha256 !== currentSha256)     // 优先比 SHA256（准）
+  : (info.version !== currentVersion)   // 兜底比版本号
+```
+
+**只要 dist.zip 的 SHA256 变了，就判断有更新。**
+
+#### 5.4.4 完整流程（点"检查更新"到生效）
+
+1. **检查阶段**（GET /updates/latest）
+   - 服务器实时读 dist.zip 算 SHA256
+   - 前端比对本地 localStorage 里的 sha256
+   - 不一样 → 有更新
+
+2. **下载阶段**（GET /updates/dist.zip）
+   - axios responseType `arraybuffer` 拿到 zip 二进制
+   - 显示下载进度条
+
+3. **校验阶段**
+   - 本地 `crypto.subtle.digest('SHA-256')` 算下载文件的哈希
+   - 和服务器返回的对比，防传输损坏
+
+4. **解压阶段**（fflate 库）
+   - `unzipSync(uint8array)` 内存解压
+   - 从 zip 里读 `version.json` 记录新版本信息
+
+5. **写入阶段**（Capacitor Filesystem）
+   - 写到 `Directory.Data/webroot/{version}/`（App 沙盒目录，卸载才清）
+   - 文本文件 UTF8 写入，二进制文件 base64 写入
+   - 逐个文件写，显示 "1/N" 进度
+
+6. **切换阶段**
+   - `Filesystem.getUri` 拿绝对路径
+   - **跳过** `WebView.setServerBasePath` （踩过坑：会 WebView 死锁）
+   - 改成保存 `OTA_RESTART_PENDING` 标记
+   - 提示用户"更新完成，请重启 App"
+
+7. **重启后**（App.tsx 启动时）
+   - 检测到 `OTA_RESTART_PENDING` 标记
+   - 从 `Directory.Data/webroot/{last_version}/` 加载
+   - 有 10 秒**健康检查**：如果 App 启动后 10 秒内又启动一次（说明崩了），**自动回退**到内置版本
+
+#### 5.4.5 部署踩坑
+
+**踩过的坑**：`scripts/deploy_frontend.sh` 只推 dist/ 和 dist.zip，**不管 versions.json**。
+
+结果：
+- `/updates/latest` 实时算的 SHA256 是新的 ✓
+- 但 App 里"检查更新"UI 先读 `/updates/history` 展示可选版本 → 用户以为没更新
+
+**修复方式**：手动更新服务器上 `/data2/haowu33/mobile/frontend/versions.json` 追加一条记录，或调用 `POST /api/v1/updates/add-version` 接口写入。
+
+#### 5.4.6 为什么这么设计
+
+- **无需重装 APK**：前端 JS/HTML/CSS 秒级替换，APK 走 GitHub Actions 编译要 3-5 分钟
+- **健康检查回退**：Capacitor WebView 加载新代码崩溃后能自动回内置版，防止砖机
+- **两份存储**：`dist/` 给 Web 浏览器（nginx 静态）+ `dist.zip` 给 App（下载解压）
+
 ---
+
+### 5.5 拨测平台集成（智学网 monitor.zhixue.com）
+
+#### 5.5.1 需求背景
+
+- 大搜平台等 178 个拨测任务分散在多台拨测点机器（skyline_proxy/HWY_proxy 等）
+- 收到告警要跳到拨测点上跑复测脚本验证
+- 拨测点只能通过 ebgoas 4A 堡垒机访问，手工操作繁琐
+- **目标**：手机端一站式查看拨测任务 + 一键复测
+
+#### 5.5.2 整体架构
+
+```
+┌─────────────────────┐   POST 拉列表     ┌────────────────────────┐
+│ mobile-ops backend  │ ───────────────► │ monitor.zhixue.com     │
+│ (10.211.79.100)     │  每 5 分钟自动    │ /uoamp-end/dialingTask │
+│                     │                   │ ├─ dialingTaskList.do  │
+│  ├── DialingService │ ◄──────────────  │ ├─ dialingTaskDetail.do│
+│  │   (定时轮询)     │  178 条拨测       │ └─ testDial.do (复测)  │
+│  │                  │  含 monitorConfig │                        │
+│  └── PostgreSQL     │                   │ 平台后端自己 SSH        │
+│      ├─ dialing_    │                   │ 到拨测点跑脚本 (~40s)   │
+│      │  tasks       │                   └────────────────────────┘
+│      ├─ dialing_    │                                │
+│      │  task_configs│                                ▼
+│      └─ dialing_    │                   ┌────────────────────────┐
+│         rerun_hist  │                   │ 拨测点机器             │
+└─────────────────────┘                   │ 10.106.16.8 等         │
+         ▲                                │ /data/server/          │
+         │ GET /api/v1/dialing/tasks      │  desp-proxy/cmd/       │
+         │ POST /rerun                    │   *.py 拨测脚本         │
+         │                                │   *.json 请求参数       │
+┌─────────────────────┐                   └────────────────────────┘
+│ 手机 App / Web PWA  │
+└─────────────────────┘
+```
+
+#### 5.5.3 关键决策：为什么走平台 testDial.do 而不是直连 SSH
+
+尝试过的方向和结论：
+
+| 方案 | 尝试结果 |
+|------|---------|
+| ❌ 10.211.79.100 直连拨测点 SSH | 10.106.16.8 网络不通、119.3.216.170 免密未配 |
+| ❌ 走 ebgoas.iflysec.com 堡垒机 | Web 4A 无开放 API，无法程序化 |
+| ❌ 在 10.211.79.100 上做本地拨测 | 拨测脚本本体和参数 JSON 都拿不到（plugin/downloadPlugin.do 返回 404） |
+| ✅ **走平台 testDial.do** | 平台后端自己到拨测点跑，我们只拿结果；耗时约 40s，可接受 |
+
+#### 5.5.4 后端组件
+
+**目录结构**：
+```
+backend/
+├── internal/
+│   ├── services/dialing_service.go     # 核心逻辑
+│   │   ├── DialingService struct       # http client + token 缓存
+│   │   ├── RunPoller()                 # 5 分钟循环 SyncAll
+│   │   ├── SyncAll()                   # 全量拉列表并入库
+│   │   ├── FetchTaskDetail()           # 拉单个任务详情
+│   │   └── TriggerRerun()              # 调 testDial.do 一键复测
+│   ├── api/dialing.go                  # HTTP handler
+│   │   ├── ListDialingTasks            # GET /dialing/tasks
+│   │   ├── GetDialingTaskDetail        # GET /dialing/tasks/:id
+│   │   ├── TriggerDialingRerun         # POST /dialing/tasks/:id/rerun
+│   │   ├── ListDialingRerunHistory     # GET /dialing/tasks/:id/rerun-history
+│   │   ├── BuildRerunCommand           # GET /dialing/tasks/:id/rerun-command
+│   │   └── SyncDialingTasks            # POST /dialing/sync (手动触发同步)
+│   └── config/config.go
+│       └── DialingConfig               # token/url/interval 配置
+└── migrations/005_dialing.sql          # 三张表
+```
+
+**config.yaml 结构**：
+```yaml
+dialing:
+  enabled: true
+  base_url: "http://monitor.zhixue.com"
+  application_id: "4b916eb0bccf4c01a2c804fc6c6c0139"  # 大搜平台的 app id
+  token: "eyJhbGciOi..."                              # haowu33 浏览器登录后的 JWT
+  pull_interval_seconds: 300                          # 5 分钟轮询
+  bastion_url: "https://ebgoas.iflysec.com/#/login"   # 手动跳堡垒机深链
+  script_base_dir: "/data/server/desp-proxy/cmd"      # 拨测点上脚本目录
+```
+
+**数据表**：
+
+- `dialing_tasks`（178 条拨测任务缓存，5 分钟刷新）
+  - 主键 `dialing_task_id`
+  - 常用字段：`dialing_task_name`、`monitor_point_ip`、`isactive`、`notification_enable`、`off_reason`
+  - `raw_json` JSONB 保留原始响应做兜底
+
+- `dialing_task_configs`（详情里的 monitorConfigList 展开）
+  - 主键 `monitor_config_id`
+  - 外键 `dialing_task_id`
+  - 关键字段：`plugin_name`、`request_url`、`extend_params`
+
+- `dialing_rerun_history`（复测历史，最近 100 条）
+  - `stdout` 存 `{"skyline_proxy":"验证成功"}` 这种 perPoint JSON
+
+#### 5.5.5 同步机制（Poller）
+
+`DialingService.RunPoller` 启动时（main.go 里 `go dialingSvc.RunPoller(pollCtx)`）：
+
+```go
+1. 检查 cfg.Enabled，不启用直接返回
+2. 立刻触发一次 SyncAll (首启不等 5 分钟)
+3. time.NewTicker(pullIntervalSeconds) 循环
+4. select ctx.Done() / ticker.C
+```
+
+`SyncAll` 的分页逻辑：
+
+```
+POST /uoamp-end/dialingTask/dialingTaskList.do
+Body: applicationId=4b916eb0bccf4c01a2c804fc6c6c0139
+     &alarmGroupIds=
+     &currentPage=1
+     &pageSize=100
+
+响应 (JSON):
+{
+  "code": "00100000",
+  "data": {
+    "currentPage": 1,
+    "totalPages": 2,
+    "count": 178,
+    "list": [...]
+  }
+}
+
+循环 currentPage++ 直到 >= totalPages
+每条 upsertTask() 入库 (ON CONFLICT DO UPDATE)
+```
+
+**响应体首行陷阱**：monitor.zhixue.com 返回体前面会带 `Authorized users only.` banner，需要用 `strings.Index(raw, "{")` 去掉再解析 JSON。
+
+#### 5.5.6 一键复测流程（testDial.do）
+
+**踩过的坑**：
+
+1. **必须先拉详情** — testDial.do 参数几乎是完整 task 配置（20+ 字段），必须先调 `dialingTaskDetail.do` 拿全量数据再拼参数
+2. **operType=add 而非 update** — 平台文档没说，用 update 会返回 `001001 操作失败`
+3. **timeout ≥60s** — 平台真的到拨测点跑脚本，40s 才返回结果，短 timeout 会 502
+4. **contactGroups** 要从第一个 monitorConfig 里提取到顶层字段
+
+**调用序列**：
+
+```
+用户点"一键复测"
+    │
+    ▼
+POST /api/v1/dialing/tasks/:id/rerun
+    │
+    ▼ (后端)
+1. GET dialingTaskDetail.do (~200ms)
+2. 解析 data.monitorConfigList JSON 字符串 → array
+3. 每个 config 加 operType="add"
+4. 拼 20+ 字段的 form body
+5. POST testDial.do (~40s，平台内部到拨测点跑)
+6. 解析 data 字段 (JSON 字符串二次解析)
+    → {"skyline_proxy": "验证成功"}
+7. 写 dialing_rerun_history
+    │
+    ▼
+返回给前端: {
+  success: true,
+  perPoint: {"skyline_proxy": "验证成功"},
+  elapsedMs: 40200
+}
+```
+
+#### 5.5.7 前端组件
+
+**目录**：
+```
+frontend/src/
+├── pages/
+│   ├── Dialing.tsx           # 列表页
+│   │   ├── SearchBar         # 关键字搜索
+│   │   ├── Selector          # isactive / notification 过滤
+│   │   └── InfiniteScroll    # 分页加载
+│   └── DialingDetail.tsx     # 详情页
+│       ├── 状态卡片          # 启用/停用/通知开关/间隔
+│       ├── 一键复测按钮      # 触发 /rerun
+│       ├── 复测结果展示      # perPoint 结果配色
+│       └── 复制命令 / 堡垒机深链 (Plan B)
+├── api/client.ts
+│   ├── listDialingTasks
+│   ├── getDialingTaskDetail
+│   ├── triggerDialingRerun   # timeout=90000
+│   └── syncDialingTasks
+└── App.tsx                    # 路由 /dialing 和 /dialing/:id
+```
+
+**Home 快捷入口**：📡 拨测 图标进列表页
+
+#### 5.5.8 Token 管理（当前限制）
+
+- JWT payload 只有 `iat` 没 `exp`，实际有效期未知
+- 目前 token **硬编码在服务器 config.yaml**，过期时手动更新
+- token 失效表现：手机端调 rerun 报 500，服务器日志 `dialing api 401`
+- 后续可加：`login_url` + 用户名密码，401 时自动 refresh（预留了 `Username/Password/LoginURL` 字段）
+
+#### 5.5.9 如何添加新的拨测
+
+**完全不用改代码**：
+
+1. 在 monitor.zhixue.com 界面添加拨测任务
+2. 等 5 分钟或调用 `POST /api/v1/dialing/sync` 立即同步
+3. 手机端下拉刷新即可看到
+
+---
+
 
 ## 六、部署指南
 
@@ -944,8 +1234,9 @@ mobile-ops/
 | v1.0 | 2026-07-17 | 初始版本，覆盖架构/前后端/CI-CD/部署 |
 | v1.1 | 2026-07-17 | 补齐 K8s 全资源类型 (StatefulSet/DaemonSet/Ingress)；Pod 详情增强 (NodeSelector/Tolerations/Affinity/Volumes/资源汇总)；ResourceDetail 通用详情页；Pod 监控 Tab (Grafana嵌入)；容器文件浏览 + 终端；日志下载/分享；APK 更新改走 GitHub Releases + ghproxy 镜像；深色主题适配；侧滑手势拦截；告警 TTS + 悬浮窗 + 测试功能；FAQ 扩展到 10 条 |
 | v1.2 | 2026-07-17 | 【UX优化】深色模式select文字可见、云日志自动展示、日志按钮缩小、终端倒序、查看日志跳转；【功能】所有日志ERROR高亮（红底+左边框）；【监控】Pod监控Tab改用ECharts时序图（CPU/内存/网络），从Prometheus拉数据；【修复】OTA卡住（getUri超时保护+兜底reload）；【文档】新增推广方案(PROMOTION.md): 宣传视频制作/多端安装/证书信任/飞书微信集成/数据同步架构 |
+| v1.3 | 2026-07-20 | 【新模块】拨测平台集成 (5.5 章节)：接入 monitor.zhixue.com 178 条拨测任务、5 分钟自动同步、一键复测走 testDial.do、复测历史；【修复】Grafana 智能 Viewer 走后端代理，解决 iframe 加载内网 Grafana 失败问题；后端 RequireAuth 中间件加 `_token` query 参数兜底 iframe 鉴权；【文档】5.4 OTA 章节完整重写，加架构图/接口清单/流程/踩坑 |
 
 ---
 
-*文档版本: v1.2 | 最近更新: 2026-07-17 | 项目: CloudPilot 云驾*
+*文档版本: v1.3 | 最近更新: 2026-07-20 | 项目: CloudPilot 云驾*
 *每次功能改动请同步更新此文档，与代码一起 commit*
