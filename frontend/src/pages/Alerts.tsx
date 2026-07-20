@@ -22,6 +22,15 @@ export default function AlertsPage() {
   const [ttsOn, setTtsOn] = useState(getTTSEnabled())
   const [floatingOn, setFloatingOn] = useState(getFloatingAlertEnabled())
   const [activeSilences, setActiveSilences] = useState<any[]>([])
+  // 不关注的告警名称列表（持久化到 localStorage）
+  const [ignoredAlerts, setIgnoredAlerts] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('ignored_alertnames')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
   // 本地状态：已确认和已静默的告警 ID（后端未实现时用 localStorage）
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => {
     try {
@@ -63,6 +72,25 @@ export default function AlertsPage() {
     const obj = Object.fromEntries(silenced)
     localStorage.setItem('silenced_alerts', JSON.stringify(obj))
   }, [silenced])
+
+  useEffect(() => {
+    localStorage.setItem('ignored_alertnames', JSON.stringify([...ignoredAlerts]))
+  }, [ignoredAlerts])
+
+  // 忽略告警（加入不关注列表）
+  const ignoreAlert = (alertname: string) => {
+    setIgnoredAlerts(prev => new Set(prev).add(alertname))
+    Toast.show({ content: `已忽略 ${alertname}`, icon: 'success' })
+  }
+  // 取消忽略
+  const unignoreAlert = (alertname: string) => {
+    setIgnoredAlerts(prev => {
+      const next = new Set(prev)
+      next.delete(alertname)
+      return next
+    })
+    Toast.show({ content: '已恢复关注', icon: 'success' })
+  }
 
   // 确认告警
   const acknowledgeAlert = (alertId: string) => {
@@ -157,11 +185,9 @@ export default function AlertsPage() {
   const viewAlertRule = async (alert: any) => {
     Toast.show({ icon: 'loading', content: '加载规则...', duration: 0 })
     try {
-      // 使用默认 Grafana（ID=1）
       const rules = await api.getVMRules(1)
       Toast.clear()
 
-      // 查找匹配的规则（根据 alertname）
       let matchedRule: any = null
       if (rules?.data?.groups) {
         for (const group of rules.data.groups) {
@@ -193,18 +219,11 @@ export default function AlertsPage() {
           confirmText: '关闭'
         })
       } else {
-        Dialog.confirm({
-          title: '未找到规则',
-          content: '在 Grafana vmrules 中未找到匹配的规则，是否前往查看？',
-          confirmText: '前往 Grafana',
-          onConfirm: () => {
-            window.open('http://jyyun.grafana.changyan.cn/vmrules', '_blank')
-          }
-        })
+        Toast.show({ content: '未找到匹配规则，请在 Grafana 中查看 vmrules', duration: 3000 })
       }
     } catch (e) {
       Toast.clear()
-      Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+      Toast.show({ icon: 'fail', content: '规则加载失败: ' + friendlyApiError(e) })
     }
   }
 
@@ -336,10 +355,12 @@ export default function AlertsPage() {
     }))
   }
 
-  const rawFiltered = tab === 'all' ? alerts
-    : tab === 'critical' ? alerts.filter(a => a.severity === 'critical')
-    : tab === 'warning' ? alerts.filter(a => a.severity === 'warning')
-    : tab === 'silenced' ? alerts : alerts.filter(a => a.status === 'resolved')
+  const rawFiltered = tab === 'all' ? alerts.filter(a => !ignoredAlerts.has(a.alertname))
+    : tab === 'critical' ? alerts.filter(a => a.severity === 'critical' && !ignoredAlerts.has(a.alertname))
+    : tab === 'warning' ? alerts.filter(a => a.severity === 'warning' && !ignoredAlerts.has(a.alertname))
+    : tab === 'silenced' ? alerts
+    : tab === 'ignored' ? alerts.filter(a => ignoredAlerts.has(a.alertname))
+    : alerts.filter(a => a.status === 'resolved' && !ignoredAlerts.has(a.alertname))
 
   // namespace 过滤
   const nsFiltered = filterNamespace === 'all' ? rawFiltered
@@ -434,11 +455,12 @@ export default function AlertsPage() {
             '--active-title-color': 'var(--accent-blue)',
             '--active-line-color': 'var(--accent-blue)'
           } as any}>
-            <Tabs.Tab title={`全部 (${alerts.length})`} key="all" />
-            <Tabs.Tab title={`严重 (${critical.length})`} key="critical" />
-            <Tabs.Tab title={`警告 (${warning.length})`} key="warning" />
+            <Tabs.Tab title={`全部 (${alerts.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="all" />
+            <Tabs.Tab title={`严重 (${critical.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="critical" />
+            <Tabs.Tab title={`警告 (${warning.filter(a => !ignoredAlerts.has(a.alertname)).length})`} key="warning" />
             <Tabs.Tab title="已恢复" key="resolved" />
             <Tabs.Tab title={`屏蔽 (${activeSilences.length})`} key="silenced" />
+            <Tabs.Tab title={`已忽略 (${ignoredAlerts.size})`} key="ignored" />
           </Tabs>
 
           {/* 过滤器 */}
@@ -586,7 +608,7 @@ export default function AlertsPage() {
                     <div style={{ marginTop: 6 }}>
 
                       {/* 快捷操作按钮 */}
-                      {a.status === 'firing' && (
+                      {(a.status === 'firing' || tab === 'ignored') && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           {!acknowledged.has(getAlertId(a)) ? (
                             <Button
@@ -714,6 +736,33 @@ export default function AlertsPage() {
                           >
                             📋 规则
                           </Button>
+
+                          {tab !== 'ignored' ? (
+                            <Button
+                              size="mini"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                ignoreAlert(a.alertname)
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-tertiary)' }}
+                            >
+                              🚫 忽略
+                            </Button>
+                          ) : (
+                            <Button
+                              size="mini"
+                              color="success"
+                              fill="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                unignoreAlert(a.alertname)
+                              }}
+                              style={{ fontSize: 10, padding: '2px 8px' }}
+                            >
+                              ✓ 恢复关注
+                            </Button>
+                          )}
                         </div>
                       )}
 
