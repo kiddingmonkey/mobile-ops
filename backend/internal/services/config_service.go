@@ -977,3 +977,55 @@ func (s *ConfigService) GetPromSource(ctx context.Context, id int64) (*models.Pr
 func (s *ConfigService) DecryptAuth(encrypted []byte) (string, error) {
 	return s.cipher.Decrypt(encrypted)
 }
+
+// ============ VictoriaMetrics Sources ============
+
+func (s *ConfigService) ListVMSources(ctx context.Context) ([]models.VictoriaMetricsSource, error) {
+	var list []models.VictoriaMetricsSource
+	err := s.db.SelectContext(ctx, &list,
+		`SELECT id, name, url, description, is_default, created_at, updated_at
+		 FROM victoria_metrics_sources ORDER BY id DESC`)
+	return list, err
+}
+
+func (s *ConfigService) CreateVMSource(ctx context.Context, name, url, description string, isDefault bool) (*models.VictoriaMetricsSource, error) {
+	if name == "" || url == "" {
+		return nil, errors.New("name/url required")
+	}
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if isDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE victoria_metrics_sources SET is_default=FALSE`); err != nil {
+			return nil, err
+		}
+	}
+	var out models.VictoriaMetricsSource
+	err = tx.QueryRowxContext(ctx,
+		`INSERT INTO victoria_metrics_sources(name, url, description, is_default)
+		 VALUES ($1,$2,$3,$4) RETURNING id, name, url, description, is_default, created_at, updated_at`,
+		name, url, description, isDefault).StructScan(&out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, tx.Commit()
+}
+
+func (s *ConfigService) DeleteVMSource(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM victoria_metrics_sources WHERE id=$1`, id)
+	return err
+}
+
+func (s *ConfigService) GetVMSource(ctx context.Context, id int64) (*models.VictoriaMetricsSource, error) {
+	var vm models.VictoriaMetricsSource
+	err := s.db.GetContext(ctx, &vm,
+		`SELECT id, name, url, description, is_default, created_at, updated_at
+		 FROM victoria_metrics_sources WHERE id=$1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &vm, nil
+}
+

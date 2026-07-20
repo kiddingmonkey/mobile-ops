@@ -53,6 +53,13 @@ func (h *Handler) Register(r *gin.Engine) {
 		priv.GET("/prom-sources", h.ListPromSources)
 		priv.POST("/prom-sources", h.CreatePromSource)
 
+		priv.GET("/vm-sources", h.ListVMSources)
+		priv.POST("/vm-sources", h.CreateVMSource)
+		priv.DELETE("/vm-sources/:id", h.DeleteVMSource)
+
+		priv.GET("/vm/:id/query", h.VMQuery)
+		priv.GET("/vm/:id/query_range", h.VMQueryRange)
+
 		priv.GET("/cloud-accounts", h.ListCloudAccounts)
 		priv.POST("/cloud-accounts", h.CreateCloudAccount)
 

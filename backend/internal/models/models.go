@@ -39,6 +39,16 @@ type PrometheusSource struct {
 	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 }
 
+type VictoriaMetricsSource struct {
+	ID          int64     `db:"id" json:"id"`
+	Name        string    `db:"name" json:"name"`
+	URL         string    `db:"url" json:"url"`
+	Description *string   `db:"description" json:"description,omitempty"`
+	IsDefault   bool      `db:"is_default" json:"is_default"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}
+
 type CloudAccount struct {
 	ID                  int64     `db:"id" json:"id"`
 	Name                string    `db:"name" json:"name"`

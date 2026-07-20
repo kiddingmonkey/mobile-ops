@@ -156,6 +156,47 @@ func (h *Handler) CreatePromSource(c *gin.Context) {
 	c.JSON(200, out)
 }
 
+// ============ VictoriaMetrics Sources ============
+
+func (h *Handler) ListVMSources(c *gin.Context) {
+	list, err := h.config.ListVMSources(c.Request.Context())
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	jsonList(c, list)
+}
+
+type createVMReq struct {
+	Name        string `json:"name" binding:"required"`
+	URL         string `json:"url" binding:"required"`
+	Description string `json:"description"`
+	IsDefault   bool   `json:"is_default"`
+}
+
+func (h *Handler) CreateVMSource(c *gin.Context) {
+	var r createVMReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := h.config.CreateVMSource(c.Request.Context(), r.Name, r.URL, r.Description, r.IsDefault)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) DeleteVMSource(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.config.DeleteVMSource(c.Request.Context(), id); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
 // ============ Cloud Accounts ============
 
 func (h *Handler) ListCloudAccounts(c *gin.Context) {
@@ -1513,3 +1554,77 @@ func (h *Handler) WatchResourceList(c *gin.Context) {
 		}
 	}
 }
+
+// ============ VictoriaMetrics Query ============
+
+// VMQuery GET /vm/:id/query?query=xxx&time=xxx
+func (h *Handler) VMQuery(c *gin.Context) {
+	vmID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	query := c.Query("query")
+	if query == "" {
+		c.JSON(400, gin.H{"error": "query required"})
+		return
+	}
+	vm, err := h.config.GetVMSource(c.Request.Context(), vmID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "vm source not found"})
+		return
+	}
+	cli := clients.NewVMClient(vm.URL)
+	result, err := cli.Query(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, result)
+}
+
+// VMQueryRange GET /vm/:id/query_range?query=xxx&start=xxx&end=xxx&step=xxx
+func (h *Handler) VMQueryRange(c *gin.Context) {
+	vmID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	query := c.Query("query")
+	if query == "" {
+		c.JSON(400, gin.H{"error": "query required"})
+		return
+	}
+	startStr := c.Query("start")
+	endStr := c.Query("end")
+	stepStr := c.DefaultQuery("step", "15s")
+
+	start, err := parseTime(startStr)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid start time"})
+		return
+	}
+	end, err := parseTime(endStr)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid end time"})
+		return
+	}
+	step, err := time.ParseDuration(stepStr)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid step"})
+		return
+	}
+
+	vm, err := h.config.GetVMSource(c.Request.Context(), vmID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "vm source not found"})
+		return
+	}
+	cli := clients.NewVMClient(vm.URL)
+	result, err := cli.QueryRange(c.Request.Context(), query, start, end, step)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, result)
+}
+
+func parseTime(s string) (time.Time, error) {
+	if ts, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return time.Unix(ts, 0), nil
+	}
+	return time.Parse(time.RFC3339, s)
+}
+
