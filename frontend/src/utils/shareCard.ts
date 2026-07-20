@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import { Toast } from 'antd-mobile'
 
 /**
@@ -210,16 +211,52 @@ export async function shareAlertCard(data: AlertShareData): Promise<boolean> {
 
     // 转换为 blob 用于分享
     const blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/png'))
-    const file = new File([blob], 'alert-card.png', { type: 'image/png' })
 
-    if (Capacitor.isNativePlatform() || navigator.share) {
+    if (Capacitor.isNativePlatform()) {
+      // Capacitor 原生环境：写文件后分享
+      try {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(blob)
+        })
+        const base64Data = base64.split(',')[1]
+
+        const fileName = `alert-${Date.now()}.png`
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache
+        })
+
+        await Share.share({
+          title: `告警: ${data.alertname}`,
+          text,
+          url: savedFile.uri,
+          dialogTitle: '分享告警卡片'
+        })
+
+        // 清理临时文件
+        setTimeout(() => {
+          Filesystem.deleteFile({ path: fileName, directory: Directory.Cache }).catch(() => {})
+        }, 5000)
+
+        return true
+      } catch (e) {
+        console.error('Native share failed:', e)
+        // 降级到纯文字
+      }
+    } else if (navigator.share) {
+      // Web 环境：使用 Web Share API
+      const file = new File([blob], 'alert-card.png', { type: 'image/png' })
       const shareData: any = { title: `告警: ${data.alertname}`, text, files: [file] }
       if (navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData)
         return true
       }
     }
-  } catch {
+  } catch (e) {
+    console.error('Share card generation failed:', e)
     // 图片生成或分享失败，降级到纯文字
   }
 
