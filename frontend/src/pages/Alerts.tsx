@@ -550,7 +550,27 @@ export default function AlertsPage() {
                     .filter(s => !searchKeyword || s.matchers?.some((m: any) => m.value?.includes(searchKeyword)) || s.comment?.includes(searchKeyword))
                     .slice(0, pageSize)
                     .map(s => (
-                    <div key={s.id} className="card" style={{ padding: '10px 12px' }}>
+                    <div key={s.id} className="card" style={{ padding: '10px 12px' }}
+                      onClick={() => {
+                        Dialog.alert({
+                          title: '屏蔽详情',
+                          content: (
+                            <div style={{ fontSize: 12, lineHeight: 1.8, textAlign: 'left' }}>
+                              <div><b>匹配规则:</b></div>
+                              {s.matchers?.map((m: any, i: number) => (
+                                <div key={i} style={{ fontFamily: 'monospace', marginLeft: 8 }}>{m.name} {m.isEqual ? '=' : '!='} {m.isRegex ? '~' : ''}{m.value}</div>
+                              ))}
+                              <div style={{ marginTop: 8 }}><b>创建者:</b> {s.createdBy}</div>
+                              <div><b>备注:</b> {s.comment || '-'}</div>
+                              <div><b>开始:</b> {new Date(s.startsAt).toLocaleString('zh-CN')}</div>
+                              <div><b>过期:</b> {new Date(s.endsAt).toLocaleString('zh-CN')}</div>
+                              <div><b>ID:</b> <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{s.id}</span></div>
+                            </div>
+                          ),
+                          confirmText: '关闭'
+                        })
+                      }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }}/>
                         <div style={{ flex: 1, minWidth: 0 }}>

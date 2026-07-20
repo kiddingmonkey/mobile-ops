@@ -42,9 +42,34 @@ async function checkNewAlerts() {
 
     if (!Array.isArray(alerts)) return
 
+    // 读取忽略列表
+    let ignoredNames: Set<string> = new Set()
+    try {
+      const saved = localStorage.getItem('ignored_alertnames')
+      if (saved) ignoredNames = new Set(JSON.parse(saved))
+    } catch {}
+
+    // 读取告警分类策略（只通知"我的"告警）
+    let filterConfig = { clusterValues: ['jyyun'], systemNameValues: [] as string[] }
+    try {
+      const saved = localStorage.getItem('alert_filter_config')
+      if (saved) filterConfig = { ...filterConfig, ...JSON.parse(saved) }
+    } catch {}
+
+    const isMyAlert = (a: any) => {
+      const cluster = a.labels?.cluster || ''
+      const sysName = a.labels?.system_name || a.labels?.exported_system_name || ''
+      const clusterMatch = filterConfig.clusterValues.length === 0 || filterConfig.clusterValues.includes(cluster)
+      if (!clusterMatch) return false
+      if (filterConfig.systemNameValues.length === 0) return true
+      return filterConfig.systemNameValues.includes(sysName)
+    }
+
     const newUrgentAlerts = alerts.filter((alert: any) => {
       if (seenAlertIds.has(alert.id)) return false
       if (alert.status !== 'firing') return false
+      if (ignoredNames.has(alert.alertname)) return false
+      if (!isMyAlert(alert)) return false
       const severity = alert.severity?.toLowerCase() || ''
       if (!['critical', 'warning'].includes(severity)) return false
       seenAlertIds.add(alert.id)

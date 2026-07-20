@@ -53,7 +53,23 @@ export default function HomePage() {
   useEffect(() => { load() }, [load])
 
   // === 汇总数据 ===
-  const firingAlerts   = alerts.filter(a => a.status === 'firing')
+  // 读取告警分类策略（首页只展示"我的"告警）
+  const alertFilterConfig = (() => {
+    try {
+      const saved = localStorage.getItem('alert_filter_config')
+      return saved ? JSON.parse(saved) : { clusterValues: ['jyyun'], systemNameValues: [] }
+    } catch { return { clusterValues: ['jyyun'], systemNameValues: [] } }
+  })()
+  const isMyAlert = (a: any) => {
+    const cluster = a.labels?.cluster || ''
+    const sysName = a.labels?.system_name || a.labels?.exported_system_name || ''
+    const clusterMatch = alertFilterConfig.clusterValues.length === 0 || alertFilterConfig.clusterValues.includes(cluster)
+    if (!clusterMatch) return false
+    if (alertFilterConfig.systemNameValues.length === 0) return true
+    return alertFilterConfig.systemNameValues.includes(sysName)
+  }
+
+  const firingAlerts   = alerts.filter(a => a.status === 'firing' && isMyAlert(a))
   const criticals      = firingAlerts.filter(a => a.severity === 'critical')
   const warnings       = firingAlerts.filter(a => a.severity === 'warning')
   const runningOps     = ops.filter(o => ['executing','polling','pending','prechecking'].includes(o.status))

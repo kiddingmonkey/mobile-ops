@@ -4,7 +4,7 @@ import { AddOutline, LockOutline, DownCircleOutline, UpCircleOutline } from 'ant
 import { useNavigate } from 'react-router-dom'
 import PageShell from '@/components/PageShell'
 import { api, friendlyApiError } from '@/api/client'
-import { loadTemplates, deleteTemplate, exportTemplates, importTemplates, migrateFromServer } from '@/utils/sgStorage'
+import { loadTemplates, deleteTemplate, exportTemplates, importTemplates, migrateFromServer, updateTemplate } from '@/utils/sgStorage'
 import type { SGTemplate } from '@/utils/sgStorage'
 import { fetchPublicIP } from '@/utils/publicIP'
 import dayjs from 'dayjs'
@@ -429,7 +429,29 @@ export default function SecurityGroupsPage() {
                 borderRadius: 8,
                 padding: 12,
                 marginBottom: 8
-              }}>
+              }}
+                onClick={() => {
+                  Dialog.alert({
+                    title: row.name,
+                    content: (
+                      <div style={{ fontSize: 12, lineHeight: 1.8, textAlign: 'left' }}>
+                        <div><b>安全组 ID:</b> {row.sg_id}</div>
+                        <div><b>地域:</b> {row.region}</div>
+                        <div><b>端口:</b> {row.port}</div>
+                        <div><b>协议:</b> {row.protocol}</div>
+                        <div><b>备注:</b> {row.description || '-'}</div>
+                        <div><b>AK (Secret ID):</b> {row.secret_id ? row.secret_id.slice(0, 8) + '...' : '未配置'}</div>
+                        <div><b>上次更新 IP:</b> {row.last_ip || '未同步'}</div>
+                        <div><b>创建时间:</b> {row.created_at ? dayjs(row.created_at).format('YYYY-MM-DD HH:mm') : '-'}</div>
+                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                          模板仅存储在本地，后端接口暂不可用，请等待功能更新
+                        </div>
+                      </div>
+                    ),
+                    confirmText: '关闭'
+                  })
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
