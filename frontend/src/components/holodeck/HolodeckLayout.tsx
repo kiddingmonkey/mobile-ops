@@ -9,7 +9,9 @@ import HolodeckRotateHint from './HolodeckRotateHint'
 import HealthReminder from './HealthReminder'
 import BadgeWall from './BadgeWall'
 import BadgeUnlockToast from './BadgeUnlockToast'
+import QuickCommandDrawer from './QuickCommandDrawer'
 import { Badge, recordEvent } from './achievements'
+import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
 type Mood = 'calm' | 'alert' | 'combat'
 
@@ -19,12 +21,59 @@ export default function HolodeckLayout() {
     typeof window !== 'undefined' && window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
   )
   const [showBadgeWall, setShowBadgeWall] = useState(false)
+  const [showQuickCmd, setShowQuickCmd] = useState(false)
   const [newBadges, setNewBadges] = useState<Badge[]>([])
 
   // 进入 Holodeck 首次触发徽章
   useEffect(() => {
     const unlocked = recordEvent({ type: 'holodeck_entered' })
     if (unlocked.length) setNewBadges(unlocked)
+  }, [])
+
+  // 恢复上次的环境音景（需要用户交互后才能启动 AudioContext）
+  useEffect(() => {
+    const scape = getCurrentScape()
+    if (scape === 'off') return
+    const unlock = () => {
+      playSoundscape(scape, getCurrentVolume())
+      window.removeEventListener('pointerdown', unlock)
+    }
+    window.addEventListener('pointerdown', unlock, { once: true })
+    return () => window.removeEventListener('pointerdown', unlock)
+  }, [])
+
+  // 从右边缘右滑呼出快速指令
+  useEffect(() => {
+    let startX = 0
+    let startY = 0
+    let tracking = false
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (t.clientX > window.innerWidth - 30) {
+        startX = t.clientX
+        startY = t.clientY
+        tracking = true
+      }
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return
+      const t = e.touches[0]
+      const dx = startX - t.clientX
+      const dy = Math.abs(startY - t.clientY)
+      if (dx > 40 && dy < 40) {
+        setShowQuickCmd(true)
+        tracking = false
+      }
+    }
+    const onEnd = () => { tracking = false }
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchmove', onMove, { passive: true })
+    window.addEventListener('touchend', onEnd)
+    return () => {
+      window.removeEventListener('touchstart', onStart)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+    }
   }, [])
 
   useEffect(() => {
@@ -113,7 +162,9 @@ export default function HolodeckLayout() {
             if (unlocked.length) setNewBadges(prev => [...prev, ...unlocked])
           }}
         />
-        <HolodeckTaskPanel />
+        <HolodeckTaskPanel
+          onBadgesUnlocked={(b) => setNewBadges(prev => [...prev, ...b])}
+        />
       </div>
 
       <HealthReminder emergency={mood === 'combat'} />
@@ -121,6 +172,32 @@ export default function HolodeckLayout() {
       {showBadgeWall && <BadgeWall onClose={() => setShowBadgeWall(false)} />}
 
       <BadgeUnlockToast badges={newBadges} onDismiss={() => setNewBadges([])} />
+
+      <QuickCommandDrawer open={showQuickCmd} onClose={() => setShowQuickCmd(false)} />
+
+      {/* 右边缘触发提示 + 点击呼出 */}
+      <div
+        onClick={() => setShowQuickCmd(true)}
+        style={{
+          position: 'fixed',
+          right: 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 20,
+          height: 80,
+          background: 'linear-gradient(90deg, transparent 0%, rgba(79,195,247,0.15) 100%)',
+          borderLeft: '2px solid var(--hd-cyan)',
+          cursor: 'pointer',
+          zIndex: 990,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'hd-breathe 2.5s ease-in-out infinite',
+        }}
+        title="呼出快速指令"
+      >
+        <span style={{ color: 'var(--hd-cyan)', fontSize: 10 }}>◀</span>
+      </div>
     </div>
   )
 }

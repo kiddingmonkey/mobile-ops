@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
+import { Toast } from 'antd-mobile'
+import { api, friendlyApiError } from '@/api/client'
 import { withCache, getCache } from '@/utils/apiCache'
 import { fmtRelative } from '@/utils/format'
 import { hapticLight } from '@/utils/haptics'
+import HoldToConfirm from './HoldToConfirm'
+import { recordEvent, Badge } from './achievements'
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--hd-emergency)',
@@ -11,21 +14,59 @@ const SEVERITY_COLOR: Record<string, string> = {
   info: 'var(--hd-cyan)',
 }
 
-export default function HolodeckTaskPanel() {
+export default function HolodeckTaskPanel({
+  onBadgesUnlocked,
+}: {
+  onBadgesUnlocked?: (b: Badge[]) => void
+}) {
   const nav = useNavigate()
   const [alerts, setAlerts] = useState<any[]>(() => getCache('alerts_50') || [])
   const [ops, setOps] = useState<any[]>(() => getCache('ops_10') || [])
   const [tab, setTab] = useState<'alerts' | 'ops'>('alerts')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [silencing, setSilencing] = useState<string | null>(null)
+
+  const load = () => {
+    withCache('alerts_50', () => api.listAlerts(50)).then(a => setAlerts(a || [])).catch(() => {})
+    withCache('ops_10', () => api.listOperations(10)).then(o => setOps(o || [])).catch(() => {})
+  }
 
   useEffect(() => {
-    const load = () => {
-      withCache('alerts_50', () => api.listAlerts(50)).then(a => setAlerts(a || [])).catch(() => {})
-      withCache('ops_10', () => api.listOperations(10)).then(o => setOps(o || [])).catch(() => {})
-    }
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
   }, [])
+
+  const silenceAlert = async (alert: any) => {
+    const alertname = alert.labels?.alertname || alert.name
+    if (!alertname) return
+    setSilencing(alert.id)
+    Toast.show({ icon: 'loading', content: '静默中...', duration: 0 })
+    try {
+      const now = new Date()
+      const endsAt = new Date(now.getTime() + 60 * 60 * 1000) // 1 小时
+      await api.createSilence(1, {
+        matchers: [{ name: 'alertname', value: alertname, isRegex: false, isEqual: true }],
+        startsAt: now.toISOString(),
+        endsAt: endsAt.toISOString(),
+        createdBy: 'holodeck',
+        comment: '全息舰桥·蓄力静默 1h',
+      })
+      Toast.clear()
+      Toast.show({ icon: 'success', content: '星域已清理' })
+
+      const unlocked = recordEvent({ type: 'alert_resolved', severity: alert.severity })
+      if (unlocked.length) onBadgesUnlocked?.(unlocked)
+
+      load()
+      setExpandedId(null)
+    } catch (e) {
+      Toast.clear()
+      Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+    } finally {
+      setSilencing(null)
+    }
+  }
 
   const firing = alerts.filter(a => a.status === 'firing')
   const criticals = firing.filter(a => a.severity === 'critical')
@@ -82,7 +123,18 @@ export default function HolodeckTaskPanel() {
         )}
 
         {tab === 'alerts' && firing.map(a => (
-          <AlertCard key={a.id} alert={a} onClick={() => { hapticLight(); nav(`/alerts?id=${a.id}`) }} />
+          <AlertCard
+            key={a.id}
+            alert={a}
+            expanded={expandedId === a.id}
+            silencing={silencing === a.id}
+            onToggle={() => {
+              hapticLight()
+              setExpandedId(expandedId === a.id ? null : a.id)
+            }}
+            onOpen={() => { hapticLight(); nav(`/alerts?id=${a.id}`) }}
+            onSilence={() => silenceAlert(a)}
+          />
         ))}
         {tab === 'ops' && running.map(o => (
           <OpCard key={o.id} op={o} onClick={() => { hapticLight(); nav(`/tasks?id=${o.id}`) }} />
@@ -135,29 +187,47 @@ function TabBtn({ children, active, onClick }: { children: React.ReactNode; acti
   )
 }
 
-function AlertCard({ alert, onClick }: { alert: any; onClick: () => void }) {
+function AlertCard({
+  alert,
+  expanded,
+  silencing,
+  onToggle,
+  onOpen,
+  onSilence,
+}: {
+  alert: any
+  expanded: boolean
+  silencing: boolean
+  onToggle: () => void
+  onOpen: () => void
+  onSilence: () => void
+}) {
   const color = SEVERITY_COLOR[alert.severity] || 'var(--hd-cyan)'
   const name = alert.labels?.alertname || alert.name || 'Unknown'
   const cluster = alert.labels?.cluster || ''
   return (
     <div
-      onClick={onClick}
       style={{
-        background: 'rgba(10, 20, 45, 0.5)',
-        border: `1px solid ${color}40`,
+        background: expanded ? 'rgba(10, 20, 45, 0.75)' : 'rgba(10, 20, 45, 0.5)',
+        border: `1px solid ${color}${expanded ? '80' : '40'}`,
         borderLeft: `3px solid ${color}`,
         padding: '8px 10px',
-        cursor: 'pointer',
         borderRadius: 2,
+        boxShadow: expanded ? `0 0 16px ${color}44` : 'none',
+        transition: 'all 0.2s ease',
       }}
     >
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 8,
-        marginBottom: 4,
-      }}>
+      <div
+        onClick={onToggle}
+        style={{
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 8,
+          marginBottom: 4,
+        }}
+      >
         <div style={{
           fontSize: 11,
           fontWeight: 600,
@@ -166,7 +236,7 @@ function AlertCard({ alert, onClick }: { alert: any; onClick: () => void }) {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           display: '-webkit-box',
-          WebkitLineClamp: 2,
+          WebkitLineClamp: expanded ? 4 : 2,
           WebkitBoxOrient: 'vertical',
         }}>
           {name}
@@ -175,15 +245,52 @@ function AlertCard({ alert, onClick }: { alert: any; onClick: () => void }) {
           {(alert.severity || '').toUpperCase()}
         </div>
       </div>
-      <div className="hd-text-mono" style={{
-        fontSize: 9,
-        color: 'var(--text-tertiary)',
-        display: 'flex',
-        justifyContent: 'space-between',
-      }}>
+      <div
+        onClick={onToggle}
+        className="hd-text-mono"
+        style={{
+          fontSize: 9,
+          color: 'var(--text-tertiary)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+        }}
+      >
         <span>{cluster || 'N/A'}</span>
         <span>{fmtRelative(alert.starts_at || alert.startsAt)}</span>
       </div>
+
+      {expanded && (
+        <div style={{
+          marginTop: 10,
+          paddingTop: 10,
+          borderTop: `1px dashed ${color}40`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <HoldToConfirm
+            label="HOLD · 静默 1h"
+            duration={1600}
+            color={color}
+            glowColor={color}
+            onConfirm={onSilence}
+            disabled={silencing}
+          />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button
+              className="hd-btn"
+              onClick={(e) => { e.stopPropagation(); onOpen() }}
+              style={{ fontSize: 10, width: '100%' }}
+            >
+              VIEW DETAIL
+            </button>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+              长按左侧充能环 1.6s 静默此告警一小时
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
