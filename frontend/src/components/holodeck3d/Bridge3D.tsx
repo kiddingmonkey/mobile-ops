@@ -193,18 +193,37 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
           </div>
         </div>
       }>
-        <Bridge3DScene
-          criticals={stats.criticals}
-          warnings={stats.warnings}
-          running={stats.running}
-          clusters={clusters.length}
-          okClusters={clusters.length}
-          focusedConsole={focused}
-          onConsoleClick={handleConsoleClick}
-          lowPerf={lowPerf}
-          cameraPreset={cameraPreset}
-        />
+        {/* 面板打开时隐藏整个 3D 场景（含 Html 图标），避免穿透遮挡 */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          visibility: panel ? 'hidden' : 'visible',
+          transition: 'opacity 0.2s',
+          opacity: panel ? 0 : 1,
+        }}>
+          <Bridge3DScene
+            criticals={stats.criticals}
+            warnings={stats.warnings}
+            running={stats.running}
+            clusters={clusters.length}
+            okClusters={clusters.length}
+            focusedConsole={focused}
+            onConsoleClick={handleConsoleClick}
+            lowPerf={lowPerf}
+            cameraPreset={cameraPreset}
+          />
+        </div>
       </Suspense>
+
+      {/* 面板打开时的静态背景（不再消耗 GPU） */}
+      {panel && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'radial-gradient(ellipse at center, #1a0842 0%, #060316 55%, #000005 100%)',
+          zIndex: 0,
+        }} />
+      )}
 
       {/* 顶部 HUD（时间 + 状态 + 退出） */}
       <div style={{

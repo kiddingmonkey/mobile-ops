@@ -1,6 +1,6 @@
 import { Suspense, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Environment, ContactShadows } from '@react-three/drei'
+import { ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import BridgeFloor from './BridgeFloor'
 import CenterBeam from './CenterBeam'
@@ -90,13 +90,10 @@ export default function Bridge3DScene({
       }}
       style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #1a0842 0%, #060316 55%, #000005 100%)' }}
     >
-      {/* HDR 环境光：night preset 提供夜晚都市反射 */}
-      <Suspense fallback={null}>
-        <Environment preset="night" background={false} environmentIntensity={0.35} />
-      </Suspense>
-
-      {/* 关键补光：三点布光营造电影感 */}
-      <ambientLight intensity={0.08} color="#3a2f6a" />
+      {/* 关键补光：三点布光营造电影感（本地光源，无外部依赖） */}
+      {/* 半球光：模拟环境光，天空色 + 地面色，补偿去掉 HDR 环境后的暗淡 */}
+      <hemisphereLight args={['#4fc3f7', '#2a1a5a', 0.35]} />
+      <ambientLight intensity={0.15} color="#3a2f6a" />
 
       {/* 主光：舰长头顶暖粉光 */}
       <spotLight
