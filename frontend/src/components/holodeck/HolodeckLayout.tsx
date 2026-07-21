@@ -6,6 +6,10 @@ import HolodeckStarfield from './HolodeckStarfield'
 import HolodeckTaskPanel from './HolodeckTaskPanel'
 import HolodeckStarBackground from './HolodeckStarBackground'
 import HolodeckRotateHint from './HolodeckRotateHint'
+import HealthReminder from './HealthReminder'
+import BadgeWall from './BadgeWall'
+import BadgeUnlockToast from './BadgeUnlockToast'
+import { Badge, recordEvent } from './achievements'
 
 type Mood = 'calm' | 'alert' | 'combat'
 
@@ -14,6 +18,14 @@ export default function HolodeckLayout() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(
     typeof window !== 'undefined' && window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
   )
+  const [showBadgeWall, setShowBadgeWall] = useState(false)
+  const [newBadges, setNewBadges] = useState<Badge[]>([])
+
+  // 进入 Holodeck 首次触发徽章
+  useEffect(() => {
+    const unlocked = recordEvent({ type: 'holodeck_entered' })
+    if (unlocked.length) setNewBadges(unlocked)
+  }, [])
 
   useEffect(() => {
     const check = () => {
@@ -74,7 +86,12 @@ export default function HolodeckLayout() {
       <HolodeckStarBackground />
 
       {/* 顶部指挥条 */}
-      <TopCommandBar mood={mood} criticals={criticals} warnings={warnings} />
+      <TopCommandBar
+        mood={mood}
+        criticals={criticals}
+        warnings={warnings}
+        onOpenBadges={() => setShowBadgeWall(true)}
+      />
 
       {/* 三列主区域 */}
       <div style={{
@@ -90,14 +107,35 @@ export default function HolodeckLayout() {
         <div className={mood === 'combat' ? 'hd-non-critical' : ''}>
           <HolodeckCaptain mood={mood} criticals={criticals} warnings={warnings} />
         </div>
-        <HolodeckStarfield />
+        <HolodeckStarfield
+          onSelectCluster={(id) => {
+            const unlocked = recordEvent({ type: 'cluster_selected', clusterId: id })
+            if (unlocked.length) setNewBadges(prev => [...prev, ...unlocked])
+          }}
+        />
         <HolodeckTaskPanel />
       </div>
+
+      <HealthReminder emergency={mood === 'combat'} />
+
+      {showBadgeWall && <BadgeWall onClose={() => setShowBadgeWall(false)} />}
+
+      <BadgeUnlockToast badges={newBadges} onDismiss={() => setNewBadges([])} />
     </div>
   )
 }
 
-function TopCommandBar({ mood, criticals, warnings }: { mood: Mood; criticals: number; warnings: number }) {
+function TopCommandBar({
+  mood,
+  criticals,
+  warnings,
+  onOpenBadges,
+}: {
+  mood: Mood
+  criticals: number
+  warnings: number
+  onOpenBadges: () => void
+}) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
@@ -164,6 +202,25 @@ function TopCommandBar({ mood, criticals, warnings }: { mood: Mood; criticals: n
             {warnings > 0 && <span style={{ color: 'var(--warning)' }}>{warnings}W</span>}
           </div>
         )}
+
+        {/* 徽章墙入口 */}
+        <button
+          onClick={onOpenBadges}
+          className="hd-text-mono"
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(120, 200, 255, 0.3)',
+            color: 'var(--hd-cyan)',
+            padding: '4px 10px',
+            fontSize: 10,
+            letterSpacing: '0.15em',
+            cursor: 'pointer',
+            borderRadius: 2,
+            fontFamily: 'inherit',
+          }}
+        >
+          ◆ GALLERY
+        </button>
 
         {/* 时间 */}
         <div className="hd-text-mono hd-text-glow" style={{
