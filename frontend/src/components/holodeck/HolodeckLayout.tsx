@@ -248,39 +248,44 @@ export default function HolodeckLayout() {
       <div style={{
         position: 'fixed',
         left: 0,
-        top: 0,
-        bottom: 0,
-        width: 280,
+        top: 40,
+        bottom: 40,
+        width: 220,
         background: 'linear-gradient(90deg, rgba(3,5,16,0.85) 0%, transparent 100%)',
         borderRight: '1px solid rgba(79,195,247,0.2)',
         zIndex: 1,
         pointerEvents: 'none',
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'center',
         justifyContent: 'flex-end',
-        paddingBottom: 60,
+        paddingBottom: 40,
+        overflow: 'hidden',
       }}>
         <img
           src="/images/captain.png"
           alt="Captain"
           style={{
-            width: '100%',
+            maxWidth: '100%',
+            maxHeight: 'calc(100% - 40px)',
+            width: 'auto',
             height: 'auto',
             objectFit: 'contain',
             filter: 'drop-shadow(0 0 20px rgba(79,195,247,0.4))',
-            opacity: 0.92,
+            opacity: 0.9,
           }}
         />
         <div style={{
           textAlign: 'center',
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 11,
-          letterSpacing: '0.3em',
+          fontSize: 10,
+          letterSpacing: '0.25em',
           color: 'var(--hd-cyan)',
-          marginTop: 12,
+          marginTop: 8,
           textShadow: '0 0 8px var(--hd-cyan)',
+          flexShrink: 0,
         }}>
-          ◆ STARDECK COMMANDER
+          ◆ COMMANDER
         </div>
       </div>
 
