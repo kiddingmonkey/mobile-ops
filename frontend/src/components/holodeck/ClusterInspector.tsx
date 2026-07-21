@@ -70,7 +70,7 @@ export default function ClusterInspector({ clusterId, clusterName, onClose, onSt
         inset: 0,
         background: 'rgba(3, 5, 16, 0.75)',
         backdropFilter: 'blur(8px)',
-        zIndex: 9994,
+        zIndex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

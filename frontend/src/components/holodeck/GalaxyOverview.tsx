@@ -84,7 +84,7 @@ export default function GalaxyOverview({ onClose, onEnterCluster }: Props) {
         inset: 0,
         background: 'rgba(3, 5, 16, 0.85)',
         backdropFilter: 'blur(8px)',
-        zIndex: 9994,
+        zIndex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
