@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import { withCache, getCache } from '@/utils/apiCache'
 import { useTheme } from '@/store'
 import { hapticLight } from '@/utils/haptics'
+import { holoAudio } from '@/utils/holoAudio'
 import BridgeTicker from '@/components/holodeck/BridgeTicker'
 import QuickCommandDrawer from '@/components/holodeck/QuickCommandDrawer'
 import HolodeckRotateHint from '@/components/holodeck/HolodeckRotateHint'
@@ -60,6 +61,7 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
   const [webglOK] = useState(() => detectWebGL())
   const [lowPerf] = useState(() => detectLowPerf())
   const [time, setTime] = useState(new Date())
+  const [audioEnabled, setAudioEnabled] = useState(() => holoAudio.isEnabled())
 
   useEffect(() => {
     if (!webglOK) onFallback2D()
@@ -134,14 +136,28 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
     setFocused(data.id)
     // 500ms 后弹面板，让相机推近动画先跑
     setTimeout(() => {
+      holoAudio.panelOpen()
       setPanel(data.id)
     }, 500)
   }
 
   const closePanel = () => {
+    holoAudio.panelClose()
     setPanel(null)
     setFocused(null)
   }
+
+  // 启动环境音
+  useEffect(() => {
+    holoAudio.startAmbient()
+    return () => holoAudio.stopAmbient()
+  }, [])
+
+  // 告警音效
+  useEffect(() => {
+    if (stats.criticals > 0) holoAudio.alertCritical()
+    else if (stats.warnings > 0) holoAudio.alertWarning()
+  }, [stats.criticals, stats.warnings])
 
   if (orientation === 'portrait') {
     return <HolodeckRotateHint />
@@ -208,6 +224,28 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
           ◆ STARDECK · {time.toTimeString().slice(0, 5)}
         </div>
         <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
+          <button
+            onClick={() => {
+              const next = !audioEnabled
+              holoAudio.setEnabled(next)
+              setAudioEnabled(next)
+              if (next) holoAudio.consoleClick()
+            }}
+            style={{
+              background: 'rgba(3,5,16,0.6)',
+              border: `1px solid ${audioEnabled ? '#4ade80' : 'rgba(120,200,255,0.35)'}`,
+              color: audioEnabled ? '#4ade80' : 'rgba(220,240,255,0.6)',
+              padding: '4px 10px',
+              fontSize: 10,
+              letterSpacing: '0.2em',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              borderRadius: 2,
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            {audioEnabled ? '🔊' : '🔇'}
+          </button>
           <button
             onClick={onFallback2D}
             style={{

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
+import { holoAudio } from '@/utils/holoAudio'
 
 export interface ConsoleData {
   id: string
@@ -44,6 +45,7 @@ export default function ConsoleStation({ data, onClick, focused }: Props) {
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
+    holoAudio.consoleClick()
     onClick(data)
   }
 
@@ -55,7 +57,7 @@ export default function ConsoleStation({ data, onClick, focused }: Props) {
       position={data.position}
       rotation={[0, data.rotationY, 0]}
       onClick={handleClick}
-      onPointerOver={(e) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer' }}
+      onPointerOver={(e) => { e.stopPropagation(); setHover(true); holoAudio.consoleHover(); document.body.style.cursor = 'pointer' }}
       onPointerOut={() => { setHover(false); document.body.style.cursor = '' }}
     >
       {/* 底座 */}
