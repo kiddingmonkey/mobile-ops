@@ -114,6 +114,31 @@ body.mo-holodeck #root {
   50% { box-shadow: inset 0 0 100px rgba(255, 59, 92, 0.4); }
 }
 
+@keyframes hd-fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes hd-strike-beam {
+  0% { opacity: 0; transform: scaleY(0); transform-origin: top; }
+  20% { opacity: 1; transform: scaleY(1); }
+  80% { opacity: 1; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(1); }
+}
+
+@keyframes hd-strike-flash {
+  0%, 100% { opacity: 0; }
+  20%, 60% { opacity: 1; }
+}
+
+@keyframes hd-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-2px, 1px); }
+  40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, 2px); }
+  80% { transform: translate(1px, -2px); }
+}
+
 /* ============ 全息面板 ============ */
 .hd-panel {
   position: relative;

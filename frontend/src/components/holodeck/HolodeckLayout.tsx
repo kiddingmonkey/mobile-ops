@@ -10,6 +10,7 @@ import HealthReminder from './HealthReminder'
 import BadgeWall from './BadgeWall'
 import BadgeUnlockToast from './BadgeUnlockToast'
 import QuickCommandDrawer from './QuickCommandDrawer'
+import ClusterInspector from './ClusterInspector'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
@@ -23,6 +24,7 @@ export default function HolodeckLayout() {
   const [showBadgeWall, setShowBadgeWall] = useState(false)
   const [showQuickCmd, setShowQuickCmd] = useState(false)
   const [newBadges, setNewBadges] = useState<Badge[]>([])
+  const [inspectCluster, setInspectCluster] = useState<{ id: number; name: string } | null>(null)
 
   // 进入 Holodeck 首次触发徽章
   useEffect(() => {
@@ -157,9 +159,10 @@ export default function HolodeckLayout() {
           <HolodeckCaptain mood={mood} criticals={criticals} warnings={warnings} />
         </div>
         <HolodeckStarfield
-          onSelectCluster={(id) => {
+          onSelectCluster={(id, name) => {
             const unlocked = recordEvent({ type: 'cluster_selected', clusterId: id })
             if (unlocked.length) setNewBadges(prev => [...prev, ...unlocked])
+            setInspectCluster({ id, name: name || `cluster-${id}` })
           }}
         />
         <HolodeckTaskPanel
@@ -174,6 +177,14 @@ export default function HolodeckLayout() {
       <BadgeUnlockToast badges={newBadges} onDismiss={() => setNewBadges([])} />
 
       <QuickCommandDrawer open={showQuickCmd} onClose={() => setShowQuickCmd(false)} />
+
+      {inspectCluster && (
+        <ClusterInspector
+          clusterId={inspectCluster.id}
+          clusterName={inspectCluster.name}
+          onClose={() => setInspectCluster(null)}
+        />
+      )}
 
       {/* 右边缘触发提示 + 点击呼出 */}
       <div

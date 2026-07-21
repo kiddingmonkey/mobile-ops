@@ -35,7 +35,7 @@ const HEALTH_COLOR: Record<ClusterNode['health'], string> = {
 export default function HolodeckStarfield({
   onSelectCluster,
 }: {
-  onSelectCluster?: (id: number) => void
+  onSelectCluster?: (id: number, name?: string) => void
 }) {
   const nav = useNavigate()
   const [clusters, setClusters] = useState<any[]>(() => getCache('clusters') || [])
@@ -77,7 +77,7 @@ export default function HolodeckStarfield({
   const handleClick = (n: ClusterNode) => {
     hapticLight()
     setSelected(n.id)
-    onSelectCluster?.(n.id)
+    onSelectCluster?.(n.id, n.name)
   }
 
   const count = nodes.length

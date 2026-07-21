@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SILHOUETTES, SilhouetteId } from './CaptainSilhouettes'
 import CaptainConfigSheet from './CaptainConfigSheet'
+import OpsPet from './OpsPet'
 
 interface CaptainConfig {
   name: string
@@ -130,6 +131,9 @@ export default function HolodeckCaptain({
             background: 'repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(79,195,247,0.04) 3px, rgba(79,195,247,0.04) 4px)',
             pointerEvents: 'none',
           }} />
+
+          {/* OpsPet 运维精灵伙伴 */}
+          <OpsPet mood={mood} />
         </div>
 
         {/* 台词气泡 */}
