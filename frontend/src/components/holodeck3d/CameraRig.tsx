@@ -24,9 +24,9 @@ export default function CameraRig({ focusTarget }: Props) {
   }, [focusTarget])
 
   useEffect(() => {
-    // 初始位置：站在中央偏后，看向主屏幕
-    camera.position.set(0, 3, 6)
-    camera.lookAt(0, 3, -8)
+    // 初始位置：第三人称视角，看向舰长背影 + 主屏幕
+    camera.position.set(0, 4, 7)
+    camera.lookAt(0, 3, -4)
   }, [camera])
 
   useEffect(() => {
@@ -48,8 +48,9 @@ export default function CameraRig({ focusTarget }: Props) {
       const dy = e.clientY - lastY
       lastX = e.clientX
       lastY = e.clientY
-      yawRef.current -= dx * 0.005
-      pitchRef.current = Math.max(-0.6, Math.min(0.5, pitchRef.current - dy * 0.004))
+      // 灵敏度大幅提升：0.005 → 0.012
+      yawRef.current -= dx * 0.012
+      pitchRef.current = Math.max(-0.6, Math.min(0.5, pitchRef.current - dy * 0.009))
     }
     const onPointerUp = (e: PointerEvent) => {
       dragging = false
@@ -103,6 +104,10 @@ export default function CameraRig({ focusTarget }: Props) {
   }, [gl])
 
   const tmp = useRef(new THREE.Vector3())
+  const posTarget = useRef(new THREE.Vector3())
+  const lookTarget = useRef(new THREE.Vector3(0, 3, -8))
+  const currentLook = useRef(new THREE.Vector3(0, 3, -8))
+
   useFrame(() => {
     // 目标位置：绕玩家位（0,3,0）的球面
     const [tx, ty, tz] = focusRef.current || [0, 3, 0]
@@ -117,13 +122,24 @@ export default function CameraRig({ focusTarget }: Props) {
       pz = tz + dir.z * 2.5
     } else {
       const d = distRef.current
+      // 第三人称：相机绕舰长位（0,2,0）转动
       px = Math.sin(yawRef.current) * d
-      py = 3 + Math.sin(pitchRef.current) * d * 0.5
+      py = 3.5 + Math.sin(pitchRef.current) * d * 0.4
       pz = Math.cos(yawRef.current) * d
+      // 视点跟随 yaw 反向偏移（往前看）
+      lookTarget.current.set(Math.sin(yawRef.current) * -3, 3, Math.cos(yawRef.current) * -3)
     }
 
-    camera.position.lerp(new THREE.Vector3(px, py, pz), 0.08)
-    camera.lookAt(targetLook)
+    if (focusRef.current) {
+      lookTarget.current.copy(targetLook)
+    }
+
+    posTarget.current.set(px, py, pz)
+    // 相机移动更快：0.08 → 0.25
+    camera.position.lerp(posTarget.current, 0.25)
+    // 视线也平滑跟随
+    currentLook.current.lerp(lookTarget.current, 0.25)
+    camera.lookAt(currentLook.current)
   })
 
   return null

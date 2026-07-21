@@ -39,10 +39,13 @@ function detectWebGL(): boolean {
 }
 
 function detectLowPerf(): boolean {
+  // 移动端默认低性能模式：保证流畅优先
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  if (isMobile) return true
   const mem = (navigator as any).deviceMemory
-  if (typeof mem === 'number' && mem <= 3) return true
+  if (typeof mem === 'number' && mem <= 4) return true
   const cores = navigator.hardwareConcurrency
-  if (typeof cores === 'number' && cores <= 4) return true
+  if (typeof cores === 'number' && cores <= 6) return true
   return false
 }
 

@@ -7,6 +7,10 @@ import MainScreen from './MainScreen'
 import Effects from './Effects'
 import Starfield from './Starfield'
 import CameraRig from './CameraRig'
+import CaptainAvatar from './CaptainAvatar'
+import BridgeWalls from './BridgeWalls'
+import SideConsoles from './SideConsoles'
+import FloatingOrbs from './FloatingOrbs'
 
 interface Props {
   criticals: number
@@ -83,9 +87,13 @@ export default function Bridge3DScene({
       <pointLight position={[0, 15, 0]} intensity={0.3} color="#8ac6ff" distance={30} />
 
       <Suspense fallback={null}>
-        <Starfield count={lowPerf ? 300 : 700} />
+        <Starfield count={lowPerf ? 200 : 500} />
         <BridgeFloor />
+        <BridgeWalls />
+        <SideConsoles />
+        <CaptainAvatar />
         <CenterBeam />
+        {!lowPerf && <FloatingOrbs count={6} />}
         {consoles.map(c => (
           <ConsoleStation
             key={c.id}
@@ -104,7 +112,7 @@ export default function Bridge3DScene({
       </Suspense>
 
       <CameraRig focusTarget={focusTarget} />
-      <Effects lowPerf={lowPerf} />
+      {!lowPerf && <Effects lowPerf={false} />}
     </Canvas>
   )
 }

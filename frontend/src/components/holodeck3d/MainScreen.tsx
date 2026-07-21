@@ -12,8 +12,8 @@ interface Props {
 }
 
 /**
- * 正前方弧形主屏幕
- * 显示星系图 + 实时告警/集群/任务数据
+ * 正前方巨型主屏幕
+ * 用平面 + 边角装饰代替 wireframe 柱面，避免遮挡内容
  */
 export default function MainScreen({ criticals, warnings, running, clusters, okClusters }: Props) {
   const glowRef = useRef<THREE.Mesh>(null)
@@ -21,82 +21,93 @@ export default function MainScreen({ criticals, warnings, running, clusters, okC
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime()
     if (glowRef.current) {
-      const s = 1 + Math.sin(t * 0.8) * 0.02
+      const s = 1 + Math.sin(t * 0.6) * 0.015
       glowRef.current.scale.set(s, s, 1)
     }
   })
 
   const combat = criticals > 0
   const primaryColor = combat ? '#ff3b5c' : '#4fc3f7'
+  const glowColor = combat ? 'rgba(255,59,92,0.5)' : 'rgba(79,195,247,0.5)'
 
-  // 弧形屏幕（正前方，Z 负方向）
+  // 屏幕放在正前方 z=-9，高度 y=4，尺寸 14x6
+  const W = 14
+  const H = 6
+  const zPos = -9
+
   return (
-    <group position={[0, 3.5, -8]}>
-      {/* 屏幕背板（弧形近似：用 CylinderGeometry 局部片段） */}
-      <mesh ref={glowRef}>
-        <cylinderGeometry args={[8, 8, 4, 32, 1, true, -Math.PI / 4, Math.PI / 2]} />
-        <meshBasicMaterial
-          color={primaryColor}
-          toneMapped={false}
-          transparent
-          opacity={0.08}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* 屏幕边框（发光） */}
-      <mesh>
-        <cylinderGeometry args={[8.05, 8.05, 4.1, 32, 1, true, -Math.PI / 4, Math.PI / 2]} />
-        <meshBasicMaterial
-          color={primaryColor}
-          toneMapped={false}
-          transparent
-          opacity={0.5}
-          side={THREE.DoubleSide}
-          wireframe
-        />
+    <group position={[0, 4, zPos]}>
+      {/* 屏幕背光晕 */}
+      <mesh ref={glowRef} position={[0, 0, -0.2]}>
+        <planeGeometry args={[W + 2, H + 2]} />
+        <meshBasicMaterial color={primaryColor} toneMapped={false} transparent opacity={0.08} />
       </mesh>
 
-      {/* HTML 内容层：星系数据面板 */}
+      {/* 屏幕主体（暗色玻璃） */}
+      <mesh position={[0, 0, -0.05]}>
+        <planeGeometry args={[W, H]} />
+        <meshBasicMaterial color="#030818" transparent opacity={0.75} />
+      </mesh>
+
+      {/* 边框描边（顶+底+左+右） */}
+      <BorderLine start={[-W / 2, H / 2, 0]} end={[W / 2, H / 2, 0]} color={primaryColor} />
+      <BorderLine start={[-W / 2, -H / 2, 0]} end={[W / 2, -H / 2, 0]} color={primaryColor} />
+      <BorderLine start={[-W / 2, -H / 2, 0]} end={[-W / 2, H / 2, 0]} color={primaryColor} />
+      <BorderLine start={[W / 2, -H / 2, 0]} end={[W / 2, H / 2, 0]} color={primaryColor} />
+
+      {/* 四角装饰 */}
+      <CornerBracket position={[-W / 2, H / 2, 0]} color={primaryColor} rotation={0} />
+      <CornerBracket position={[W / 2, H / 2, 0]} color={primaryColor} rotation={Math.PI / 2} />
+      <CornerBracket position={[W / 2, -H / 2, 0]} color={primaryColor} rotation={Math.PI} />
+      <CornerBracket position={[-W / 2, -H / 2, 0]} color={primaryColor} rotation={-Math.PI / 2} />
+
+      {/* HTML 数据面板（贴在屏幕表面，不占用 3D 空间）*/}
       <Html
-        position={[0, 0, 4]}
+        position={[0, 0, 0.05]}
         transform
         occlude={false}
-        distanceFactor={4}
+        distanceFactor={3.2}
         style={{
-          width: 900,
+          width: 1200,
           pointerEvents: 'none',
           userSelect: 'none',
         }}
       >
         <div style={{
-          padding: 20,
-          background: 'linear-gradient(135deg, rgba(3,5,16,0.7) 0%, rgba(10,20,45,0.5) 100%)',
-          border: `2px solid ${primaryColor}`,
-          borderRadius: 6,
+          padding: '24px 30px',
           fontFamily: "'JetBrains Mono', monospace",
           color: '#eaf4ff',
-          textShadow: `0 0 12px ${primaryColor}`,
-          boxShadow: `0 0 40px ${primaryColor}80, inset 0 0 40px rgba(79,195,247,0.15)`,
+          textShadow: `0 0 8px ${primaryColor}`,
         }}>
-          {/* 标题 */}
+          {/* 标题栏 */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 16,
-            paddingBottom: 12,
-            borderBottom: `1px solid ${primaryColor}60`,
+            marginBottom: 20,
+            paddingBottom: 14,
+            borderBottom: `1px solid ${primaryColor}80`,
           }}>
-            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.3em', color: primaryColor }}>
+            <div style={{
+              fontSize: 26,
+              fontWeight: 700,
+              letterSpacing: '0.35em',
+              color: primaryColor,
+            }}>
               ◆ GALAXY OVERVIEW · 星系总览
             </div>
-            <div style={{ fontSize: 13, color: primaryColor, letterSpacing: '0.2em' }}>
+            <div style={{
+              fontSize: 16,
+              color: primaryColor,
+              letterSpacing: '0.25em',
+              fontWeight: 700,
+            }}>
               {combat ? '⚠ RED ALERT' : warnings > 0 ? '△ CAUTION' : '● NOMINAL'}
             </div>
           </div>
 
-          {/* 5 项汇总（大数字网格） */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+          {/* 5 项数据 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
             <StatBlock label="CLUSTERS · 集群" value={clusters} color="#4fc3f7" />
             <StatBlock label="CRITICAL · 紧急" value={criticals} color="#ff3b5c" pulse={criticals > 0} />
             <StatBlock label="WARNING · 告警" value={warnings} color="#fbbf24" />
@@ -104,18 +115,50 @@ export default function MainScreen({ criticals, warnings, running, clusters, okC
             <StatBlock label="OK · 健康" value={`${okClusters}/${clusters}`} color="#4ade80" />
           </div>
 
-          {/* 底部扫描线 */}
+          {/* 底部信息 */}
           <div style={{
-            marginTop: 16,
-            fontSize: 10,
+            marginTop: 20,
+            paddingTop: 14,
+            borderTop: `1px solid ${primaryColor}60`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: 12,
             letterSpacing: '0.4em',
-            color: `${primaryColor}80`,
-            textAlign: 'center',
+            color: `${primaryColor}b0`,
           }}>
-            ▸ STARDECK · 全息舰桥指挥中心 · 实时监控 ◂
+            <span>▸ STARDECK · 全息舰桥指挥中心</span>
+            <span>SYSTEM v16.3 · UPLINK OK ◂</span>
           </div>
         </div>
       </Html>
+    </group>
+  )
+}
+
+function BorderLine({ start, end, color }: { start: [number, number, number]; end: [number, number, number]; color: string }) {
+  const geometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(...start),
+    new THREE.Vector3(...end),
+  ])
+  return (
+    <line>
+      <primitive object={geometry} attach="geometry" />
+      <lineBasicMaterial color={color} toneMapped={false} linewidth={2} />
+    </line>
+  )
+}
+
+function CornerBracket({ position, color, rotation }: { position: [number, number, number]; color: string; rotation: number }) {
+  return (
+    <group position={position} rotation={[0, 0, rotation]}>
+      <mesh position={[-0.3, 0, 0.05]}>
+        <boxGeometry args={[0.6, 0.06, 0.06]} />
+        <meshBasicMaterial color={color} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, -0.3, 0.05]}>
+        <boxGeometry args={[0.06, 0.6, 0.06]} />
+        <meshBasicMaterial color={color} toneMapped={false} />
+      </mesh>
     </group>
   )
 }
@@ -124,26 +167,26 @@ function StatBlock({ label, value, color, pulse }: { label: string; value: numbe
   return (
     <div style={{
       textAlign: 'center',
-      padding: '12px 8px',
-      background: `${color}10`,
-      border: `1px solid ${color}60`,
-      borderRadius: 4,
+      padding: '18px 12px',
+      background: `${color}12`,
+      border: `1px solid ${color}70`,
+      borderRadius: 6,
       animation: pulse ? 'hd-breathe 0.8s ease-in-out infinite' : undefined,
     }}>
       <div style={{
-        fontSize: 32,
+        fontSize: 44,
         fontWeight: 700,
         color,
-        textShadow: `0 0 16px ${color}`,
+        textShadow: `0 0 20px ${color}`,
         lineHeight: 1,
       }}>
         {value}
       </div>
       <div style={{
-        fontSize: 10,
+        fontSize: 12,
         color: `${color}dd`,
-        letterSpacing: '0.15em',
-        marginTop: 6,
+        letterSpacing: '0.2em',
+        marginTop: 10,
       }}>
         {label}
       </div>
