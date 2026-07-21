@@ -13,6 +13,7 @@ import QuickCommandDrawer from './QuickCommandDrawer'
 import ClusterInspector from './ClusterInspector'
 import OrbitalStrike from './OrbitalStrike'
 import BridgeTicker, { pushBridgeEvent } from './BridgeTicker'
+import GlassShatter from './GlassShatter'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
@@ -188,11 +189,16 @@ export default function HolodeckLayout() {
           clusterId={inspectCluster.id}
           clusterName={inspectCluster.name}
           onClose={() => setInspectCluster(null)}
+          onStrike={(x, y, color) => setStrike({ x, y, color })}
+          onBadgesUnlocked={(b) => setNewBadges(prev => [...prev, ...b])}
         />
       )}
 
       {/* 底部系统日志 ticker */}
       <BridgeTicker alerts={alerts} />
+
+      {/* P0 玻璃碎裂效果 */}
+      <GlassShatter active={mood === 'combat'} />
 
       {/* 轨道打击动画 */}
       <OrbitalStrike

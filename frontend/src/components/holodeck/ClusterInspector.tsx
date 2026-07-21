@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { hapticLight } from '@/utils/haptics'
+import InBridgeScale from './InBridgeScale'
+import { Badge } from './achievements'
 
 interface Props {
   clusterId: number
   clusterName: string
   onClose: () => void
+  onStrike?: (x: number, y: number, color?: string) => void
+  onBadgesUnlocked?: (b: Badge[]) => void
 }
 
 const HEALTH_COLOR = (v: number) => {
@@ -15,7 +19,7 @@ const HEALTH_COLOR = (v: number) => {
   return '#4ADE80'
 }
 
-export default function ClusterInspector({ clusterId, clusterName, onClose }: Props) {
+export default function ClusterInspector({ clusterId, clusterName, onClose, onStrike, onBadgesUnlocked }: Props) {
   const nav = useNavigate()
   const [overview, setOverview] = useState<any | null>(null)
   const [metrics, setMetrics] = useState<any | null>(null)
@@ -215,7 +219,7 @@ export default function ClusterInspector({ clusterId, clusterName, onClose }: Pr
               )}
             </div>
 
-            {/* 节点池 */}
+            {/* 舰桥内扩容 */}
             <div>
               <div style={{
                 fontSize: 10,
@@ -223,35 +227,15 @@ export default function ClusterInspector({ clusterId, clusterName, onClose }: Pr
                 color: 'var(--hd-cyan)',
                 marginBottom: 10,
               }}>
-                ◇ NODE POOLS ({pools.length})
+                ◇ ORBITAL DEPLOY · 空投增援
               </div>
-              {pools.length === 0 ? (
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>No pools detected</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
-                  {pools.map((p: any) => (
-                    <div
-                      key={p.id || p.name}
-                      style={{
-                        padding: '6px 10px',
-                        background: 'rgba(10, 20, 45, 0.5)',
-                        border: '1px solid rgba(120, 200, 255, 0.15)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: 11,
-                      }}
-                    >
-                      <span style={{ color: 'var(--text-primary)' }}>
-                        {p.name || p.pool_name || `pool-${p.id}`}
-                      </span>
-                      <span className="hd-text-mono" style={{ color: 'var(--hd-cyan)', fontSize: 10 }}>
-                        {p.current_size ?? p.desired_size ?? '?'} nodes
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <InBridgeScale
+                clusterId={clusterId}
+                clusterName={clusterName}
+                pools={pools}
+                onStrike={onStrike}
+                onBadgesUnlocked={onBadgesUnlocked}
+              />
             </div>
 
             {/* 快捷动作 */}

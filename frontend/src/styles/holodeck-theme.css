@@ -155,6 +155,11 @@ body.mo-holodeck #root {
   to { transform: translateX(-100%); }
 }
 
+@keyframes hd-crack-appear {
+  0% { opacity: 0; stroke-dasharray: 100; stroke-dashoffset: 100; }
+  100% { opacity: 1; stroke-dasharray: 100; stroke-dashoffset: 0; }
+}
+
 /* ============ 全息面板 ============ */
 .hd-panel {
   position: relative;
