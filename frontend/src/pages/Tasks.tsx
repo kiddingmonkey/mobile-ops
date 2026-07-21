@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { fmtRelative, fmtTime } from '@/utils/format'
 import { hapticLight } from '@/utils/haptics'
+import TaskInspector from '@/components/holodeck/TaskInspector'
 
 /**
  * 任务与运维中心 - 综合 SRE 场景入口
@@ -15,6 +16,7 @@ export default function TasksPage() {
   const nav = useNavigate()
   const [ops, setOps] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [inspectTask, setInspectTask] = useState<any | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -170,7 +172,7 @@ export default function TasksPage() {
                 return (
                   <div
                     key={o.id}
-                    onClick={() => nav('/operations')}
+                    onClick={() => setInspectTask(o)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 0', borderBottom: '1px solid var(--border-color)',
@@ -210,7 +212,7 @@ export default function TasksPage() {
                 return (
                   <div
                     key={o.id}
-                    onClick={() => nav('/operations')}
+                    onClick={() => setInspectTask(o)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '6px 0', borderBottom: '1px solid var(--border-color)',
@@ -238,6 +240,14 @@ export default function TasksPage() {
         </div>
       </PullToRefresh>
       </div>
+
+      {inspectTask && (
+        <TaskInspector
+          task={inspectTask}
+          onClose={() => setInspectTask(null)}
+          onRefresh={load}
+        />
+      )}
     </div>
   )
 }

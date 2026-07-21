@@ -5,6 +5,7 @@ import HoldToConfirm from './HoldToConfirm'
 import { pushBridgeEvent } from './BridgeTicker'
 import { recordEvent, Badge } from './achievements'
 import { fireCaptainReaction } from './captainReactions'
+import { showConfirmDialog, CONFIRM_ACTIONS } from './ConfirmDialog'
 
 /**
  * 舰桥内节点池扩容
@@ -55,6 +56,16 @@ export default function InBridgeScale({
 
   const execute = async (x: number, y: number) => {
     if (poolId === null) return
+
+    // 二次确认：展示中文操作描述、风险和后果
+    const poolName = pool.name || `pool-${poolId}`
+    const confirmAction = isShrink
+      ? CONFIRM_ACTIONS.scaleDown(clusterName, poolName, currentSize, targetSize, delta)
+      : CONFIRM_ACTIONS.scaleUp(clusterName, poolName, currentSize, targetSize, delta)
+
+    const confirmed = await showConfirmDialog(confirmAction)
+    if (!confirmed) return
+
     setSubmitting(true)
     Toast.show({ icon: 'loading', content: isShrink ? '正在回收...' : '正在空投增援...', duration: 0 })
     onStrike?.(x, y, color)
@@ -77,17 +88,17 @@ export default function InBridgeScale({
 
       pushBridgeEvent(
         'success',
-        `${isShrink ? 'SCALE-DOWN' : 'SCALE-UP'} · [${clusterName.toUpperCase()}] ${pool.name || `pool-${poolId}`} · ${currentSize}→${targetSize} · op=${r.operation_id?.slice(0, 8) || 'N/A'}`
+        `${isShrink ? 'SCALE-DOWN' : 'SCALE-UP'} · [${clusterName.toUpperCase()}] ${poolName} · ${currentSize}→${targetSize} · op=${r.operation_id?.slice(0, 8) || 'N/A'}`
       )
-      fireCaptainReaction({ type: 'scale_success', delta, poolName: pool.name || `pool-${poolId}` })
+      fireCaptainReaction({ type: 'scale_success', delta, poolName })
 
       const unlocked = recordEvent({ type: 'op_executed' })
       if (unlocked.length) onBadgesUnlocked?.(unlocked)
     } catch (e) {
       Toast.clear()
       Toast.show({ icon: 'fail', content: friendlyApiError(e) })
-      pushBridgeEvent('error', `SCALE FAILED · ${pool.name || `pool-${poolId}`} · ${(e as any)?.message || 'unknown'}`)
-      fireCaptainReaction({ type: 'scale_failed', poolName: pool.name || `pool-${poolId}` })
+      pushBridgeEvent('error', `SCALE FAILED · ${poolName} · ${(e as any)?.message || 'unknown'}`)
+      fireCaptainReaction({ type: 'scale_failed', poolName })
     } finally {
       setSubmitting(false)
     }
@@ -116,7 +127,7 @@ export default function InBridgeScale({
             letterSpacing: '0.2em',
             marginBottom: 4,
           }}>
-            POOL
+            POOL · 节点池
           </div>
           <select
             value={poolId ?? ''}
@@ -151,7 +162,7 @@ export default function InBridgeScale({
           letterSpacing: '0.2em',
           marginBottom: 4,
         }}>
-          DELTA
+          DELTA · 变化量
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
           {[-1, 1, 2, 3].map(d => {
@@ -194,7 +205,7 @@ export default function InBridgeScale({
           {' nodes'}
         </div>
         <div className="hd-text-mono" style={{ fontSize: 9, color, letterSpacing: '0.15em' }}>
-          {isShrink ? 'RECALL' : 'DEPLOY'}
+          {isShrink ? 'RECALL · 回收' : 'DEPLOY · 投放'}
         </div>
       </div>
 
@@ -206,7 +217,7 @@ export default function InBridgeScale({
         marginTop: 4,
       }}>
         <HoldToConfirm
-          label={isShrink ? 'HOLD · 回收' : 'HOLD · 空投增援'}
+          label={isShrink ? 'HOLD · 回收' : 'HOLD · 增援'}
           duration={2000}
           color={color}
           glowColor={glowColor}
@@ -215,7 +226,8 @@ export default function InBridgeScale({
         />
         <div style={{ flex: 1, fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
           长按左侧充能环 2s<br />
-          {isShrink ? '回收多余节点' : '从轨道投放增援节点'}
+          {isShrink ? '回收多余节点' : '从轨道投放增援节点'}<br/>
+          <span style={{ color: 'var(--warning)' }}>⚠️ 执行前会要求二次确认</span>
         </div>
       </div>
     </div>

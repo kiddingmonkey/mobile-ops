@@ -332,28 +332,68 @@ export default function AlertsPage() {
   const critical = firing.filter(a => a.severity === 'critical')
   const warning = firing.filter(a => a.severity === 'warning')
 
-  // === 告警分类策略（从 localStorage 读取配置） ===
+  // === 告警分类策略（从 localStorage 读取配置，支持 v2 新格式） ===
   const alertFilterConfig = (() => {
     try {
+      // 优先读取 v2 配置
+      const savedV2 = localStorage.getItem('alert_filter_config_v2')
+      if (savedV2) return JSON.parse(savedV2)
+
+      // 兼容旧配置
       const saved = localStorage.getItem('alert_filter_config')
-      return saved ? JSON.parse(saved) : {
-        clusterValues: ['jyyun'],
-        systemNameValues: [],
-        staleDays: 3
+      if (saved) {
+        const old = JSON.parse(saved)
+        return {
+          conditions: [
+            { field: 'cluster', operator: 'OR', values: old.clusterValues || ['jyyun'] },
+            ...(old.systemNameValues?.length ? [{ field: 'system_name', operator: 'OR', values: old.systemNameValues }] : [])
+          ],
+          staleDays: old.staleDays || 3,
+          logicMode: 'mine'
+        }
+      }
+
+      return {
+        conditions: [{ field: 'cluster', operator: 'OR', values: ['jyyun'] }],
+        staleDays: 3,
+        logicMode: 'mine'
       }
     } catch {
-      return { clusterValues: ['jyyun'], systemNameValues: [], staleDays: 3 }
+      return {
+        conditions: [{ field: 'cluster', operator: 'OR', values: ['jyyun'] }],
+        staleDays: 3,
+        logicMode: 'mine'
+      }
     }
   })()
 
-  // 判断是否是"我的告警"
+  // 判断告警是否匹配单个条件
+  const matchCondition = (alert: any, condition: any) => {
+    const { field, operator, values } = condition
+    if (values.length === 0) return true // 空值视为不限制
+
+    const alertValue = field === 'system_name'
+      ? (alert.labels?.system_name || alert.labels?.exported_system_name || '')
+      : (alert.labels?.[field] || alert[field] || '')
+
+    if (operator === 'OR') {
+      // 或：满足任意一个值
+      return values.some((v: string) => alertValue === v)
+    } else if (operator === 'AND') {
+      // 与：必须同时匹配所有值（alertValue 包含所有 values）
+      return values.every((v: string) => alertValue.includes(v))
+    } else {
+      // NOT：不能匹配任何一个值
+      return !values.some((v: string) => alertValue === v)
+    }
+  }
+
+  // 判断是否是"我的告警"（所有条件必须同时满足，条件间是 AND 关系）
   const isMyAlert = (a: any) => {
-    const cluster = a.labels?.cluster || ''
-    const sysName = a.labels?.system_name || a.labels?.exported_system_name || ''
-    const clusterMatch = alertFilterConfig.clusterValues.length === 0 || alertFilterConfig.clusterValues.includes(cluster)
-    if (!clusterMatch) return false
-    if (alertFilterConfig.systemNameValues.length === 0) return true
-    return alertFilterConfig.systemNameValues.includes(sysName)
+    if (!alertFilterConfig.conditions || alertFilterConfig.conditions.length === 0) {
+      return true // 无条件时匹配所有
+    }
+    return alertFilterConfig.conditions.every((cond: any) => matchCondition(a, cond))
   }
 
   // 超过 N 天的告警自动归入已忽略

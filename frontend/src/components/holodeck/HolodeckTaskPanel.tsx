@@ -6,6 +6,7 @@ import { fmtRelative } from '@/utils/format'
 import { hapticLight } from '@/utils/haptics'
 import { Badge } from './achievements'
 import AlertInspector from './AlertInspector'
+import TaskInspector from './TaskInspector'
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--hd-emergency)',
@@ -25,6 +26,7 @@ export default function HolodeckTaskPanel({
   const [ops, setOps] = useState<any[]>(() => getCache('ops_10') || [])
   const [tab, setTab] = useState<'alerts' | 'ops'>('alerts')
   const [inspectAlert, setInspectAlert] = useState<any | null>(null)
+  const [inspectTask, setInspectTask] = useState<any | null>(null)
 
   const load = () => {
     withCache('alerts_50', () => api.listAlerts(50)).then(a => setAlerts(a || [])).catch(() => {})
@@ -99,7 +101,7 @@ export default function HolodeckTaskPanel({
           />
         ))}
         {tab === 'ops' && running.map(o => (
-          <OpCard key={o.id} op={o} onClick={() => { hapticLight(); nav(`/tasks?id=${o.id}`) }} />
+          <OpCard key={o.id} op={o} onClick={() => { hapticLight(); setInspectTask(o) }} />
         ))}
       </div>
 
@@ -127,6 +129,14 @@ export default function HolodeckTaskPanel({
           onClose={() => { setInspectAlert(null); load() }}
           onStrike={onStrike}
           onBadgesUnlocked={onBadgesUnlocked}
+        />
+      )}
+
+      {inspectTask && (
+        <TaskInspector
+          task={inspectTask}
+          onClose={() => { setInspectTask(null); load() }}
+          onRefresh={load}
         />
       )}
     </div>

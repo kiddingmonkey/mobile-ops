@@ -157,57 +157,59 @@ export default function HolodeckShell() {
     }}>
       <HolodeckStarBackground />
 
-      {/* 顶部指挥条（简化版，含返回舰桥） */}
+      {/* 顶部指挥条（优化版：紧凑布局） */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
-        padding: '8px 16px',
+        gap: 8,
+        padding: '6px 10px',
         borderBottom: '1px solid rgba(120, 200, 255, 0.15)',
         background: 'rgba(3, 5, 16, 0.6)',
         backdropFilter: 'blur(12px)',
         position: 'relative',
         zIndex: 2,
         flexShrink: 0,
+        minHeight: 36,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        {/* 左侧：返回+Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {isDeep && (
             <button
               onClick={() => nav(-1)}
               className="hd-text-mono"
-              title="返回上级"
+              title="返回"
               style={{
                 background: 'transparent',
-                border: '1px solid rgba(120, 200, 255, 0.35)',
+                border: '1px solid rgba(120, 200, 255, 0.3)',
                 color: 'var(--hd-cyan)',
-                padding: '4px 10px',
-                fontSize: 11,
-                letterSpacing: '0.2em',
+                padding: '3px 8px',
+                fontSize: 10,
+                letterSpacing: '0.15em',
                 cursor: 'pointer',
                 borderRadius: 2,
                 fontFamily: 'inherit',
-                textShadow: '0 0 6px var(--hd-cyan-glow)',
+                textShadow: '0 0 4px var(--hd-cyan-glow)',
               }}
             >
-              ◂ BACK
+              ◂
             </button>
           )}
           <div
             className="hd-text-glow hd-text-mono"
             onClick={() => nav('/')}
             style={{
-              fontSize: 13,
-              letterSpacing: '0.35em',
+              fontSize: 11,
+              letterSpacing: '0.25em',
               fontWeight: 700,
               cursor: 'pointer',
             }}
           >
-            ◆ STARDECK · 星驾
+            ◆ STARDECK
           </div>
         </div>
 
-        {/* 导航条 */}
-        <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+        {/* 中央：导航条 */}
+        <div style={{ display: 'flex', gap: 3, flex: 1, minWidth: 0 }}>
           {ROUTE_LABELS.map(r => {
             const isActive = active === r.path
             return (
@@ -215,18 +217,20 @@ export default function HolodeckShell() {
                 key={r.path}
                 onClick={() => nav(r.path)}
                 className="hd-text-mono"
+                title={r.label}
                 style={{
                   background: isActive ? 'rgba(79, 195, 247, 0.15)' : 'transparent',
                   border: `1px solid ${isActive ? 'var(--hd-cyan)' : 'rgba(120, 200, 255, 0.15)'}`,
-                  color: isActive ? 'var(--hd-cyan)' : 'var(--text-secondary)',
-                  padding: '4px 12px',
-                  fontSize: 10,
-                  letterSpacing: '0.2em',
+                  color: isActive ? 'var(--hd-cyan)' : 'var(--text-tertiary)',
+                  padding: '3px 8px',
+                  fontSize: 9,
+                  letterSpacing: '0.15em',
                   cursor: 'pointer',
                   borderRadius: 2,
                   fontFamily: 'inherit',
-                  textShadow: isActive ? '0 0 6px var(--hd-cyan-glow)' : 'none',
-                  boxShadow: isActive ? '0 0 12px var(--hd-cyan-glow)' : 'none',
+                  textShadow: isActive ? '0 0 4px var(--hd-cyan-glow)' : 'none',
+                  boxShadow: isActive ? '0 0 8px var(--hd-cyan-glow)' : 'none',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {r.en}
@@ -235,62 +239,66 @@ export default function HolodeckShell() {
           })}
         </div>
 
-        {/* 状态灯 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            width: 8, height: 8,
-            borderRadius: '50%',
-            background: statusColor,
-            boxShadow: `0 0 8px ${statusColor}`,
-            animation: combat ? 'hd-breathe 0.8s ease-in-out infinite' : 'hd-breathe 3s ease-in-out infinite',
-          }} />
-          <span className="hd-text-mono" style={{
+        {/* 右侧：状态+退出+时间 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {/* 状态灯 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{
+              width: 6, height: 6,
+              borderRadius: '50%',
+              background: statusColor,
+              boxShadow: `0 0 6px ${statusColor}`,
+              animation: combat ? 'hd-breathe 0.8s ease-in-out infinite' : 'hd-breathe 3s ease-in-out infinite',
+            }} />
+            <span className="hd-text-mono" style={{
+              fontSize: 9,
+              color: statusColor,
+              letterSpacing: '0.15em',
+              fontWeight: 600,
+            }}>
+              {statusText}
+            </span>
+          </div>
+
+          {/* 退出 */}
+          <button
+            onClick={() => setMode('dark')}
+            className="hd-text-mono"
+            title="退出全息舰桥"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(120, 200, 255, 0.25)',
+              color: 'var(--text-tertiary)',
+              padding: '3px 8px',
+              fontSize: 9,
+              letterSpacing: '0.12em',
+              cursor: 'pointer',
+              borderRadius: 2,
+              fontFamily: 'inherit',
+            }}
+          >
+            EXIT
+          </button>
+
+          {/* 时间 */}
+          <div className="hd-text-mono hd-text-glow" style={{
             fontSize: 11,
-            color: statusColor,
-            letterSpacing: '0.2em',
-            fontWeight: 600,
+            letterSpacing: '0.12em',
+            minWidth: 70,
+            textAlign: 'right',
           }}>
-            {statusText}
-          </span>
-        </div>
-
-        {/* 退出全息 */}
-        <button
-          onClick={() => setMode('dark')}
-          className="hd-text-mono"
-          style={{
-            background: 'transparent',
-            border: '1px solid rgba(120, 200, 255, 0.3)',
-            color: 'var(--text-tertiary)',
-            padding: '4px 10px',
-            fontSize: 10,
-            letterSpacing: '0.15em',
-            cursor: 'pointer',
-            borderRadius: 2,
-            fontFamily: 'inherit',
-          }}
-        >
-          EXIT
-        </button>
-
-        {/* 时间 */}
-        <div className="hd-text-mono hd-text-glow" style={{
-          fontSize: 13,
-          letterSpacing: '0.15em',
-          minWidth: 92,
-          textAlign: 'right',
-        }}>
-          {time.toTimeString().slice(0, 8)}
+            {time.toTimeString().slice(0, 5)}
+          </div>
         </div>
       </div>
 
-      {/* 中央内容（hd-panel 包裹） */}
+      {/* 中央内容（hd-panel 包裹，优化 padding） */}
       <div style={{
         flex: 1,
         minHeight: 0,
         position: 'relative',
         zIndex: 1,
-        padding: '10px 12px',
+        padding: '8px 10px',
         overflow: 'hidden',
       }}>
         <div className="hd-panel" style={{

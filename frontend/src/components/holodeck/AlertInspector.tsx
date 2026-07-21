@@ -8,6 +8,7 @@ import HoldToConfirm from './HoldToConfirm'
 import { pushBridgeEvent } from './BridgeTicker'
 import { fireCaptainReaction } from './captainReactions'
 import { recordEvent, Badge } from './achievements'
+import { showConfirmDialog, CONFIRM_ACTIONS } from './ConfirmDialog'
 
 const SEV_COLOR: Record<string, string> = {
   critical: 'var(--hd-emergency)',
@@ -48,6 +49,10 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
   )
 
   const doSilence = async (x: number, y: number) => {
+    // 二次确认：展示中文操作描述、风险和后果
+    const confirmed = await showConfirmDialog(CONFIRM_ACTIONS.silenceAlert(alertname, duration))
+    if (!confirmed) return
+
     setSilencing(true)
     Toast.show({ icon: 'loading', content: '静默中...', duration: 0 })
     onStrike?.(x, y, color)
@@ -128,7 +133,7 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
         }}
       >
         <div className="hd-panel-header" style={{ color, textShadow: `0 0 8px ${glowColor}` }}>
-          <span>◆ ALERT · {severity.toUpperCase()}</span>
+          <span>◆ ALERT · 告警详情 · {severity.toUpperCase()}</span>
           <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <span className="hd-text-mono" style={{ fontSize: 10, opacity: 0.7 }}>
               {fmtRelative(alert.starts_at || alert.startsAt)}
@@ -211,7 +216,7 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
                 color: 'var(--hd-cyan)',
                 marginBottom: 10,
               }}>
-                ◇ LABELS ({labelEntries.length})
+                ◇ LABELS · 标签 ({labelEntries.length})
               </div>
               <div style={{
                 display: 'grid',
@@ -247,7 +252,7 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
                 color: 'var(--hd-cyan)',
                 marginBottom: 10,
               }}>
-                ◇ META
+                ◇ META · 元数据
               </div>
               <div style={{
                 fontSize: 11,
@@ -274,7 +279,7 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
             color: 'var(--hd-cyan)',
             marginBottom: 10,
           }}>
-            ◇ SILENCE DURATION
+            ◇ SILENCE DURATION · 静默时长
           </div>
           <div style={{
             display: 'grid',
@@ -341,7 +346,8 @@ export default function AlertInspector({ alert, onClose, onStrike, onBadgesUnloc
                 </a>
               )}
               <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-                长按环形充能 1.8s 静默此告警
+                长按环形充能 1.8s 静默此告警<br/>
+                <span style={{ color: 'var(--warning)' }}>⚠️ 执行前会要求二次确认</span>
               </div>
             </div>
           </div>
