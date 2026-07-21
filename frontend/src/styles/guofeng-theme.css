@@ -1,0 +1,234 @@
+/* ========================================================
+   Mobile-Ops 国风主题 · 阴阳师级视觉皮肤
+   激活方式: body.mo-guofeng
+   ======================================================== */
+
+/* ============ 国风配色变量 ============ */
+body.mo-guofeng {
+  --bg-primary: #0a0c14;
+  --bg-secondary: rgba(15, 18, 30, 0.75);
+  --bg-elevated: rgba(25, 30, 48, 0.8);
+  --bg-input: rgba(10, 12, 20, 0.9);
+
+  --border-color: rgba(180, 150, 90, 0.2);
+  --border-strong: rgba(180, 150, 90, 0.35);
+
+  --text-primary: #F2E8D4;
+  --text-secondary: #B8A88A;
+  --text-tertiary: #7A6E58;
+  --text-disabled: #4A4238;
+
+  /* 朱砂红 */
+  --accent-blue: #C44536;
+  --accent-blue-hover: #D4554A;
+  --accent-blue-bg: rgba(196, 69, 54, 0.15);
+
+  /* 状态色 - 国风版 */
+  --success: #5E9E5E;
+  --success-bg: rgba(94, 158, 94, 0.14);
+  --warning: #D4A843;
+  --warning-bg: rgba(212, 168, 67, 0.14);
+  --danger: #C44536;
+  --danger-bg: rgba(196, 69, 54, 0.14);
+  --info-bg: rgba(180, 150, 90, 0.12);
+
+  /* 国风专属 */
+  --gf-gold: #B4965A;
+  --gf-gold-light: #D4B87A;
+  --gf-cinnabar: #C44536;
+  --gf-ink: #1A1E2E;
+  --gf-jade: #5E9E7E;
+  --gf-cloud: rgba(200, 190, 170, 0.06);
+
+  /* AntD 覆盖 */
+  --adm-color-primary: #C44536;
+  --adm-color-background: #0a0c14;
+  --adm-color-text: #F2E8D4;
+  --adm-color-text-secondary: #B8A88A;
+  --adm-color-weak: #7A6E58;
+  --adm-color-border: rgba(180, 150, 90, 0.2);
+  --adm-color-box: rgba(15, 18, 30, 0.75);
+  --adm-color-background-body: transparent;
+}
+
+/* ============ 国风卡片毛玻璃 ============ */
+body.mo-guofeng .card,
+body.mo-guofeng .metric-card,
+body.mo-guofeng .adm-list-body,
+body.mo-guofeng .adm-list-item {
+  background: rgba(15, 18, 30, 0.65) !important;
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid rgba(180, 150, 90, 0.15) !important;
+}
+
+body.mo-guofeng .page-header {
+  background: rgba(10, 12, 20, 0.8) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(180, 150, 90, 0.15) !important;
+}
+
+body.mo-guofeng .adm-tab-bar {
+  background: rgba(10, 12, 20, 0.85) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(180, 150, 90, 0.12) !important;
+}
+
+/* 国风按钮 */
+body.mo-guofeng .adm-button-primary,
+body.mo-guofeng .primary-action {
+  background: linear-gradient(135deg, #C44536 0%, #8B2E22 100%) !important;
+  box-shadow: 0 4px 16px rgba(196, 69, 54, 0.3) !important;
+}
+
+/* 国风卡片装饰角 */
+body.mo-guofeng .card::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: -1px;
+  width: 20px; height: 20px;
+  border-top: 2px solid var(--gf-gold);
+  border-left: 2px solid var(--gf-gold);
+  border-radius: 0;
+  opacity: 0.6;
+  pointer-events: none;
+}
+body.mo-guofeng .card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 20px; height: 20px;
+  border-bottom: 2px solid var(--gf-gold);
+  border-right: 2px solid var(--gf-gold);
+  border-radius: 0;
+  opacity: 0.6;
+  pointer-events: none;
+}
+body.mo-guofeng .card {
+  position: relative;
+}
+
+/* ============ 花瓣粒子动画 ============ */
+@keyframes gf-petal-fall {
+  0% { transform: translate(0, -10vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.8; }
+  100% { transform: translate(80px, 110vh) rotate(720deg); opacity: 0; }
+}
+
+@keyframes gf-petal-sway {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: 20px; }
+  75% { margin-left: -20px; }
+}
+
+@keyframes gf-cloud-drift {
+  0% { transform: translateX(-100%) translateY(0); opacity: 0; }
+  10% { opacity: 0.3; }
+  90% { opacity: 0.3; }
+  100% { transform: translateX(100vw) translateY(-20px); opacity: 0; }
+}
+
+@keyframes gf-firefly {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gf-breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+/* ============ 视差背景层 ============ */
+.gf-parallax-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gf-layer-far {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 100%, rgba(15, 20, 35, 0.9) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 60% at 80% 20%, rgba(40, 30, 50, 0.4) 0%, transparent 50%),
+    linear-gradient(180deg, #080a12 0%, #0d1020 40%, #151828 100%);
+}
+
+.gf-layer-mid {
+  position: absolute;
+  inset: 0;
+}
+
+.gf-layer-near {
+  position: absolute;
+  inset: 0;
+}
+
+/* 花瓣 */
+.gf-petal {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(ellipse, #C4453680 0%, #C4453620 70%);
+  border-radius: 50% 0 50% 0;
+  animation: gf-petal-fall linear infinite, gf-petal-sway ease-in-out infinite;
+}
+
+/* 萤火虫 */
+.gf-firefly {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: radial-gradient(circle, #D4B87A 0%, transparent 70%);
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(212, 184, 122, 0.4);
+  animation: gf-firefly ease-in-out infinite;
+}
+
+/* 云雾 */
+.gf-cloud {
+  position: absolute;
+  height: 60px;
+  background: radial-gradient(ellipse 100% 100%, rgba(200, 190, 170, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: gf-cloud-drift linear infinite;
+}
+
+/* 山水远景 SVG 层 */
+.gf-mountain {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40vh;
+  opacity: 0.15;
+  background: linear-gradient(180deg, transparent 0%, rgba(180, 150, 90, 0.05) 100%);
+}
+
+.gf-mountain svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* 金色边框光晕 */
+body.mo-guofeng .page {
+  background: transparent !important;
+}
+
+/* 横屏适配 */
+@media (orientation: landscape) {
+  .gf-parallax-container {
+    background-size: cover;
+  }
+  .gf-layer-far {
+    background:
+      radial-gradient(ellipse 60% 80% at 10% 100%, rgba(15, 20, 35, 0.9) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 90% 20%, rgba(40, 30, 50, 0.4) 0%, transparent 50%),
+      linear-gradient(180deg, #080a12 0%, #0d1020 40%, #151828 100%);
+  }
+}

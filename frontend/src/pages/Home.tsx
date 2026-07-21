@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { PullToRefresh, Button, Skeleton, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { api, friendlyApiError } from '@/api/client'
-import { useUI, useAuth } from '@/store'
+import { useUI, useAuth, useTheme, resolveTheme } from '@/store'
 import { fmtRelative } from '@/utils/format'
 import { withCache, getCache } from '@/utils/apiCache'
 import { hapticLight } from '@/utils/haptics'
@@ -106,6 +106,14 @@ export default function HomePage() {
 
   const greeting = () => {
     const h = new Date().getHours()
+    const isGF = resolveTheme(useTheme.getState().mode) === 'guofeng'
+    if (isGF) {
+      if (h < 6) return '夜深露重，君且珍重'
+      if (h < 11) return '晨光熹微，万物可期'
+      if (h < 14) return '日正当中，诸事顺遂'
+      if (h < 18) return '斜阳西照，百事无忧'
+      return '月上柳梢，天下太平'
+    }
     if (h < 6) return '深夜辛苦了'
     if (h < 11) return '早上好'
     if (h < 14) return '中午好'
@@ -113,13 +121,16 @@ export default function HomePage() {
     return '晚上好'
   }
 
+  const themeMode = useTheme(s => s.mode)
+  const isGuofeng = resolveTheme(themeMode) === 'guofeng'
+
   return (
     <div className="page">
       <RemoteStatusBanner />
 
       {/* 顶部 header - flex-shrink: 0 不参与滚动 */}
-      <div style={{ flexShrink: 0, padding: 'calc(env(safe-area-inset-top) + 10px) 16px 8px', background: 'var(--bg-primary)' }}>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{greeting()}</div>
+      <div style={{ flexShrink: 0, padding: 'calc(env(safe-area-inset-top) + 10px) 16px 8px', background: isGuofeng ? 'transparent' : 'var(--bg-primary)' }}>
+        <div style={{ fontSize: 11, color: isGuofeng ? 'var(--gf-gold)' : 'var(--text-tertiary)' }}>{greeting()}</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginTop: 1 }}>
           {user?.display_name || user?.username || 'SRE'}
         </div>

@@ -4,6 +4,10 @@
 
 /* 字体导入 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
+
+/* 国风主题 */
+@import './guofeng-theme.css';
 
 /* ============ 深色主题（默认）============ */
 :root, body.mo-dark {
@@ -761,5 +765,38 @@ option {
 .card + .card,
 .adm-list + .adm-list {
   margin-top: 10px !important;
+}
+
+/* ============ 国风主题全局覆盖 ============ */
+body.mo-guofeng {
+  background: #0a0c14 !important;
+  font-family: 'Noto Serif SC', 'PingFang SC', serif !important;
+}
+
+body.mo-guofeng #root {
+  background: transparent !important;
+}
+
+body.mo-guofeng .page {
+  background: transparent !important;
+}
+
+body.mo-guofeng .page-content {
+  position: relative;
+  z-index: 1;
+}
+
+body.mo-guofeng .adm-tab-bar-item-title {
+  font-family: 'Noto Serif SC', serif !important;
+}
+
+body.mo-guofeng .text-h1,
+body.mo-guofeng .text-h2,
+body.mo-guofeng .text-h3,
+body.mo-guofeng h1,
+body.mo-guofeng h2,
+body.mo-guofeng h3 {
+  font-family: 'Noto Serif SC', serif !important;
+  color: var(--gf-gold-light) !important;
 }
 

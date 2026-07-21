@@ -39,7 +39,7 @@ export const useUI = create<UIState>(set => ({
 }))
 
 // 主题
-export type ThemeMode = 'dark' | 'light' | 'auto' | 'pure-black'
+export type ThemeMode = 'dark' | 'light' | 'auto' | 'pure-black' | 'guofeng'
 
 interface ThemeState {
   mode: ThemeMode
@@ -57,7 +57,7 @@ export const useTheme = create<ThemeState>()(
 )
 
 // 计算真实主题（auto 时看系统偏好）
-export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' {
+export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' | 'guofeng' {
   if (mode === 'auto') {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
@@ -68,14 +68,15 @@ export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' {
 export function applyTheme(mode: ThemeMode) {
   const actual = resolveTheme(mode)
   document.documentElement.setAttribute('data-theme', actual)
-  document.documentElement.setAttribute('data-prefers-color-scheme', actual === 'pure-black' ? 'dark' : actual)
+  document.documentElement.setAttribute('data-prefers-color-scheme', actual === 'pure-black' || actual === 'guofeng' ? 'dark' : actual)
 
-  // 清理旧 class
-  document.documentElement.classList.remove('light-theme', 'pure-black-theme')
-  document.body.classList.remove('mo-dark', 'mo-light', 'mo-pure-black')
+  document.documentElement.classList.remove('light-theme', 'pure-black-theme', 'guofeng-theme')
+  document.body.classList.remove('mo-dark', 'mo-light', 'mo-pure-black', 'mo-guofeng')
 
-  // 用 html class 控制（优先级高于 body）
-  if (actual === 'dark') {
+  if (actual === 'guofeng') {
+    document.documentElement.classList.add('guofeng-theme')
+    document.body.classList.add('mo-guofeng')
+  } else if (actual === 'dark') {
     document.body.classList.add('mo-dark')
   } else if (actual === 'pure-black') {
     document.documentElement.classList.add('pure-black-theme')
@@ -84,10 +85,9 @@ export function applyTheme(mode: ThemeMode) {
     document.documentElement.classList.add('light-theme')
     document.body.classList.add('mo-light')
   }
-  // 更新 theme-color meta（PWA 状态栏颜色）
   const metaTheme = document.querySelector('meta[name="theme-color"]')
   if (metaTheme) {
-    const color = actual === 'pure-black' ? '#000000' : actual === 'dark' ? '#1F2329' : '#F5F6F7'
+    const color = actual === 'guofeng' ? '#0a0c14' : actual === 'pure-black' ? '#000000' : actual === 'dark' ? '#1F2329' : '#F5F6F7'
     metaTheme.setAttribute('content', color)
   }
 }

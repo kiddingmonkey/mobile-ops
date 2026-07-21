@@ -4,7 +4,9 @@ import { TabBar, Badge } from 'antd-mobile'
 import { AppOutline, SearchOutline, SetOutline, BellOutline, UnorderedListOutline } from 'antd-mobile-icons'
 import { api } from '@/api/client'
 import { startAlertPolling, stopAlertPolling } from '@/utils/alertPoller'
+import { useTheme, resolveTheme } from '@/store'
 import GlobalSearch from './GlobalSearch'
+import GuofengBackground from './GuofengBackground'
 
 export default function AppLayout() {
   const nav = useNavigate()
@@ -45,8 +47,12 @@ export default function AppLayout() {
     || tabs.find(t => t.key !== '/' && loc.pathname.startsWith(t.key))?.key
     || '/'
 
+  const themeMode = useTheme(s => s.mode)
+  const isGuofeng = resolveTheme(themeMode) === 'guofeng'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
+      {isGuofeng && <GuofengBackground />}
       {/* 内容区：不滚动，让每个页面内部自己控制滚动 */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         <Outlet />
@@ -62,7 +68,9 @@ export default function AppLayout() {
           width: 48,
           height: 48,
           borderRadius: 24,
-          background: 'linear-gradient(135deg, var(--accent-blue) 0%, #6E9BFF 100%)',
+          background: isGuofeng
+            ? 'linear-gradient(135deg, var(--gf-cinnabar) 0%, #8B2E22 100%)'
+            : 'linear-gradient(135deg, var(--accent-blue) 0%, #6E9BFF 100%)',
           color: 'white',
           display: 'flex',
           alignItems: 'center',
