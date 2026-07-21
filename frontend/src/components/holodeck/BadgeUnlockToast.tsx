@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge, TIER_COLOR } from './achievements'
 import { BadgeIcon } from './BadgeIcons'
+import { fireCaptainReaction } from './captainReactions'
 
 /**
  * 徽章解锁通知
@@ -17,9 +18,14 @@ export default function BadgeUnlockToast({
 
   useEffect(() => {
     if (!badges.length) return
+    // 舰长会祝贺解锁（延迟一点让 Toast 先出场）
+    const rt = setTimeout(() => {
+      fireCaptainReaction({ type: 'badge_unlocked', badgeName: badges[0].name })
+    }, 400)
     const t = setTimeout(() => setVisible(false), 3500)
     const t2 = setTimeout(onDismiss, 4000)
     return () => {
+      clearTimeout(rt)
       clearTimeout(t)
       clearTimeout(t2)
     }

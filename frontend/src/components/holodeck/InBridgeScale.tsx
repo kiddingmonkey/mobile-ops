@@ -4,6 +4,7 @@ import { api, friendlyApiError } from '@/api/client'
 import HoldToConfirm from './HoldToConfirm'
 import { pushBridgeEvent } from './BridgeTicker'
 import { recordEvent, Badge } from './achievements'
+import { fireCaptainReaction } from './captainReactions'
 
 /**
  * 舰桥内节点池扩容
@@ -78,6 +79,7 @@ export default function InBridgeScale({
         'success',
         `${isShrink ? 'SCALE-DOWN' : 'SCALE-UP'} · [${clusterName.toUpperCase()}] ${pool.name || `pool-${poolId}`} · ${currentSize}→${targetSize} · op=${r.operation_id?.slice(0, 8) || 'N/A'}`
       )
+      fireCaptainReaction({ type: 'scale_success', delta, poolName: pool.name || `pool-${poolId}` })
 
       const unlocked = recordEvent({ type: 'op_executed' })
       if (unlocked.length) onBadgesUnlocked?.(unlocked)
@@ -85,6 +87,7 @@ export default function InBridgeScale({
       Toast.clear()
       Toast.show({ icon: 'fail', content: friendlyApiError(e) })
       pushBridgeEvent('error', `SCALE FAILED · ${pool.name || `pool-${poolId}`} · ${(e as any)?.message || 'unknown'}`)
+      fireCaptainReaction({ type: 'scale_failed', poolName: pool.name || `pool-${poolId}` })
     } finally {
       setSubmitting(false)
     }

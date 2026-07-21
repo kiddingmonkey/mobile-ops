@@ -16,6 +16,7 @@ import BridgeTicker, { pushBridgeEvent } from './BridgeTicker'
 import GlassShatter from './GlassShatter'
 import BootSequence, { shouldPlayBoot } from './BootSequence'
 import FullBridgeLog from './FullBridgeLog'
+import { fireCaptainReaction } from './captainReactions'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
@@ -172,7 +173,9 @@ export default function HolodeckLayout() {
           onSelectCluster={(id, name) => {
             const unlocked = recordEvent({ type: 'cluster_selected', clusterId: id })
             if (unlocked.length) setNewBadges(prev => [...prev, ...unlocked])
-            setInspectCluster({ id, name: name || `cluster-${id}` })
+            const displayName = name || `cluster-${id}`
+            setInspectCluster({ id, name: displayName })
+            fireCaptainReaction({ type: 'cluster_selected', clusterName: displayName })
           }}
         />
         <HolodeckTaskPanel

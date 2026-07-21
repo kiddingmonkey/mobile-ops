@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { SILHOUETTES, SilhouetteId } from './CaptainSilhouettes'
 import CaptainConfigSheet from './CaptainConfigSheet'
 import OpsPet from './OpsPet'
+import { subscribeCaptainReaction, textForEvent } from './captainReactions'
 
 interface CaptainConfig {
   name: string
@@ -50,6 +51,7 @@ export default function HolodeckCaptain({
 }) {
   const [captain, setCaptain] = useState<CaptainConfig>(() => loadCaptain())
   const [showConfig, setShowConfig] = useState(false)
+  const [reaction, setReaction] = useState<{ text: string; ts: number } | null>(null)
 
   useEffect(() => {
     const onStorage = () => setCaptain(loadCaptain())
@@ -57,7 +59,26 @@ export default function HolodeckCaptain({
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const dialogue = moodDialogue(mood, criticals, warnings, captain.name)
+  // 订阅事件反应
+  useEffect(() => {
+    return subscribeCaptainReaction((event) => {
+      const text = textForEvent(event, captain.silhouette)
+      setReaction({ text, ts: Date.now() })
+    })
+  }, [captain.silhouette])
+
+  // 反应台词自动消失（3.5s）
+  useEffect(() => {
+    if (!reaction) return
+    const t = setTimeout(() => {
+      setReaction(cur => (cur && cur.ts === reaction.ts ? null : cur))
+    }, 3500)
+    return () => clearTimeout(t)
+  }, [reaction])
+
+  const moodText = moodDialogue(mood, criticals, warnings, captain.name)
+  const dialogue = reaction?.text || moodText
+  const inReaction = !!reaction
   const Silhouette = captain.silhouette && SILHOUETTES[captain.silhouette]
     ? SILHOUETTES[captain.silhouette].Component
     : SILHOUETTES.lyra.Component
@@ -137,21 +158,27 @@ export default function HolodeckCaptain({
         </div>
 
         {/* 台词气泡 */}
-        <div style={{
-          margin: '8px 12px 12px',
-          padding: '10px 12px',
-          background: 'rgba(79, 195, 247, 0.08)',
-          borderLeft: '2px solid var(--hd-cyan)',
-          borderRadius: '2px',
-          fontSize: 12,
-          color: 'var(--text-primary)',
-          lineHeight: 1.55,
-        }}>
+        <div
+          key={reaction?.ts || 'mood'}
+          style={{
+            margin: '8px 12px 12px',
+            padding: '10px 12px',
+            background: inReaction ? 'rgba(232, 121, 249, 0.14)' : 'rgba(79, 195, 247, 0.08)',
+            borderLeft: `2px solid ${inReaction ? 'var(--hd-magenta)' : 'var(--hd-cyan)'}`,
+            borderRadius: '2px',
+            fontSize: 12,
+            color: 'var(--text-primary)',
+            lineHeight: 1.55,
+            boxShadow: inReaction ? '0 0 16px var(--hd-magenta-glow)' : 'none',
+            animation: inReaction ? 'hd-fade-in 0.35s ease-out' : 'none',
+            transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+          }}
+        >
           <div style={{
             fontSize: 10,
             letterSpacing: '0.2em',
-            color: 'var(--hd-cyan)',
-            textShadow: '0 0 6px var(--hd-cyan-glow)',
+            color: inReaction ? 'var(--hd-magenta)' : 'var(--hd-cyan)',
+            textShadow: inReaction ? '0 0 6px var(--hd-magenta-glow)' : '0 0 6px var(--hd-cyan-glow)',
             marginBottom: 4,
           }}>
             {captain.name}

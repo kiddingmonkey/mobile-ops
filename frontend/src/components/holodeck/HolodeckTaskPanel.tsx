@@ -8,6 +8,7 @@ import { hapticLight } from '@/utils/haptics'
 import HoldToConfirm from './HoldToConfirm'
 import { recordEvent, Badge } from './achievements'
 import { pushBridgeEvent } from './BridgeTicker'
+import { fireCaptainReaction } from './captainReactions'
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--hd-emergency)',
@@ -64,6 +65,7 @@ export default function HolodeckTaskPanel({
       Toast.show({ icon: 'success', content: '星域已清理' })
 
       pushBridgeEvent('success', `SILENCED · ${alertname} · 1h`)
+      fireCaptainReaction({ type: 'silence_success', alertName: alertname, severity: alert.severity })
 
       const unlocked = recordEvent({ type: 'alert_resolved', severity: alert.severity })
       if (unlocked.length) onBadgesUnlocked?.(unlocked)
@@ -74,6 +76,7 @@ export default function HolodeckTaskPanel({
       Toast.clear()
       Toast.show({ icon: 'fail', content: friendlyApiError(e) })
       pushBridgeEvent('error', `SILENCE FAILED · ${alertname}`)
+      fireCaptainReaction({ type: 'silence_failed', alertName: alertname })
     } finally {
       setSilencing(null)
     }
