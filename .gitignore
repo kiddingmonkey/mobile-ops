@@ -27,6 +27,13 @@ frontend/android/captures/
 frontend/android/.externalNativeBuild/
 frontend/android/.cxx/
 
+# iOS
+frontend/ios/App/Pods/
+frontend/ios/App/App/public/
+frontend/ios/App/build/
+frontend/ios/DerivedData/
+*.xcuserdata
+
 # 证书 & 密钥（永远不要 push）
 certs/
 *.pem

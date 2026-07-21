@@ -1,11 +1,6 @@
-name: Build Android APK
+name: Build Android APK (Legacy)
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
 permissions:

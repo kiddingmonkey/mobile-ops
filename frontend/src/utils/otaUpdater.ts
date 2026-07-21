@@ -191,7 +191,7 @@ export async function downloadAndApply(
   otaDebugLogger.log('info', 'downloadAndApply', `开始下载并应用版本: ${info.version}`, { info })
 
   if (!Capacitor.isNativePlatform()) {
-    const error = 'OTA 更新仅在 APK 内可用; 浏览器请刷新页面'
+    const error = 'OTA 更新仅在原生 App 内可用; 浏览器请刷新页面'
     otaDebugLogger.log('error', 'downloadAndApply', error)
     throw new Error(error)
   }

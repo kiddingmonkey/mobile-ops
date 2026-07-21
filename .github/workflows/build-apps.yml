@@ -1,0 +1,329 @@
+name: Build Android & iOS
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/build-apps.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ===== 共用步骤：构建前端 Web 资源 =====
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps & build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Pack dist.zip (OTA)
+        working-directory: frontend/dist
+        run: zip -qr ../dist.zip .
+
+      - name: Upload web artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: |
+            frontend/dist/
+            frontend/dist.zip
+          retention-days: 1
+
+  # ===== Android 构建 =====
+  build-android:
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: frontend/
+
+      - name: Sync Capacitor Android
+        working-directory: frontend
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        working-directory: frontend/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        working-directory: frontend/android/app/build/outputs/apk/debug
+        run: mv app-debug.apk cloudpilot-android-${{ github.run_number }}.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: frontend/android/app/build/outputs/apk/debug/cloudpilot-android-*.apk
+          retention-days: 30
+
+  # ===== iOS 构建 =====
+  build-ios:
+    needs: build-web
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: frontend/
+
+      - name: Sync Capacitor iOS
+        working-directory: frontend
+        run: npx cap sync ios
+
+      # ----- iOS 签名配置 -----
+      - name: Install Apple certificate and provisioning profile
+        env:
+          P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}
+        run: |
+          # 创建临时 keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # 导入 p12 证书
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$P12_BASE64" | base64 --decode -o $CERT_PATH
+          security import $CERT_PATH -P "$P12_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # 安装 provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          PP_PATH=$RUNNER_TEMP/profile.mobileprovision
+          echo -n "$PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+          PP_UUID=$(/usr/libexec/PlistBuddy -c \
+            "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $PP_PATH))
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+
+      - name: Build iOS archive
+        working-directory: frontend/ios/App
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
+            -archivePath $RUNNER_TEMP/App.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            -allowProvisioningUpdates \
+            | xcpretty
+
+      - name: Export IPA
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.IOS_TEAM_ID }}
+          PROVISIONING_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
+        run: |
+          # 生成 ExportOptions.plist（填入实际值）
+          cat > $RUNNER_TEMP/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>ad-hoc</string>
+              <key>teamID</key>
+              <string>$DEVELOPMENT_TEAM</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.mobileops.app</key>
+                  <string>$PROVISIONING_PROFILE_NAME</string>
+              </dict>
+              <key>compileBitcode</key>
+              <false/>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>thinning</key>
+              <string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/App.xcarchive \
+            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/ipa-output
+
+      - name: Rename IPA
+        run: |
+          IPA=$(find $RUNNER_TEMP/ipa-output -name "*.ipa" | head -1)
+          cp "$IPA" $RUNNER_TEMP/ipa-output/cloudpilot-ios-${{ github.run_number }}.ipa
+
+      - name: Upload iOS IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: ${{ runner.temp }}/ipa-output/cloudpilot-ios-*.ipa
+          retention-days: 30
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
+
+  # ===== 发布 Release =====
+  release:
+    needs: [build-web, build-android, build-ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          BUILD_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_sha=$BUILD_SHA" >> $GITHUB_OUTPUT
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          # Android APK
+          cp artifacts/android-apk/*.apk release/cloudpilot-latest.apk || true
+          # iOS IPA
+          cp artifacts/ios-ipa/*.ipa release/cloudpilot-latest.ipa || true
+          # OTA dist.zip
+          cp artifacts/web-dist/dist.zip release/dist.zip || true
+          ls -la release/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CHANGELOG=$(git log -1 --pretty=%B)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: CloudPilot v${{ steps.version.outputs.version }}
+          body: |
+            **版本**: ${{ steps.version.outputs.version }}
+            **构建**: ${{ steps.version.outputs.build_sha }}
+            **发布时间**: ${{ steps.version.outputs.build_time }}
+
+            ## 更新内容
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## 下载
+            | 平台 | 文件 |
+            |------|------|
+            | Android | cloudpilot-latest.apk |
+            | iOS/iPad | cloudpilot-latest.ipa |
+            | OTA 热更新 | dist.zip |
+
+            ## OTA 热更新
+            已安装用户无需重新下载安装包，打开 App → 设置 → 检查更新即可。
+          files: |
+            release/cloudpilot-latest.apk
+            release/cloudpilot-latest.ipa
+            release/dist.zip
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate version.json
+        run: |
+          VER=${{ steps.version.outputs.version }}
+          APK_URL="https://ghproxy.com/https://github.com/${{ github.repository }}/releases/download/v${VER}/cloudpilot-latest.apk"
+          IPA_URL="https://ghproxy.com/https://github.com/${{ github.repository }}/releases/download/v${VER}/cloudpilot-latest.ipa"
+
+          cat > version.json << EOF
+          {
+            "version": "${VER}",
+            "build": "${{ steps.version.outputs.build_sha }}",
+            "android_url": "${APK_URL}",
+            "ios_url": "${IPA_URL}",
+            "changelog": $(git log -1 --pretty=%B | jq -Rs .),
+            "required": false,
+            "published_at": "${{ steps.version.outputs.build_time }}"
+          }
+          EOF
+
+      - name: Upload version.json to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          files: version.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
