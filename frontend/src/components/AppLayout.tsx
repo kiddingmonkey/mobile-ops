@@ -7,6 +7,7 @@ import { startAlertPolling, stopAlertPolling } from '@/utils/alertPoller'
 import { useTheme, resolveTheme } from '@/store'
 import GlobalSearch from './GlobalSearch'
 import GuofengBackground from './GuofengBackground'
+import HolodeckLayout from './holodeck/HolodeckLayout'
 
 export default function AppLayout() {
   const nav = useNavigate()
@@ -48,7 +49,14 @@ export default function AppLayout() {
     || '/'
 
   const themeMode = useTheme(s => s.mode)
-  const isGuofeng = resolveTheme(themeMode) === 'guofeng'
+  const resolvedTheme = resolveTheme(themeMode)
+  const isGuofeng = resolvedTheme === 'guofeng'
+  const isHolodeck = resolvedTheme === 'holodeck'
+
+  // Holodeck 模式：首页替换成全息舰桥，其他页面（诊断/任务/设置）用普通布局透出到舰桥外
+  if (isHolodeck && loc.pathname === '/') {
+    return <HolodeckLayout />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>

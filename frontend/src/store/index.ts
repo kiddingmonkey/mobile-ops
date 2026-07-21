@@ -39,7 +39,7 @@ export const useUI = create<UIState>(set => ({
 }))
 
 // 主题
-export type ThemeMode = 'dark' | 'light' | 'auto' | 'pure-black' | 'guofeng'
+export type ThemeMode = 'dark' | 'light' | 'auto' | 'pure-black' | 'guofeng' | 'holodeck'
 
 interface ThemeState {
   mode: ThemeMode
@@ -57,7 +57,7 @@ export const useTheme = create<ThemeState>()(
 )
 
 // 计算真实主题（auto 时看系统偏好）
-export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' | 'guofeng' {
+export function resolveTheme(mode: ThemeMode): 'dark' | 'light' | 'pure-black' | 'guofeng' | 'holodeck' {
   if (mode === 'auto') {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
@@ -70,10 +70,13 @@ export function applyTheme(mode: ThemeMode) {
   document.documentElement.setAttribute('data-theme', actual)
   document.documentElement.setAttribute('data-prefers-color-scheme', actual === 'pure-black' || actual === 'guofeng' ? 'dark' : actual)
 
-  document.documentElement.classList.remove('light-theme', 'pure-black-theme', 'guofeng-theme')
-  document.body.classList.remove('mo-dark', 'mo-light', 'mo-pure-black', 'mo-guofeng')
+  document.documentElement.classList.remove('light-theme', 'pure-black-theme', 'guofeng-theme', 'holodeck-theme')
+  document.body.classList.remove('mo-dark', 'mo-light', 'mo-pure-black', 'mo-guofeng', 'mo-holodeck')
 
-  if (actual === 'guofeng') {
+  if (actual === 'holodeck') {
+    document.documentElement.classList.add('holodeck-theme')
+    document.body.classList.add('mo-holodeck')
+  } else if (actual === 'guofeng') {
     document.documentElement.classList.add('guofeng-theme')
     document.body.classList.add('mo-guofeng')
   } else if (actual === 'dark') {
@@ -87,7 +90,7 @@ export function applyTheme(mode: ThemeMode) {
   }
   const metaTheme = document.querySelector('meta[name="theme-color"]')
   if (metaTheme) {
-    const color = actual === 'guofeng' ? '#0a0c14' : actual === 'pure-black' ? '#000000' : actual === 'dark' ? '#1F2329' : '#F5F6F7'
+    const color = actual === 'holodeck' ? '#030510' : actual === 'guofeng' ? '#0a0c14' : actual === 'pure-black' ? '#000000' : actual === 'dark' ? '#1F2329' : '#F5F6F7'
     metaTheme.setAttribute('content', color)
   }
 }

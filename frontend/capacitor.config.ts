@@ -20,7 +20,9 @@ const config: CapacitorConfig = {
   ios: {
     // 禁用iOS侧滑返回手势
     scrollEnabled: true,
-    allowsBackForwardNavigationGestures: false
+    allowsBackForwardNavigationGestures: false,
+    // 支持所有方向（Holodeck 需要横屏，其他主题竖屏）
+    contentInset: 'always'
   }
 };
 

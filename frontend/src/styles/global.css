@@ -9,6 +9,9 @@
 /* 国风主题 */
 @import './guofeng-theme.css';
 
+/* 全息舰桥主题 */
+@import './holodeck-theme.css';
+
 /* ============ 深色主题（默认）============ */
 :root, body.mo-dark {
   /* 背景层次 */

@@ -1,0 +1,267 @@
+/* ========================================================
+   Holodeck 全息舰桥主题 · 沉浸式指挥中心
+   激活方式: body.mo-holodeck
+   ======================================================== */
+
+body.mo-holodeck {
+  --bg-primary: #030510;
+  --bg-secondary: rgba(10, 20, 45, 0.45);
+  --bg-elevated: rgba(20, 35, 65, 0.55);
+  --bg-input: rgba(5, 10, 25, 0.85);
+
+  --border-color: rgba(120, 200, 255, 0.2);
+  --border-strong: rgba(120, 200, 255, 0.4);
+
+  --text-primary: #E8F4FF;
+  --text-secondary: #92B4D4;
+  --text-tertiary: #5D7A9A;
+  --text-disabled: #354860;
+
+  --accent-blue: #4FC3F7;
+  --accent-blue-hover: #6FD3FF;
+  --accent-blue-bg: rgba(79, 195, 247, 0.15);
+
+  --success: #4ADE80;
+  --success-bg: rgba(74, 222, 128, 0.14);
+  --warning: #FBBF24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --danger: #FF3B5C;
+  --danger-bg: rgba(255, 59, 92, 0.14);
+  --info-bg: rgba(79, 195, 247, 0.12);
+
+  --hd-cyan: #4FC3F7;
+  --hd-cyan-glow: rgba(79, 195, 247, 0.6);
+  --hd-magenta: #E879F9;
+  --hd-magenta-glow: rgba(232, 121, 249, 0.5);
+  --hd-emergency: #FF3B5C;
+  --hd-emergency-glow: rgba(255, 59, 92, 0.7);
+  --hd-hologram-line: rgba(79, 195, 247, 0.15);
+
+  --adm-color-primary: #4FC3F7;
+  --adm-color-background: transparent;
+  --adm-color-text: #E8F4FF;
+  --adm-color-text-secondary: #92B4D4;
+  --adm-color-weak: #5D7A9A;
+  --adm-color-border: rgba(120, 200, 255, 0.2);
+  --adm-color-box: rgba(10, 20, 45, 0.45);
+}
+
+body.mo-holodeck {
+  background: #030510 !important;
+  font-family: 'Rajdhani', 'Orbitron', 'Inter', -apple-system, sans-serif !important;
+}
+
+body.mo-holodeck #root {
+  background: transparent !important;
+}
+
+/* ============ 星空背景 ============ */
+.hd-starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 30%, rgba(79, 195, 247, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 80% 70%, rgba(232, 121, 249, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(20, 40, 90, 0.6) 0%, transparent 70%),
+    linear-gradient(180deg, #020408 0%, #050820 50%, #030510 100%);
+}
+
+.hd-star {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: #E8F4FF;
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+  animation: hd-twinkle ease-in-out infinite;
+}
+
+@keyframes hd-twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ============ 全息发光 ============ */
+@keyframes hd-glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px var(--hd-cyan-glow), inset 0 0 8px rgba(79, 195, 247, 0.15); }
+  50% { box-shadow: 0 0 24px var(--hd-cyan-glow), inset 0 0 12px rgba(79, 195, 247, 0.25); }
+}
+
+@keyframes hd-scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes hd-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+@keyframes hd-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hd-orbit-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes hd-emergency-flash {
+  0%, 100% { box-shadow: inset 0 0 0 rgba(255, 59, 92, 0); }
+  50% { box-shadow: inset 0 0 100px rgba(255, 59, 92, 0.4); }
+}
+
+/* ============ 全息面板 ============ */
+.hd-panel {
+  position: relative;
+  background: rgba(10, 20, 45, 0.45);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(120, 200, 255, 0.25);
+  border-radius: 4px;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.hd-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(79, 195, 247, 0.03) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: hd-scanline 8s linear infinite;
+}
+
+.hd-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(120, 200, 255, 0.2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hd-cyan);
+  text-shadow: 0 0 8px var(--hd-cyan-glow);
+}
+
+.hd-panel-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--hd-cyan);
+  pointer-events: none;
+}
+.hd-panel-corner.tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+.hd-panel-corner.tr { top: 4px; right: 4px; border-left: none; border-bottom: none; }
+.hd-panel-corner.bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
+.hd-panel-corner.br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+
+/* ============ 全息文字 ============ */
+.hd-text-glow {
+  color: var(--hd-cyan);
+  text-shadow: 0 0 10px var(--hd-cyan-glow);
+}
+
+.hd-text-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  letter-spacing: 0.05em;
+}
+
+/* ============ 紧急模式 ============ */
+body.mo-holodeck.hd-emergency .hd-starfield::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 100% 100% at 50% 50%,
+    transparent 40%,
+    rgba(255, 59, 92, 0.15) 100%
+  );
+  animation: hd-emergency-flash 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+body.mo-holodeck.hd-emergency .hd-panel {
+  border-color: rgba(255, 59, 92, 0.4);
+}
+
+body.mo-holodeck.hd-emergency .hd-panel-header {
+  color: var(--hd-emergency);
+  text-shadow: 0 0 10px var(--hd-emergency-glow);
+}
+
+/* 紧急模式下所有非告警内容降饱和 */
+body.mo-holodeck.hd-emergency .hd-non-critical {
+  filter: grayscale(0.7) brightness(0.6);
+  transition: filter 0.4s ease;
+}
+
+/* ============ 横屏提示 ============ */
+.hd-rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #030510;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.hd-rotate-hint svg {
+  width: 80px;
+  height: 80px;
+  color: var(--hd-cyan);
+  animation: hd-rotate-icon 3s ease-in-out infinite;
+}
+
+@keyframes hd-rotate-icon {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
+/* ============ 全息按钮 ============ */
+.hd-btn {
+  background: transparent;
+  border: 1.5px solid var(--hd-cyan);
+  color: var(--hd-cyan);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  text-shadow: 0 0 8px var(--hd-cyan-glow);
+  font-family: inherit;
+}
+
+.hd-btn:hover, .hd-btn:active {
+  background: rgba(79, 195, 247, 0.15);
+  box-shadow: 0 0 16px var(--hd-cyan-glow);
+}
+
+.hd-btn.danger {
+  border-color: var(--hd-emergency);
+  color: var(--hd-emergency);
+  text-shadow: 0 0 8px var(--hd-emergency-glow);
+}
+.hd-btn.danger:hover, .hd-btn.danger:active {
+  background: rgba(255, 59, 92, 0.15);
+  box-shadow: 0 0 16px var(--hd-emergency-glow);
+}

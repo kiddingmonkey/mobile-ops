@@ -58,6 +58,7 @@ export default function SettingsPage() {
                 { label: '浅色', value: 'light' },
                 { label: '纯黑 OLED', value: 'pure-black' },
                 { label: '国风', value: 'guofeng' },
+                { label: '全息舰桥', value: 'holodeck' },
                 { label: '跟随系统', value: 'auto' }
               ]}
               style={{ '--border-radius': '6px', '--checked-color': 'var(--accent-blue)' } as any}
