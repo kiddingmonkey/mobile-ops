@@ -16,6 +16,7 @@ import BridgeTicker, { pushBridgeEvent } from './BridgeTicker'
 import GlassShatter from './GlassShatter'
 import BootSequence, { shouldPlayBoot } from './BootSequence'
 import FullBridgeLog from './FullBridgeLog'
+import GalaxyOverview from './GalaxyOverview'
 import { fireCaptainReaction } from './captainReactions'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
@@ -34,6 +35,7 @@ export default function HolodeckLayout() {
   const [strike, setStrike] = useState<{ x: number; y: number; color?: string } | null>(null)
   const [booting, setBooting] = useState(() => shouldPlayBoot())
   const [showFullLog, setShowFullLog] = useState(false)
+  const [showGalaxy, setShowGalaxy] = useState(false)
 
   // 进入 Holodeck 首次触发徽章 + 欢迎日志
   useEffect(() => {
@@ -177,6 +179,7 @@ export default function HolodeckLayout() {
             setInspectCluster({ id, name: displayName })
             fireCaptainReaction({ type: 'cluster_selected', clusterName: displayName })
           }}
+          onCoreClick={() => setShowGalaxy(true)}
         />
         <HolodeckTaskPanel
           onBadgesUnlocked={(b) => setNewBadges(prev => [...prev, ...b])}
@@ -243,6 +246,17 @@ export default function HolodeckLayout() {
 
       {/* 完整航行日志 */}
       {showFullLog && <FullBridgeLog onClose={() => setShowFullLog(false)} />}
+
+      {/* 星系总览（点中央恒星弹出） */}
+      {showGalaxy && (
+        <GalaxyOverview
+          onClose={() => setShowGalaxy(false)}
+          onEnterCluster={(id, name) => {
+            setInspectCluster({ id, name })
+            fireCaptainReaction({ type: 'cluster_selected', clusterName: name })
+          }}
+        />
+      )}
 
       {/* 首次进入启动序列（最顶层） */}
       {booting && <BootSequence onDone={() => setBooting(false)} />}

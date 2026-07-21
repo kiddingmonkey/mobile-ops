@@ -47,8 +47,10 @@ const HEALTH_COLOR: Record<ClusterNode['health'], string> = {
 
 export default function HolodeckStarfield({
   onSelectCluster,
+  onCoreClick,
 }: {
   onSelectCluster?: (id: number, name?: string) => void
+  onCoreClick?: () => void
 }) {
   const nav = useNavigate()
   const [clusters, setClusters] = useState<any[]>(() => getCache('clusters') || [])
@@ -186,14 +188,33 @@ export default function HolodeckStarfield({
           <line x1="0" y1="-160" x2="0" y2="-140" stroke="var(--hd-cyan)" strokeWidth="0.8" opacity="0.5" />
           <line x1="0" y1="160" x2="0" y2="140" stroke="var(--hd-cyan)" strokeWidth="0.8" opacity="0.5" />
 
-          {/* 中央恒星 */}
-          <circle cx="0" cy="0" r="14" fill="var(--hd-cyan)" opacity="0.15" />
-          <circle cx="0" cy="0" r="8" fill="var(--hd-cyan)" opacity="0.4">
-            <animate attributeName="r" values="6;10;6" dur="3s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="0" cy="0" r="3" fill="#E8F4FF">
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
-          </circle>
+          {/* 中央恒星（可点击 → 星系总览） */}
+          <g
+            style={{ cursor: 'pointer' }}
+            onClick={(e) => { e.stopPropagation(); hapticLight(); onCoreClick?.() }}
+          >
+            <circle cx="0" cy="0" r="14" fill="var(--hd-cyan)" opacity="0.15" pointerEvents="none" />
+            <circle cx="0" cy="0" r="8" fill="var(--hd-cyan)" opacity="0.4" pointerEvents="none">
+              <animate attributeName="r" values="6;10;6" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="0" cy="0" r="3" fill="#E8F4FF" pointerEvents="none">
+              <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+            </circle>
+            {/* 大点击热区 */}
+            <circle cx="0" cy="0" r="20" fill="transparent" />
+            <text
+              x="0" y="34"
+              textAnchor="middle"
+              fill="var(--hd-cyan)"
+              fontSize="8"
+              fontFamily="'JetBrains Mono', monospace"
+              letterSpacing="0.2em"
+              opacity="0.7"
+              pointerEvents="none"
+            >
+              GALAXY CORE
+            </text>
+          </g>
 
           {/* 集群节点 */}
           {nodes.map((n, i) => {

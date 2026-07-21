@@ -24,6 +24,41 @@ const ROUTE_LABELS: { path: string; label: string; en: string }[] = [
   { path: '/settings', label: '设置', en: 'CONFIG' },
 ]
 
+// 路径段翻译（生成面包屑用）
+const SEGMENT_LABELS: Record<string, string> = {
+  alerts: 'ALERTS · 警报',
+  diagnose: 'DIAG · 诊断',
+  tasks: 'TASKS · 任务',
+  settings: 'CONFIG · 设置',
+  monitor: 'MONITOR · 监控',
+  'cluster-resources': 'CLUSTERS · 集群资源',
+  'scale': 'SCALE · 扩缩容',
+  'logs': 'LOGS · 日志',
+  'dialing': 'DIALING · 拨测',
+  'operations': 'OPERATIONS · 操作',
+  'security-groups': 'SG · 安全组',
+  'clusters': 'CLUSTERS · 集群',
+  'clouds': 'CLOUDS · 云账号',
+  'grafana': 'GRAFANA',
+  'prom': 'PROM · Prometheus',
+  'vm': 'VM',
+  'alertmanager': 'ALERTMANAGER',
+  'notification': 'NOTIFY · 通知',
+  'ota': 'OTA · 热更新',
+  'input': 'INPUT · 输入',
+  'new': 'NEW · 新建',
+  'edit': 'EDIT · 编辑',
+}
+
+function buildBreadcrumb(pathname: string): string[] {
+  const segs = pathname.split('/').filter(Boolean)
+  return segs.map(s => {
+    // 数字或 UUID 段跳过（多为资源 id）
+    if (/^\d+$/.test(s) || /^[0-9a-f-]{20,}$/i.test(s)) return `#${s.slice(0, 8)}`
+    return SEGMENT_LABELS[s] || s.toUpperCase()
+  })
+}
+
 export default function HolodeckShell() {
   const nav = useNavigate()
   const loc = useLocation()
@@ -105,6 +140,9 @@ export default function HolodeckShell() {
     || ROUTE_LABELS.find(r => r.path !== '/' && loc.pathname.startsWith(r.path))?.path
     || '/'
 
+  const crumbs = buildBreadcrumb(loc.pathname)
+  const isDeep = crumbs.length > 1
+
   const statusColor = combat ? 'var(--hd-emergency)' : warnings > 0 ? 'var(--warning)' : 'var(--success)'
   const statusText = combat ? 'RED ALERT' : warnings > 0 ? 'CAUTION' : 'NOMINAL'
 
@@ -132,17 +170,40 @@ export default function HolodeckShell() {
         zIndex: 2,
         flexShrink: 0,
       }}>
-        <div
-          className="hd-text-glow hd-text-mono"
-          onClick={() => nav('/')}
-          style={{
-            fontSize: 13,
-            letterSpacing: '0.35em',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          ◆ STARDECK · 星驾
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {isDeep && (
+            <button
+              onClick={() => nav(-1)}
+              className="hd-text-mono"
+              title="返回上级"
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(120, 200, 255, 0.35)',
+                color: 'var(--hd-cyan)',
+                padding: '4px 10px',
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                cursor: 'pointer',
+                borderRadius: 2,
+                fontFamily: 'inherit',
+                textShadow: '0 0 6px var(--hd-cyan-glow)',
+              }}
+            >
+              ◂ BACK
+            </button>
+          )}
+          <div
+            className="hd-text-glow hd-text-mono"
+            onClick={() => nav('/')}
+            style={{
+              fontSize: 13,
+              letterSpacing: '0.35em',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ◆ STARDECK · 星驾
+          </div>
         </div>
 
         {/* 导航条 */}
@@ -239,8 +300,27 @@ export default function HolodeckShell() {
           overflow: 'hidden',
         }}>
           <div className="hd-panel-header">
-            <span>◆ {ROUTE_LABELS.find(r => r.path === active)?.en || 'MODULE'} · {ROUTE_LABELS.find(r => r.path === active)?.label || ''}</span>
-            <span className="hd-text-mono" style={{ fontSize: 10, opacity: 0.7 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+              <span style={{ flexShrink: 0 }}>◆</span>
+              {crumbs.map((c, i) => (
+                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                  <span
+                    style={{
+                      opacity: i === crumbs.length - 1 ? 1 : 0.55,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {c}
+                  </span>
+                  {i < crumbs.length - 1 && (
+                    <span style={{ opacity: 0.4, flexShrink: 0 }}>›</span>
+                  )}
+                </span>
+              ))}
+            </span>
+            <span className="hd-text-mono" style={{ fontSize: 10, opacity: 0.55, flexShrink: 0, marginLeft: 10 }}>
               {loc.pathname}
             </span>
           </div>
