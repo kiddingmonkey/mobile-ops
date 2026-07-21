@@ -8,6 +8,7 @@ import { useTheme, resolveTheme } from '@/store'
 import GlobalSearch from './GlobalSearch'
 import GuofengBackground from './GuofengBackground'
 import HolodeckLayout from './holodeck/HolodeckLayout'
+import HolodeckShell from './holodeck/HolodeckShell'
 
 export default function AppLayout() {
   const nav = useNavigate()
@@ -53,9 +54,10 @@ export default function AppLayout() {
   const isGuofeng = resolvedTheme === 'guofeng'
   const isHolodeck = resolvedTheme === 'holodeck'
 
-  // Holodeck 模式：首页替换成全息舰桥，其他页面（诊断/任务/设置）用普通布局透出到舰桥外
-  if (isHolodeck && loc.pathname === '/') {
-    return <HolodeckLayout />
+  // Holodeck 模式：首页是舰桥主视图，其他所有页面走全息壳
+  if (isHolodeck) {
+    if (loc.pathname === '/') return <HolodeckLayout />
+    return <HolodeckShell />
   }
 
   return (

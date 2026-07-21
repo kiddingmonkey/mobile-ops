@@ -6,11 +6,24 @@ import { hapticLight } from '@/utils/haptics'
 
 interface ClusterNode {
   id: number
-  name: string
+  name: string      // codename (英文/短名)
+  displayName?: string  // 中文显示名
   metrics?: any
   health: 'ok' | 'warn' | 'critical' | 'unknown'
   ready: number
   total: number
+}
+
+// 集群名双语显示偏好: 'en' (仅英文) / 'cn' (仅中文) / 'both' (两个都显示)
+type NameMode = 'en' | 'cn' | 'both'
+const NAME_MODE_KEY = 'holodeck_cluster_name_mode'
+
+function loadNameMode(): NameMode {
+  try {
+    const v = localStorage.getItem(NAME_MODE_KEY)
+    if (v === 'cn' || v === 'en' || v === 'both') return v
+  } catch {}
+  return 'both'
 }
 
 function computeHealth(m: any): { health: ClusterNode['health']; ready: number; total: number } {
@@ -42,6 +55,21 @@ export default function HolodeckStarfield({
   const [metrics, setMetrics] = useState<Record<number, any>>({})
   const [selected, setSelected] = useState<number | null>(null)
   const [tick, setTick] = useState(0)
+  const [nameMode, setNameMode] = useState<NameMode>(() => loadNameMode())
+
+  const cycleNameMode = () => {
+    const next: NameMode = nameMode === 'both' ? 'en' : nameMode === 'en' ? 'cn' : 'both'
+    setNameMode(next)
+    try { localStorage.setItem(NAME_MODE_KEY, next) } catch {}
+  }
+
+  const renderName = (n: ClusterNode) => {
+    const cn = n.displayName
+    const en = n.name
+    if (nameMode === 'en' || !cn) return en
+    if (nameMode === 'cn') return cn
+    return { en, cn }
+  }
 
   useEffect(() => {
     withCache('clusters', () => api.listClusters()).then(cs => {
@@ -64,9 +92,14 @@ export default function HolodeckStarfield({
     clusters.map(c => {
       const m = metrics[c.id]
       const h = computeHealth(m)
+      // name: 后端 name 字段（多为英文短名/codename）
+      // displayName: 后端 display_name（多为中文别名）
+      const codename = c.name || `Cluster-${c.id}`
+      const displayName = c.display_name && c.display_name !== c.name ? c.display_name : undefined
       return {
         id: c.id,
-        name: c.name || c.display_name || `Cluster-${c.id}`,
+        name: codename,
+        displayName,
         metrics: m,
         health: h.health,
         ready: h.ready,
@@ -92,8 +125,28 @@ export default function HolodeckStarfield({
     }}>
       <div className="hd-panel-header">
         <span>◆ CLUSTER STARMAP</span>
-        <span className="hd-text-mono" style={{ fontSize: 10, opacity: 0.7 }}>
-          {count} SYS · {nodes.filter(n => n.health === 'ok').length} OK
+        <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            onClick={cycleNameMode}
+            className="hd-text-mono"
+            title="切换命名显示：EN / CN / EN+CN"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(120, 200, 255, 0.3)',
+              color: 'var(--hd-cyan)',
+              padding: '2px 8px',
+              fontSize: 9,
+              letterSpacing: '0.15em',
+              cursor: 'pointer',
+              borderRadius: 2,
+              fontFamily: 'inherit',
+            }}
+          >
+            {nameMode === 'both' ? 'EN+中' : nameMode === 'en' ? 'EN' : '中'}
+          </button>
+          <span className="hd-text-mono" style={{ fontSize: 10, opacity: 0.7 }}>
+            {count} SYS · {nodes.filter(n => n.health === 'ok').length} OK
+          </span>
         </span>
       </div>
       <div className="hd-panel-corner tl" />
@@ -155,8 +208,8 @@ export default function HolodeckStarfield({
             return (
               <g
                 key={n.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => handleClick(n)}
+                style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                onClick={(e) => { e.stopPropagation(); handleClick(n) }}
               >
                 {/* 连接线 */}
                 <line
@@ -165,6 +218,7 @@ export default function HolodeckStarfield({
                   stroke={color}
                   strokeWidth={isSelected ? '0.8' : '0.4'}
                   opacity={isSelected ? 0.6 : 0.2}
+                  pointerEvents="none"
                 />
                 {/* 节点光晕 */}
                 <circle
@@ -172,6 +226,7 @@ export default function HolodeckStarfield({
                   r={size + 8}
                   fill={color}
                   opacity="0.15"
+                  pointerEvents="none"
                 >
                   {flash && <animate attributeName="opacity" values="0.05;0.4;0.05" dur="1s" repeatCount="indefinite" />}
                 </circle>
@@ -181,31 +236,83 @@ export default function HolodeckStarfield({
                   r={size}
                   fill={color}
                   opacity="0.9"
+                  pointerEvents="none"
                 >
                   {flash && <animate attributeName="r" values={`${size};${size + 2};${size}`} dur="1s" repeatCount="indefinite" />}
                 </circle>
+                {/* 大点击热区（透明，覆盖节点+名字区域） */}
+                <rect
+                  x={x - 30} y={y - 15}
+                  width="60" height="45"
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                />
                 {/* 名称 */}
-                <text
-                  x={x}
-                  y={y + size + 14}
-                  textAnchor="middle"
-                  fill="var(--text-secondary)"
-                  fontSize="9"
-                  fontFamily="'JetBrains Mono', monospace"
-                  letterSpacing="0.1em"
-                >
-                  {n.name.length > 10 ? n.name.slice(0, 10) : n.name}
-                </text>
-                <text
-                  x={x}
-                  y={y + size + 24}
-                  textAnchor="middle"
-                  fill={color}
-                  fontSize="8"
-                  fontFamily="'JetBrains Mono', monospace"
-                >
-                  {n.ready}/{n.total}
-                </text>
+                {(() => {
+                  const rn = renderName(n)
+                  if (typeof rn === 'string') {
+                    return (
+                      <>
+                        <text
+                          x={x}
+                          y={y + size + 14}
+                          textAnchor="middle"
+                          fill="var(--text-secondary)"
+                          fontSize="9"
+                          fontFamily="'JetBrains Mono', monospace"
+                          letterSpacing="0.1em"
+                        >
+                          {rn.length > 12 ? rn.slice(0, 12) : rn}
+                        </text>
+                        <text
+                          x={x}
+                          y={y + size + 24}
+                          textAnchor="middle"
+                          fill={color}
+                          fontSize="8"
+                          fontFamily="'JetBrains Mono', monospace"
+                        >
+                          {n.ready}/{n.total}
+                        </text>
+                      </>
+                    )
+                  }
+                  // both
+                  return (
+                    <>
+                      <text
+                        x={x}
+                        y={y + size + 13}
+                        textAnchor="middle"
+                        fill="var(--hd-cyan)"
+                        fontSize="9"
+                        fontFamily="'JetBrains Mono', monospace"
+                        letterSpacing="0.1em"
+                      >
+                        {rn.en.length > 12 ? rn.en.slice(0, 12) : rn.en}
+                      </text>
+                      <text
+                        x={x}
+                        y={y + size + 23}
+                        textAnchor="middle"
+                        fill="var(--text-secondary)"
+                        fontSize="8"
+                      >
+                        {rn.cn.length > 10 ? rn.cn.slice(0, 10) : rn.cn}
+                      </text>
+                      <text
+                        x={x}
+                        y={y + size + 33}
+                        textAnchor="middle"
+                        fill={color}
+                        fontSize="7"
+                        fontFamily="'JetBrains Mono', monospace"
+                      >
+                        {n.ready}/{n.total}
+                      </text>
+                    </>
+                  )
+                })()}
               </g>
             )
           })}

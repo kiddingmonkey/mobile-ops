@@ -291,7 +291,7 @@ function TopCommandBar({
           letterSpacing: '0.35em',
           fontWeight: 700,
         }}>
-          ◆ CLOUDPILOT · BRIDGE
+          ◆ STARDECK · 星驾
         </div>
         <div className="hd-text-mono" style={{
           fontSize: 10,

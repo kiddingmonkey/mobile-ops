@@ -443,7 +443,15 @@ export default function SecurityGroupsPage() {
                         <div><b>端口:</b> {row.port}</div>
                         <div><b>协议:</b> {row.protocol}</div>
                         <div><b>备注:</b> {row.description || '-'}</div>
-                        <div><b>AK (Secret ID):</b> {row.secret_id ? row.secret_id.slice(0, 8) + '...' : '未配置'}</div>
+                        <div><b>云账号:</b> {
+                          row.cloud_account_name
+                            ? row.cloud_account_name
+                            : row.cloud_account_id
+                              ? `#${row.cloud_account_id}`
+                              : row.secret_id
+                                ? `${row.secret_id.slice(0, 8)}... (明文·旧版)`
+                                : '未配置'
+                        }</div>
                         <div><b>上次更新 IP:</b> {row.last_ip || '未同步'}</div>
                         <div><b>创建时间:</b> {row.created_at ? dayjs(row.created_at).format('YYYY-MM-DD HH:mm') : '-'}</div>
                         <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-tertiary)' }}>

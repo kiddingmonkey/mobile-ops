@@ -34,8 +34,7 @@ export default function SecurityGroupEditPage() {
       port: (tpl as any).port || '18443',
       protocol: [(tpl as any).protocol || 'TCP'],
       description: tpl.description || '',
-      secret_id: tpl.secret_id,
-      secret_key: tpl.secret_key
+      cloud_account_id: tpl.cloud_account_id ? [tpl.cloud_account_id] : undefined,
     })
   }, [id])
 
@@ -45,30 +44,25 @@ export default function SecurityGroupEditPage() {
       const v = await form.validateFields()
       setLoading(true)
 
-      // 如果选择了新的云账号，使用新的 AK/SK
-      let secret_id = v.secret_id
-      let secret_key = v.secret_key
+      // 云账号引用 (后端持有加密 AK/SK, 前端只存引用不存明文)
       const selectedCloudId = Array.isArray(v.cloud_account_id) ? v.cloud_account_id[0] : v.cloud_account_id
-      if (selectedCloudId) {
-        const ca = clouds.find(c => c.id === selectedCloudId)
-        if (ca) {
-          secret_id = ca.secret_id
-          secret_key = ca.secret_key
-        }
-      }
-
-      const success = updateTemplate(id, {
+      const patch: any = {
         name: v.name,
         sg_id: v.sg_id,
         region: Array.isArray(v.region) ? v.region[0] : v.region,
-        secret_id,
-        secret_key,
         description: v.description,
-        ...({
-          port: v.port,
-          protocol: Array.isArray(v.protocol) ? v.protocol[0] : v.protocol
-        } as any)
-      })
+        port: v.port,
+        protocol: Array.isArray(v.protocol) ? v.protocol[0] : v.protocol,
+      }
+      if (selectedCloudId) {
+        const ca = clouds.find(c => c.id === selectedCloudId)
+        patch.cloud_account_id = selectedCloudId
+        patch.cloud_account_name = ca ? `${ca.name} (${ca.region})` : `#${selectedCloudId}`
+        // 清理旧的明文 AK/SK 遗留
+        patch.secret_id = undefined
+        patch.secret_key = undefined
+      }
+      const success = updateTemplate(id, patch)
 
       if (success) {
         Toast.show({ content: '已保存', icon: 'success' })

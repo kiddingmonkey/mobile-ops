@@ -61,15 +61,15 @@ export default function SecurityGroupNewPage() {
         return
       }
 
-      // 保存到客户端存储
-      const template = createTemplate({
+      // 保存到客户端存储（只存云账号引用，AK/SK 由后端加密持有）
+      createTemplate({
         name: v.name,
         sg_id: v.sg_id,
         region: Array.isArray(v.region) ? v.region[0] : v.region,
-        secret_id: cloudAccount.secret_id,
-        secret_key: cloudAccount.secret_key,
-        description: v.description
-      })
+        cloud_account_id: cloudAccount.id,
+        cloud_account_name: `${cloudAccount.name} (${cloudAccount.region})`,
+        description: v.description,
+      } as any)
 
       Toast.show({ content: '添加成功', icon: 'success' })
       nav(-1)

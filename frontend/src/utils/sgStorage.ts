@@ -10,8 +10,12 @@ export interface SGTemplate {
   name: string
   sg_id: string
   region: string
-  secret_id: string
-  secret_key: string
+  // 新方案: 引用云账号 (后端持有加密的 AK/SK)
+  cloud_account_id?: number
+  cloud_account_name?: string
+  // 旧方案兼容: 早期版本可能存了明文 AK/SK
+  secret_id?: string
+  secret_key?: string
   description?: string
   created_at: string
   updated_at: string
