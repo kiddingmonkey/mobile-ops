@@ -17,17 +17,13 @@ export default function PageShell({ title, subtitle, onBack, right, children, fl
   const themeMode = useTheme(s => s.mode)
   const isHolodeck = resolveTheme(themeMode) === 'holodeck'
 
-  // Holodeck 模式：HolodeckShell 已经提供顶栏 BACK + 面包屑
-  // PageShell 只渲染右侧动作 + 内容区，避免双头冗余
+  // Holodeck 模式：外层 HolodeckShell 已负责顶栏 + 滚动容器
+  // PageShell 走自然流（不再 height:100%/overflow:hidden），避免双滚动嵌套
   if (isHolodeck) {
     return (
-      <div
-        className="page"
-        style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'transparent' }}
-      >
+      <div className="page" style={{ display: 'block', background: 'transparent', height: 'auto', overflow: 'visible' }}>
         {(right || subtitle) && (
           <div style={{
-            flexShrink: 0,
             padding: '6px 12px',
             display: 'flex',
             alignItems: 'center',
@@ -50,13 +46,9 @@ export default function PageShell({ title, subtitle, onBack, right, children, fl
             {right && <div style={{ flexShrink: 0 }}>{right}</div>}
           </div>
         )}
-        {flex ? (
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>{children}</div>
-        ) : (
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '12px' }}>
-            {children}
-          </div>
-        )}
+        <div style={{ padding: '12px' }}>
+          {children}
+        </div>
       </div>
     )
   }

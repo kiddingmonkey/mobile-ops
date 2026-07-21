@@ -322,10 +322,17 @@ body.mo-holodeck .hd-panel .page-header {
   display: none;
 }
 
-/* .page 容器透明 */
-body.mo-holodeck .hd-panel .page,
+/* .page 在 Holodeck 中走自然流（外层 HolodeckShell 统一负责滚动） */
+body.mo-holodeck .hd-panel .page {
+  height: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  display: block !important;
+}
 body.mo-holodeck .hd-panel .page-content {
   background: transparent !important;
+  overflow: visible !important;
+  height: auto !important;
   padding: 12px !important;
 }
 
