@@ -163,6 +163,7 @@ export default function HolodeckShell() {
         alignItems: 'center',
         gap: 8,
         padding: '6px 10px',
+        paddingTop: 'max(6px, env(safe-area-inset-top))',
         borderBottom: '1px solid rgba(120, 200, 255, 0.15)',
         background: 'rgba(3, 5, 16, 0.6)',
         backdropFilter: 'blur(12px)',
