@@ -15,7 +15,6 @@ import SideConsoles from './SideConsoles'
 import FloatingOrbs from './FloatingOrbs'
 import HoloBillboards from './HoloBillboards'
 import SpaceshipModel from './SpaceshipModel'
-import CaptainBillboard from './CaptainBillboard'
 
 import type { CameraPreset } from './CameraRig'
 
@@ -94,38 +93,41 @@ export default function Bridge3DScene({
     >
       {/* 关键补光：三点布光营造电影感（本地光源，无外部依赖） */}
       {/* 半球光：模拟环境光，天空色 + 地面色，补偿去掉 HDR 环境后的暗淡 */}
-      <hemisphereLight args={['#4fc3f7', '#2a1a5a', 0.35]} />
-      <ambientLight intensity={0.15} color="#3a2f6a" />
+      <hemisphereLight args={['#4fc3f7', '#2a1a5a', 0.8]} />
+      <ambientLight intensity={0.4} color="#6a8fbf" />
 
-      {/* 主光：舰长头顶暖粉光 */}
+      {/* 主光：舰长头顶暖粉光（增强到 5） */}
       <spotLight
-        position={[0, 8, 2]}
-        angle={0.6}
+        position={[0, 12, 2]}
+        angle={0.8}
         penumbra={0.8}
-        intensity={3}
+        intensity={5}
         color="#ff5da8"
-        distance={20}
+        distance={25}
         castShadow={!lowPerf}
         shadow-mapSize={lowPerf ? 512 : 1024}
       />
 
-      {/* 主屏幕补光：青色 */}
+      {/* 主屏幕补光：青色（增强到 4） */}
       <spotLight
-        position={[0, 6, -6]}
-        angle={0.9}
+        position={[0, 8, -6]}
+        angle={1}
         penumbra={1}
-        intensity={2.5}
+        intensity={4}
         color="#4fc3f7"
-        distance={25}
-        target-position={[0, 3, 0]}
+        distance={30}
+        target-position={[0, 2, 0]}
       />
 
-      {/* 侧光：左右两侧品紫补光 */}
-      <pointLight position={[-8, 3, 0]} intensity={1.2} color="#a78bfa" distance={14} decay={2} />
-      <pointLight position={[8, 3, 0]} intensity={1.2} color="#a78bfa" distance={14} decay={2} />
+      {/* 侧光：左右两侧品紫补光（增强到 2.5） */}
+      <pointLight position={[-10, 4, 0]} intensity={2.5} color="#a78bfa" distance={18} decay={2} />
+      <pointLight position={[10, 4, 0]} intensity={2.5} color="#a78bfa" distance={18} decay={2} />
 
-      {/* 顶部体积光（模拟穹顶光） */}
-      <pointLight position={[0, 12, 0]} intensity={0.5} color="#8ac6ff" distance={20} />
+      {/* 顶部体积光（增强到 1.2） */}
+      <pointLight position={[0, 15, 0]} intensity={1.2} color="#8ac6ff" distance={25} />
+
+      {/* 底部补光：防止飞船底部全黑 */}
+      <pointLight position={[0, -3, 0]} intensity={1.5} color="#4fc3f7" distance={15} />
 
       {/* 地板接触阴影 */}
       {!lowPerf && (
@@ -145,10 +147,7 @@ export default function Bridge3DScene({
         {/* Sketchfab 飞船模型（放大3倍，旋转180°，下移2单位） */}
         <SpaceshipModel visible={true} />
 
-        {/* 舰长立绘（中央，永远面向相机） */}
-        <CaptainBillboard />
-
-        {/* 原几何体场景（完全移除） */}
+        {/* 3D 模式不用舰长立绘，改用光效 */}
 
         {!lowPerf && <FloatingOrbs count={6} />}
         <HoloBillboards />

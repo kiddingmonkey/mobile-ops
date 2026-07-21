@@ -244,6 +244,46 @@ export default function HolodeckLayout() {
         <span style={{ color: 'var(--hd-cyan)', fontSize: 10 }}>◀</span>
       </div>
 
+      {/* 左侧舰长立绘侧栏 */}
+      <div style={{
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 280,
+        background: 'linear-gradient(90deg, rgba(3,5,16,0.85) 0%, transparent 100%)',
+        borderRight: '1px solid rgba(79,195,247,0.2)',
+        zIndex: 1,
+        pointerEvents: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        paddingBottom: 60,
+      }}>
+        <img
+          src="/images/captain.png"
+          alt="Captain"
+          style={{
+            width: '100%',
+            height: 'auto',
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 0 20px rgba(79,195,247,0.4))',
+            opacity: 0.92,
+          }}
+        />
+        <div style={{
+          textAlign: 'center',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+          letterSpacing: '0.3em',
+          color: 'var(--hd-cyan)',
+          marginTop: 12,
+          textShadow: '0 0 8px var(--hd-cyan)',
+        }}>
+          ◆ STARDECK COMMANDER
+        </div>
+      </div>
+
       {/* 完整航行日志 */}
       {showFullLog && <FullBridgeLog onClose={() => setShowFullLog(false)} />}
 
