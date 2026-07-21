@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { LeftOutline } from 'antd-mobile-icons'
 import { hapticLight } from '@/utils/haptics'
+import { useTheme, resolveTheme } from '@/store'
 
 interface Props {
   title: string
@@ -13,6 +14,53 @@ interface Props {
 }
 
 export default function PageShell({ title, subtitle, onBack, right, children, flex }: Props) {
+  const themeMode = useTheme(s => s.mode)
+  const isHolodeck = resolveTheme(themeMode) === 'holodeck'
+
+  // Holodeck 模式：HolodeckShell 已经提供顶栏 BACK + 面包屑
+  // PageShell 只渲染右侧动作 + 内容区，避免双头冗余
+  if (isHolodeck) {
+    return (
+      <div
+        className="page"
+        style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'transparent' }}
+      >
+        {(right || subtitle) && (
+          <div style={{
+            flexShrink: 0,
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderBottom: '1px solid rgba(120, 200, 255, 0.1)',
+          }}>
+            {subtitle && (
+              <div className="hd-text-mono" style={{
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                flex: 1,
+                letterSpacing: '0.05em',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {subtitle}
+              </div>
+            )}
+            {right && <div style={{ flexShrink: 0 }}>{right}</div>}
+          </div>
+        )}
+        {flex ? (
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>{children}</div>
+        ) : (
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '12px' }}>
+            {children}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       className="page"
