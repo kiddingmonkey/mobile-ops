@@ -14,6 +14,8 @@ import ClusterInspector from './ClusterInspector'
 import OrbitalStrike from './OrbitalStrike'
 import BridgeTicker, { pushBridgeEvent } from './BridgeTicker'
 import GlassShatter from './GlassShatter'
+import BootSequence, { shouldPlayBoot } from './BootSequence'
+import FullBridgeLog from './FullBridgeLog'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
@@ -29,6 +31,8 @@ export default function HolodeckLayout() {
   const [newBadges, setNewBadges] = useState<Badge[]>([])
   const [inspectCluster, setInspectCluster] = useState<{ id: number; name: string } | null>(null)
   const [strike, setStrike] = useState<{ x: number; y: number; color?: string } | null>(null)
+  const [booting, setBooting] = useState(() => shouldPlayBoot())
+  const [showFullLog, setShowFullLog] = useState(false)
 
   // 进入 Holodeck 首次触发徽章 + 欢迎日志
   useEffect(() => {
@@ -147,6 +151,7 @@ export default function HolodeckLayout() {
         criticals={criticals}
         warnings={warnings}
         onOpenBadges={() => setShowBadgeWall(true)}
+        onOpenLog={() => setShowFullLog(true)}
       />
 
       {/* 三列主区域 */}
@@ -232,6 +237,12 @@ export default function HolodeckLayout() {
       >
         <span style={{ color: 'var(--hd-cyan)', fontSize: 10 }}>◀</span>
       </div>
+
+      {/* 完整航行日志 */}
+      {showFullLog && <FullBridgeLog onClose={() => setShowFullLog(false)} />}
+
+      {/* 首次进入启动序列（最顶层） */}
+      {booting && <BootSequence onDone={() => setBooting(false)} />}
     </div>
   )
 }
@@ -241,11 +252,13 @@ function TopCommandBar({
   criticals,
   warnings,
   onOpenBadges,
+  onOpenLog,
 }: {
   mood: Mood
   criticals: number
   warnings: number
   onOpenBadges: () => void
+  onOpenLog: () => void
 }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
@@ -331,6 +344,25 @@ function TopCommandBar({
           }}
         >
           ◆ GALLERY
+        </button>
+
+        {/* 航行日志入口 */}
+        <button
+          onClick={onOpenLog}
+          className="hd-text-mono"
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(120, 200, 255, 0.3)',
+            color: 'var(--hd-cyan)',
+            padding: '4px 10px',
+            fontSize: 10,
+            letterSpacing: '0.15em',
+            cursor: 'pointer',
+            borderRadius: 2,
+            fontFamily: 'inherit',
+          }}
+        >
+          ◆ LOG
         </button>
 
         {/* 时间 */}
