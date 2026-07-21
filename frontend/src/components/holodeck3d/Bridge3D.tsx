@@ -65,6 +65,7 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
   const [lowPerf] = useState(() => detectLowPerf())
   const [time, setTime] = useState(new Date())
   const [audioEnabled, setAudioEnabled] = useState(() => holoAudio.isEnabled())
+  const [cameraPreset, setCameraPreset] = useState<'overview' | 'captain' | 'front' | 'orbit' | 'top'>('overview')
 
   useEffect(() => {
     if (!webglOK) onFallback2D()
@@ -201,6 +202,7 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
           focusedConsole={focused}
           onConsoleClick={handleConsoleClick}
           lowPerf={lowPerf}
+          cameraPreset={cameraPreset}
         />
       </Suspense>
 
@@ -284,6 +286,54 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
             EXIT
           </button>
         </div>
+      </div>
+
+      {/* 视角切换（左下） */}
+      <div style={{
+        position: 'fixed',
+        bottom: 'calc(env(safe-area-inset-bottom) + 42px)',
+        left: 16,
+        display: 'flex',
+        gap: 4,
+        zIndex: 10,
+      }}>
+        {([
+          { key: 'overview', label: '全景', icon: '🌌' },
+          { key: 'captain', label: '舰长', icon: '👁' },
+          { key: 'front', label: '正屏', icon: '📺' },
+          { key: 'orbit', label: '环绕', icon: '🔄' },
+          { key: 'top', label: '俯视', icon: '⬇' },
+        ] as const).map(p => {
+          const active = cameraPreset === p.key
+          return (
+            <button
+              key={p.key}
+              onClick={() => { hapticLight(); holoAudio.consoleHover(); setCameraPreset(p.key) }}
+              title={p.label}
+              style={{
+                background: active ? 'rgba(79,195,247,0.2)' : 'rgba(3,5,16,0.6)',
+                border: `1px solid ${active ? '#4fc3f7' : 'rgba(120,200,255,0.35)'}`,
+                color: active ? '#4fc3f7' : 'rgba(220,240,255,0.7)',
+                padding: '5px 8px',
+                fontSize: 12,
+                cursor: 'pointer',
+                borderRadius: 2,
+                backdropFilter: 'blur(8px)',
+                minWidth: 34,
+                textShadow: active ? '0 0 6px #4fc3f7' : 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 1,
+                lineHeight: 1,
+                fontFamily: 'inherit',
+              }}
+            >
+              <span>{p.icon}</span>
+              <span style={{ fontSize: 8, letterSpacing: '0.05em' }}>{p.label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* 状态灯（右下） */}

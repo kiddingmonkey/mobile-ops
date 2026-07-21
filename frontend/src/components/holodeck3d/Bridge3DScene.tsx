@@ -1,5 +1,7 @@
 import { Suspense, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
+import { Environment, ContactShadows } from '@react-three/drei'
+import * as THREE from 'three'
 import BridgeFloor from './BridgeFloor'
 import CenterBeam from './CenterBeam'
 import ConsoleStation, { ConsoleData } from './ConsoleStation'
@@ -11,6 +13,9 @@ import CaptainAvatar from './CaptainAvatar'
 import BridgeWalls from './BridgeWalls'
 import SideConsoles from './SideConsoles'
 import FloatingOrbs from './FloatingOrbs'
+import HoloBillboards from './HoloBillboards'
+
+import type { CameraPreset } from './CameraRig'
 
 interface Props {
   criticals: number
@@ -21,6 +26,7 @@ interface Props {
   focusedConsole: string | null
   onConsoleClick: (data: ConsoleData) => void
   lowPerf?: boolean
+  cameraPreset: CameraPreset
 }
 
 /**
@@ -61,6 +67,7 @@ export default function Bridge3DScene({
   focusedConsole,
   onConsoleClick,
   lowPerf,
+  cameraPreset,
 }: Props) {
   const consoles = useMemo(() => buildConsoles({ alerts: criticals + warnings, tasks: running }), [criticals, warnings, running])
   const focusTarget = useMemo<[number, number, number] | null>(() => {
@@ -71,29 +78,77 @@ export default function Bridge3DScene({
 
   return (
     <Canvas
-      shadows={false}
-      dpr={lowPerf ? [1, 1.2] : [1, 1.75]}
-      camera={{ position: [0, 3, 6], fov: 60, near: 0.1, far: 200 }}
-      gl={{ antialias: !lowPerf, powerPreference: 'high-performance', alpha: true }}
-      style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #0d0524 0%, #030510 60%, #000005 100%)' }}
+      shadows={!lowPerf}
+      dpr={lowPerf ? [1, 1.2] : [1, 2]}
+      camera={{ position: [0, 5, 9], fov: 55, near: 0.1, far: 200 }}
+      gl={{
+        antialias: !lowPerf,
+        powerPreference: 'high-performance',
+        alpha: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.1,
+      }}
+      style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #1a0842 0%, #060316 55%, #000005 100%)' }}
     >
-      {/* 全局环境光（低强度，避免盖过发光材质） */}
-      <ambientLight intensity={0.15} color="#2a3f6a" />
-      {/* 品红点光（玩家位下方） */}
-      <pointLight position={[0, 1, 0]} intensity={2.5} color="#ff2d92" distance={12} />
-      {/* 青色点光（主屏幕背后） */}
-      <pointLight position={[0, 4, -6]} intensity={2} color="#4fc3f7" distance={20} />
-      {/* 顶部补光 */}
-      <pointLight position={[0, 15, 0]} intensity={0.3} color="#8ac6ff" distance={30} />
+      {/* HDR 环境光：night preset 提供夜晚都市反射 */}
+      <Suspense fallback={null}>
+        <Environment preset="night" background={false} environmentIntensity={0.35} />
+      </Suspense>
+
+      {/* 关键补光：三点布光营造电影感 */}
+      <ambientLight intensity={0.08} color="#3a2f6a" />
+
+      {/* 主光：舰长头顶暖粉光 */}
+      <spotLight
+        position={[0, 8, 2]}
+        angle={0.6}
+        penumbra={0.8}
+        intensity={3}
+        color="#ff5da8"
+        distance={20}
+        castShadow={!lowPerf}
+        shadow-mapSize={lowPerf ? 512 : 1024}
+      />
+
+      {/* 主屏幕补光：青色 */}
+      <spotLight
+        position={[0, 6, -6]}
+        angle={0.9}
+        penumbra={1}
+        intensity={2.5}
+        color="#4fc3f7"
+        distance={25}
+        target-position={[0, 3, 0]}
+      />
+
+      {/* 侧光：左右两侧品紫补光 */}
+      <pointLight position={[-8, 3, 0]} intensity={1.2} color="#a78bfa" distance={14} decay={2} />
+      <pointLight position={[8, 3, 0]} intensity={1.2} color="#a78bfa" distance={14} decay={2} />
+
+      {/* 顶部体积光（模拟穹顶光） */}
+      <pointLight position={[0, 12, 0]} intensity={0.5} color="#8ac6ff" distance={20} />
+
+      {/* 地板接触阴影 */}
+      {!lowPerf && (
+        <ContactShadows
+          position={[0, 0.01, 0]}
+          opacity={0.55}
+          scale={22}
+          blur={2.5}
+          far={4}
+          color="#000000"
+        />
+      )}
 
       <Suspense fallback={null}>
-        <Starfield count={lowPerf ? 200 : 500} />
-        <BridgeFloor />
+        <Starfield count={lowPerf ? 200 : 600} />
+        <BridgeFloor lowPerf={lowPerf} />
         <BridgeWalls />
         <SideConsoles />
         <CaptainAvatar />
         <CenterBeam />
         {!lowPerf && <FloatingOrbs count={6} />}
+        <HoloBillboards />
         {consoles.map(c => (
           <ConsoleStation
             key={c.id}
@@ -111,7 +166,7 @@ export default function Bridge3DScene({
         />
       </Suspense>
 
-      <CameraRig focusTarget={focusTarget} />
+      <CameraRig focusTarget={focusTarget} cameraPreset={cameraPreset} />
       {!lowPerf && <Effects lowPerf={false} />}
     </Canvas>
   )
