@@ -16,6 +16,9 @@ const Bridge3DScene = lazy(() => import('./Bridge3DScene'))
 const AlertsPanel = lazy(() => import('./panels/AlertsPanel'))
 const TasksPanel = lazy(() => import('./panels/TasksPanel'))
 const ResourcesPanel = lazy(() => import('./panels/ResourcesPanel'))
+const DiagnosePanel = lazy(() => import('./panels/DiagnosePanel'))
+const MonitorPanel = lazy(() => import('./panels/MonitorPanel'))
+const ConfigPanel = lazy(() => import('./panels/ConfigPanel'))
 
 /**
  * 3D 舰桥入口
@@ -131,9 +134,6 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
     setFocused(data.id)
     // 500ms 后弹面板，让相机推近动画先跑
     setTimeout(() => {
-      if (data.id === 'diagnose') { setFocused(null); nav('/diagnose'); return }
-      if (data.id === 'monitor') { setFocused(null); nav('/monitor'); return }
-      if (data.id === 'settings') { setFocused(null); nav('/settings'); return }
       setPanel(data.id)
     }, 500)
   }
@@ -303,6 +303,9 @@ export default function Bridge3D({ onFallback2D }: { onFallback2D: () => void })
           {panel === 'alerts' && <AlertsPanel onClose={closePanel} />}
           {panel === 'tasks' && <TasksPanel onClose={closePanel} />}
           {panel === 'resources' && <ResourcesPanel onClose={closePanel} />}
+          {panel === 'diagnose' && <DiagnosePanel onClose={closePanel} />}
+          {panel === 'monitor' && <MonitorPanel onClose={closePanel} />}
+          {panel === 'settings' && <ConfigPanel onClose={closePanel} />}
         </Suspense>
       )}
     </div>
