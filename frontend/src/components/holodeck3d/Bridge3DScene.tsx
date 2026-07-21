@@ -15,6 +15,7 @@ import SideConsoles from './SideConsoles'
 import FloatingOrbs from './FloatingOrbs'
 import HoloBillboards from './HoloBillboards'
 import SpaceshipModel from './SpaceshipModel'
+import CaptainBillboard from './CaptainBillboard'
 
 import type { CameraPreset } from './CameraRig'
 
@@ -141,28 +142,29 @@ export default function Bridge3DScene({
       <Suspense fallback={null}>
         <Starfield count={lowPerf ? 200 : 600} />
 
-        {/* Sketchfab 飞船模型（真实 3D 资产） */}
+        {/* Sketchfab 飞船模型（放大3倍，旋转180°，下移2单位） */}
         <SpaceshipModel visible={true} />
 
-        {/* 原几何体场景（暂时隐藏，用于对比） */}
-        <group visible={false}>
-          <BridgeFloor lowPerf={lowPerf} />
-          <BridgeWalls />
-          <SideConsoles />
-          <CaptainAvatar />
-          <CenterBeam />
-        </group>
+        {/* 舰长立绘（中央，永远面向相机） */}
+        <CaptainBillboard />
+
+        {/* 原几何体场景（完全移除） */}
 
         {!lowPerf && <FloatingOrbs count={6} />}
         <HoloBillboards />
-        {consoles.map(c => (
-          <ConsoleStation
-            key={c.id}
-            data={c}
-            focused={focusedConsole === c.id}
-            onClick={onConsoleClick}
-          />
-        ))}
+
+        {/* 控制台暂时隐藏（等飞船内部结构确定后重新放置） */}
+        <group visible={false}>
+          {consoles.map(c => (
+            <ConsoleStation
+              key={c.id}
+              data={c}
+              focused={focusedConsole === c.id}
+              onClick={onConsoleClick}
+            />
+          ))}
+        </group>
+
         <MainScreen
           criticals={criticals}
           warnings={warnings}

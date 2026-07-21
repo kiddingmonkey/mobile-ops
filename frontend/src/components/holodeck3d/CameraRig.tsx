@@ -11,11 +11,11 @@ interface Props {
 export type CameraPreset = 'overview' | 'captain' | 'front' | 'orbit' | 'top'
 
 const PRESETS: Record<CameraPreset, { pos: [number, number, number]; look: [number, number, number] }> = {
-  overview: { pos: [0, 5, 9], look: [0, 3, -3] },      // 舰桥全景（默认）
-  captain: { pos: [0, 3.2, 2.5], look: [0, 3.5, -8] },  // 舰长第一人称
-  front: { pos: [0, 4, -5], look: [0, 4, -9] },        // 主屏幕正面
-  orbit: { pos: [8, 4, 6], look: [0, 3, 0] },          // 侧面环绕
-  top: { pos: [0, 12, 4], look: [0, 0, 0] },           // 俯视
+  overview: { pos: [0, 8, 12], look: [0, 2, 0] },      // 舰桥全景（更高更远）
+  captain: { pos: [0, 2, 3], look: [0, 2, -5] },       // 舰长背后看前方
+  front: { pos: [0, 3, -8], look: [0, 3, 0] },         // 主屏幕正面
+  orbit: { pos: [10, 5, 8], look: [0, 2, 0] },         // 侧面环绕
+  top: { pos: [0, 15, 5], look: [0, 0, 0] },           // 俯视
 }
 
 /**
@@ -36,6 +36,10 @@ export default function CameraRig({ focusTarget, cameraPreset }: Props) {
   useEffect(() => {
     const p = PRESETS.overview
     camera.position.set(...p.pos)
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      (camera as THREE.PerspectiveCamera).fov = 50
+      camera.updateProjectionMatrix()
+    }
     if (controlsRef.current) controlsRef.current.target.set(...p.look)
   }, [camera])
 

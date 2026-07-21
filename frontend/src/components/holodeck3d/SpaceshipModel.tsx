@@ -11,15 +11,17 @@ export default function SpaceshipModel({ visible = true }: { visible?: boolean }
   const { scene } = useGLTF('/models/spaceship.glb')
 
   useEffect(() => {
-    // 遍历模型所有材质，增强发光效果
+    // 遍历模型所有材质，大幅增强发光和亮度
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh
         const mat = mesh.material as THREE.MeshStandardMaterial
         if (mat.isMeshStandardMaterial) {
-          // 保持原有材质，只增强金属感和降低粗糙度
-          mat.metalness = Math.max(mat.metalness, 0.6)
-          mat.roughness = Math.min(mat.roughness, 0.5)
+          // 强化亮度：降低粗糙度，提高金属感，增加自发光
+          mat.metalness = 0.85
+          mat.roughness = 0.25
+          mat.emissive = new THREE.Color(0x4fc3f7)
+          mat.emissiveIntensity = 0.2
           mat.needsUpdate = true
         }
         mesh.castShadow = true
@@ -31,9 +33,9 @@ export default function SpaceshipModel({ visible = true }: { visible?: boolean }
   return (
     <primitive
       object={scene}
-      position={[0, 0, 0]}
-      rotation={[0, 0, 0]}
-      scale={1}
+      position={[0, -2, 0]}
+      rotation={[0, Math.PI, 0]}
+      scale={3}
       visible={visible}
     />
   )
