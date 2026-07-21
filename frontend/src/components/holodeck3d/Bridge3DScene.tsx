@@ -14,6 +14,7 @@ import BridgeWalls from './BridgeWalls'
 import SideConsoles from './SideConsoles'
 import FloatingOrbs from './FloatingOrbs'
 import HoloBillboards from './HoloBillboards'
+import SpaceshipModel from './SpaceshipModel'
 
 import type { CameraPreset } from './CameraRig'
 
@@ -139,11 +140,19 @@ export default function Bridge3DScene({
 
       <Suspense fallback={null}>
         <Starfield count={lowPerf ? 200 : 600} />
-        <BridgeFloor lowPerf={lowPerf} />
-        <BridgeWalls />
-        <SideConsoles />
-        <CaptainAvatar />
-        <CenterBeam />
+
+        {/* Sketchfab 飞船模型（真实 3D 资产） */}
+        <SpaceshipModel visible={true} />
+
+        {/* 原几何体场景（暂时隐藏，用于对比） */}
+        <group visible={false}>
+          <BridgeFloor lowPerf={lowPerf} />
+          <BridgeWalls />
+          <SideConsoles />
+          <CaptainAvatar />
+          <CenterBeam />
+        </group>
+
         {!lowPerf && <FloatingOrbs count={6} />}
         <HoloBillboards />
         {consoles.map(c => (
