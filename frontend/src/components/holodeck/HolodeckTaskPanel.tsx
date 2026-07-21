@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Toast } from 'antd-mobile'
 import { api, friendlyApiError } from '@/api/client'
@@ -7,6 +7,7 @@ import { fmtRelative } from '@/utils/format'
 import { hapticLight } from '@/utils/haptics'
 import HoldToConfirm from './HoldToConfirm'
 import { recordEvent, Badge } from './achievements'
+import { pushBridgeEvent } from './BridgeTicker'
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--hd-emergency)',
@@ -16,8 +17,10 @@ const SEVERITY_COLOR: Record<string, string> = {
 
 export default function HolodeckTaskPanel({
   onBadgesUnlocked,
+  onStrike,
 }: {
   onBadgesUnlocked?: (b: Badge[]) => void
+  onStrike?: (x: number, y: number, color?: string) => void
 }) {
   const nav = useNavigate()
   const [alerts, setAlerts] = useState<any[]>(() => getCache('alerts_50') || [])
@@ -37,11 +40,16 @@ export default function HolodeckTaskPanel({
     return () => clearInterval(t)
   }, [])
 
-  const silenceAlert = async (alert: any) => {
+  const silenceAlert = async (alert: any, targetX: number, targetY: number) => {
     const alertname = alert.labels?.alertname || alert.name
     if (!alertname) return
     setSilencing(alert.id)
     Toast.show({ icon: 'loading', content: '静默中...', duration: 0 })
+
+    // 立即触发轨道打击（不等 API）
+    const strikeColor = alert.severity === 'critical' ? 'var(--hd-emergency)' : 'var(--warning)'
+    onStrike?.(targetX, targetY, strikeColor)
+
     try {
       const now = new Date()
       const endsAt = new Date(now.getTime() + 60 * 60 * 1000) // 1 小时
@@ -55,6 +63,8 @@ export default function HolodeckTaskPanel({
       Toast.clear()
       Toast.show({ icon: 'success', content: '星域已清理' })
 
+      pushBridgeEvent('success', `SILENCED · ${alertname} · 1h`)
+
       const unlocked = recordEvent({ type: 'alert_resolved', severity: alert.severity })
       if (unlocked.length) onBadgesUnlocked?.(unlocked)
 
@@ -63,6 +73,7 @@ export default function HolodeckTaskPanel({
     } catch (e) {
       Toast.clear()
       Toast.show({ icon: 'fail', content: friendlyApiError(e) })
+      pushBridgeEvent('error', `SILENCE FAILED · ${alertname}`)
     } finally {
       setSilencing(null)
     }
@@ -133,7 +144,7 @@ export default function HolodeckTaskPanel({
               setExpandedId(expandedId === a.id ? null : a.id)
             }}
             onOpen={() => { hapticLight(); nav(`/alerts?id=${a.id}`) }}
-            onSilence={() => silenceAlert(a)}
+            onSilence={(x, y) => silenceAlert(a, x, y)}
           />
         ))}
         {tab === 'ops' && running.map(o => (
@@ -200,13 +211,27 @@ function AlertCard({
   silencing: boolean
   onToggle: () => void
   onOpen: () => void
-  onSilence: () => void
+  onSilence: (x: number, y: number) => void
 }) {
+  const targetRef = useRef<HTMLDivElement>(null)
+
+  const handleConfirm = () => {
+    const el = targetRef.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      const x = ((r.left + r.width / 2) / window.innerWidth) * 100
+      const y = ((r.top + r.height / 2) / window.innerHeight) * 100
+      onSilence(x, y)
+    } else {
+      onSilence(75, 50) // 右侧兜底
+    }
+  }
   const color = SEVERITY_COLOR[alert.severity] || 'var(--hd-cyan)'
   const name = alert.labels?.alertname || alert.name || 'Unknown'
   const cluster = alert.labels?.cluster || ''
   return (
     <div
+      ref={targetRef}
       style={{
         background: expanded ? 'rgba(10, 20, 45, 0.75)' : 'rgba(10, 20, 45, 0.5)',
         border: `1px solid ${color}${expanded ? '80' : '40'}`,
@@ -274,7 +299,7 @@ function AlertCard({
             duration={1600}
             color={color}
             glowColor={color}
-            onConfirm={onSilence}
+            onConfirm={handleConfirm}
             disabled={silencing}
           />
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>

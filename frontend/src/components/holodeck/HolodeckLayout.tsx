@@ -11,6 +11,8 @@ import BadgeWall from './BadgeWall'
 import BadgeUnlockToast from './BadgeUnlockToast'
 import QuickCommandDrawer from './QuickCommandDrawer'
 import ClusterInspector from './ClusterInspector'
+import OrbitalStrike from './OrbitalStrike'
+import BridgeTicker, { pushBridgeEvent } from './BridgeTicker'
 import { Badge, recordEvent } from './achievements'
 import { playSoundscape, getCurrentScape, getCurrentVolume } from './soundscape'
 
@@ -25,11 +27,13 @@ export default function HolodeckLayout() {
   const [showQuickCmd, setShowQuickCmd] = useState(false)
   const [newBadges, setNewBadges] = useState<Badge[]>([])
   const [inspectCluster, setInspectCluster] = useState<{ id: number; name: string } | null>(null)
+  const [strike, setStrike] = useState<{ x: number; y: number; color?: string } | null>(null)
 
-  // 进入 Holodeck 首次触发徽章
+  // 进入 Holodeck 首次触发徽章 + 欢迎日志
   useEffect(() => {
     const unlocked = recordEvent({ type: 'holodeck_entered' })
     if (unlocked.length) setNewBadges(unlocked)
+    pushBridgeEvent('info', 'BRIDGE ONLINE · 全息舰桥已激活')
   }, [])
 
   // 恢复上次的环境音景（需要用户交互后才能启动 AudioContext）
@@ -167,6 +171,7 @@ export default function HolodeckLayout() {
         />
         <HolodeckTaskPanel
           onBadgesUnlocked={(b) => setNewBadges(prev => [...prev, ...b])}
+          onStrike={(x, y, color) => setStrike({ x, y, color })}
         />
       </div>
 
@@ -185,6 +190,18 @@ export default function HolodeckLayout() {
           onClose={() => setInspectCluster(null)}
         />
       )}
+
+      {/* 底部系统日志 ticker */}
+      <BridgeTicker alerts={alerts} />
+
+      {/* 轨道打击动画 */}
+      <OrbitalStrike
+        active={!!strike}
+        x={strike?.x ?? 50}
+        y={strike?.y ?? 50}
+        color={strike?.color}
+        onDone={() => setStrike(null)}
+      />
 
       {/* 右边缘触发提示 + 点击呼出 */}
       <div

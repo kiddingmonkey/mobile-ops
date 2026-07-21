@@ -139,6 +139,22 @@ body.mo-holodeck #root {
   80% { transform: translate(1px, -2px); }
 }
 
+@keyframes hd-ripple {
+  0% { width: 20px; height: 20px; opacity: 1; }
+  100% { width: 320px; height: 320px; opacity: 0; }
+}
+
+@keyframes hd-impact-flash {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
+}
+
+@keyframes hd-ticker-scroll {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+
 /* ============ 全息面板 ============ */
 .hd-panel {
   position: relative;
