@@ -311,3 +311,239 @@ body.mo-holodeck.hd-emergency .hd-non-critical {
   background: rgba(255, 59, 92, 0.15);
   box-shadow: 0 0 16px var(--hd-emergency-glow);
 }
+
+/* ================================================================
+   Holodeck 深度全息化: 内页 antd-mobile 组件覆盖
+   让所有页面（不只是舰桥主视图）都保持全息舰桥风格
+   ================================================================ */
+
+/* 内页原有 page-header 隐藏（已被 hd-panel-header 替代） */
+body.mo-holodeck .hd-panel .page-header {
+  display: none;
+}
+
+/* .page 容器透明 */
+body.mo-holodeck .hd-panel .page,
+body.mo-holodeck .hd-panel .page-content {
+  background: transparent !important;
+  padding: 12px !important;
+}
+
+body.mo-holodeck .hd-panel .card,
+body.mo-holodeck .hd-panel .metric-card {
+  background: rgba(10, 20, 45, 0.55) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(120, 200, 255, 0.2) !important;
+  color: var(--text-primary);
+}
+
+/* List 组件 */
+body.mo-holodeck .adm-list,
+body.mo-holodeck .adm-list-body {
+  background: transparent !important;
+}
+
+body.mo-holodeck .adm-list-body {
+  border: 1px solid rgba(120, 200, 255, 0.15) !important;
+  border-radius: 2px !important;
+  overflow: hidden;
+}
+
+body.mo-holodeck .adm-list-item {
+  background: rgba(10, 20, 45, 0.5) !important;
+  --border-inner: 1px solid rgba(120, 200, 255, 0.12) !important;
+  color: var(--text-primary) !important;
+}
+
+body.mo-holodeck .adm-list-item:active {
+  background: rgba(79, 195, 247, 0.12) !important;
+}
+
+body.mo-holodeck .adm-list-item-content-main,
+body.mo-holodeck .adm-list-item-content-prefix {
+  color: var(--text-primary) !important;
+}
+
+body.mo-holodeck .adm-list-item-content-extra,
+body.mo-holodeck .adm-list-item-description {
+  color: var(--text-secondary) !important;
+}
+
+body.mo-holodeck .adm-list-header {
+  color: var(--hd-cyan) !important;
+  letter-spacing: 0.2em !important;
+  text-shadow: 0 0 6px var(--hd-cyan-glow);
+  background: transparent !important;
+  padding: 12px 12px 6px !important;
+}
+
+/* NavBar / 顶部小导航（部分页面用 antd-mobile 的 NavBar） */
+body.mo-holodeck .adm-nav-bar {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(120, 200, 255, 0.15);
+  color: var(--text-primary) !important;
+}
+body.mo-holodeck .adm-nav-bar-title {
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 6px var(--hd-cyan-glow);
+  letter-spacing: 0.15em;
+}
+body.mo-holodeck .adm-nav-bar-back-arrow,
+body.mo-holodeck .adm-nav-bar-back,
+body.mo-holodeck .adm-nav-bar-right {
+  color: var(--hd-cyan) !important;
+}
+
+/* Button */
+body.mo-holodeck .adm-button {
+  --border-radius: 2px !important;
+  font-family: inherit !important;
+  letter-spacing: 0.1em !important;
+}
+body.mo-holodeck .adm-button-primary,
+body.mo-holodeck .adm-button.adm-button-color-primary {
+  background: rgba(79, 195, 247, 0.18) !important;
+  border: 1.5px solid var(--hd-cyan) !important;
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 8px var(--hd-cyan-glow);
+  box-shadow: 0 0 12px rgba(79, 195, 247, 0.25);
+}
+body.mo-holodeck .adm-button-primary:active,
+body.mo-holodeck .adm-button.adm-button-color-primary:active {
+  background: rgba(79, 195, 247, 0.35) !important;
+  box-shadow: 0 0 20px var(--hd-cyan-glow);
+}
+body.mo-holodeck .adm-button-default {
+  background: transparent !important;
+  border: 1px solid rgba(120, 200, 255, 0.3) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Input / TextArea */
+body.mo-holodeck .adm-input,
+body.mo-holodeck .adm-text-area,
+body.mo-holodeck .adm-input-element,
+body.mo-holodeck .adm-text-area-element {
+  background: rgba(5, 10, 25, 0.7) !important;
+  color: var(--text-primary) !important;
+  --color: var(--text-primary) !important;
+  --placeholder-color: var(--text-tertiary) !important;
+}
+
+body.mo-holodeck input,
+body.mo-holodeck textarea {
+  background: rgba(5, 10, 25, 0.7) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(120, 200, 255, 0.25) !important;
+}
+
+body.mo-holodeck input:focus,
+body.mo-holodeck textarea:focus {
+  border-color: var(--hd-cyan) !important;
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.15) !important;
+}
+
+/* Selector / 选择器高亮 */
+body.mo-holodeck .adm-selector-item {
+  background: rgba(10, 20, 45, 0.55) !important;
+  border: 1px solid rgba(120, 200, 255, 0.2) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 2px !important;
+  font-family: inherit;
+}
+body.mo-holodeck .adm-selector-item-active {
+  background: rgba(79, 195, 247, 0.2) !important;
+  border-color: var(--hd-cyan) !important;
+  color: var(--hd-cyan) !important;
+  box-shadow: 0 0 12px var(--hd-cyan-glow) !important;
+}
+body.mo-holodeck .adm-selector-item-active .adm-selector-item-label {
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 6px var(--hd-cyan-glow);
+}
+
+/* Tag / 状态徽章保留原语义色 */
+body.mo-holodeck .status-badge {
+  border: 1px solid currentColor;
+  background: transparent !important;
+  padding: 2px 8px !important;
+}
+
+/* Dialog / Popup / ActionSheet */
+body.mo-holodeck .adm-dialog-body,
+body.mo-holodeck .adm-center-popup-body,
+body.mo-holodeck .adm-action-sheet-body,
+body.mo-holodeck .adm-popup-body,
+body.mo-holodeck .adm-modal-body {
+  background: rgba(10, 20, 45, 0.9) !important;
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(120, 200, 255, 0.3) !important;
+  color: var(--text-primary) !important;
+}
+body.mo-holodeck .adm-dialog-title {
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 8px var(--hd-cyan-glow);
+  letter-spacing: 0.15em;
+}
+body.mo-holodeck .adm-dialog-content {
+  color: var(--text-primary) !important;
+}
+
+/* Toast */
+body.mo-holodeck .adm-toast-wrap {
+  background: rgba(10, 20, 45, 0.92) !important;
+  border: 1px solid rgba(120, 200, 255, 0.3) !important;
+  color: var(--text-primary) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Skeleton */
+body.mo-holodeck .adm-skeleton {
+  --color: rgba(79, 195, 247, 0.08) !important;
+  --highlight-color: rgba(79, 195, 247, 0.15) !important;
+}
+
+/* Empty */
+body.mo-holodeck .adm-empty-description {
+  color: var(--text-tertiary) !important;
+}
+
+/* PullToRefresh 提示文字 */
+body.mo-holodeck .adm-pull-to-refresh-head {
+  color: var(--hd-cyan) !important;
+}
+
+/* Warning/Info banner 保留原语义色但玻璃底 */
+body.mo-holodeck .warn-banner,
+body.mo-holodeck .info-banner {
+  backdrop-filter: blur(8px);
+  border: 1px solid currentColor;
+}
+
+/* Empty state */
+body.mo-holodeck .empty-state {
+  color: var(--text-tertiary) !important;
+}
+body.mo-holodeck .empty-state .empty-title {
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 6px var(--hd-cyan-glow);
+  letter-spacing: 0.15em;
+}
+
+/* 通用文字层级修正（防止硬编码浅色文字在半透明背景上失色） */
+body.mo-holodeck h1,
+body.mo-holodeck h2,
+body.mo-holodeck h3,
+body.mo-holodeck .text-h1,
+body.mo-holodeck .text-h2,
+body.mo-holodeck .text-h3 {
+  color: var(--hd-cyan) !important;
+  text-shadow: 0 0 8px var(--hd-cyan-glow);
+  letter-spacing: 0.05em;
+}
+
+/* Switch */
+body.mo-holodeck .adm-switch {
+  --checked-color: var(--hd-cyan) !important;
+}
